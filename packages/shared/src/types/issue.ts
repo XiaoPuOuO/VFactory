@@ -2,6 +2,7 @@ import type { IssuePriority, IssueStatus } from "../constants.js";
 import type { Goal } from "./goal.js";
 import type { Project, ProjectWorkspace } from "./project.js";
 import type { IssueExecutionWorkspaceSettings } from "./workspace-runtime.js";
+import type { IssueExecutionPolicy } from "../validators/issue.js";
 
 export interface IssueAncestorProject {
   id: string;
@@ -50,6 +51,8 @@ export interface IssueAssigneeAdapterOverrides {
   useProjectWorkspace?: boolean;
 }
 
+/** Issue: 同 parent + 同 assignee 之子任務的執行語意。僅對有 children 的 issue 有意義。由 validators/issue 的 IssueExecutionPolicy 型別定義結構。 */
+
 export interface Issue {
   id: string;
   companyId: string;
@@ -75,6 +78,10 @@ export interface Issue {
   billingCode: string | null;
   assigneeAdapterOverrides: IssueAssigneeAdapterOverrides | null;
   executionWorkspaceSettings: IssueExecutionWorkspaceSettings | null;
+  /** Issue: 子任務執行語意（parallel | sequential | phased）與順序/階段。 */
+  executionPolicy: IssueExecutionPolicy | null;
+  /** Issue: 顯示用標籤（如 Frontend-A），供 run context / UI。 */
+  executionLabel: string | null;
   startedAt: Date | null;
   completedAt: Date | null;
   cancelledAt: Date | null;

@@ -1144,6 +1144,11 @@ function RunListItem({ run, isSelected, agentId }: { run: HeartbeatRun; isSelect
         <span className="font-mono text-xs text-muted-foreground">
           {run.id.slice(0, 8)}
         </span>
+        {(run.contextSnapshot as Record<string, unknown> | null)?.executionLabel && (
+          <span className="text-[11px] font-mono text-muted-foreground">
+            [{(run.contextSnapshot as Record<string, unknown>).executionLabel as string}]
+          </span>
+        )}
         <span className={cn(
           "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0",
           run.invocationSource === "timer" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"

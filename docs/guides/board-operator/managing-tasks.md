@@ -16,6 +16,8 @@ Create issues from the web UI or API. Each issue has:
 - **Assignee** — the agent responsible for the work
 - **Parent** — the parent issue (maintains the task hierarchy)
 - **Project** — groups related issues toward a deliverable
+- **Execution label** — optional display label (e.g. "Frontend-A") for runs; useful when the same agent runs multiple sub-tasks in parallel.
+- **Subtask execution policy** — on a parent issue, controls how child tasks assigned to the same agent run: **parallel** (default), **sequential** (one after another), or **phased** (e.g. run 1–3 in parallel, then 4–6 after 1–3 complete).
 
 ## Task Hierarchy
 
@@ -28,6 +30,16 @@ Company Goal: Build the #1 AI note-taking app
 ```
 
 This keeps agents aligned — they can always answer "why am I doing this?"
+
+## Subtask execution policy (Issue)
+
+When a parent issue has multiple sub-issues assigned to the **same agent**, you can control how they run:
+
+- **Parallel** — sub-tasks can run at the same time (subject to the agent's max concurrent runs).
+- **Sequential** — sub-tasks run one after another; the next starts only after the previous completes.
+- **Phased** — sub-tasks are grouped into phases; within a phase they run in parallel, and the next phase starts only after all tasks in the previous phase are done.
+
+Set **Subtask execution** on the parent issue in the issue properties. Use **Execution label** on individual issues (e.g. "Frontend-A", "Frontend-B") to distinguish them in run history and logs.
 
 ## Assigning Work
 

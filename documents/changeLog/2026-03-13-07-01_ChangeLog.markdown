@@ -1,0 +1,136 @@
+# Change Log: 2026-03-13 07:01
+
+## [Modified] doc/SPEC-implementation.md
+- 約第 581 行：`maxConcurrentRuns` 說明由「fixed at `1` for V1」改為「default `10` (configurable per agent, max 10)」。
+
+## [Modified] docs/guides/board-operator/managing-tasks.md
+- 第 19–20 行之後：新增兩項 Issue 屬性說明：「Execution label」與「Subtask execution policy」。
+- 第 31 行之後：新增章節「Subtask execution policy (Issue)」，說明同 parent、同 assignee 子任務的執行方式：Parallel、Sequential、Phased，以及 Execution label 用途。
+
+## [Modified] packages/db/src/schema/issues.ts
+- 第 44 行之後：新增 `executionPolicy` 欄位（jsonb），型別含 `subtaskExecutionPolicy`、`subtaskExecutionOrder`、`subtaskPhases`，並加註解說明。
+- 新增 `executionLabel` 欄位（text），註解為顯示用標籤。
+
+## [Modified] packages/shared/src/constants.ts
+- `WAKEUP_REQUEST_STATUSES` 陣列中新增 `"deferred_Issue_dependencies"`。
+
+## [Modified] packages/shared/src/index.ts
+- export 新增 `issueExecutionPolicySchema`、`IssueExecutionPolicy` 型別。
+
+## [Modified] packages/shared/src/types/issue.ts
+- 新增自 validators/issue 的 `IssueExecutionPolicy` 型別 import。
+- `Issue` 介面新增註解與欄位：`executionPolicy`、`executionLabel`。
+
+## [Modified] packages/shared/src/validators/index.ts
+- export 新增 `issueExecutionPolicySchema`、`IssueExecutionPolicy`。
+
+## [Modified] packages/shared/src/validators/issue.ts
+- 新增 `issueExecutionPolicySchema`（z.object：subtaskExecutionPolicy enum、subtaskExecutionOrder、subtaskPhases）與 `IssueExecutionPolicy` 型別。
+- `createIssueSchema` 新增 `executionPolicy`、`executionLabel`（字串 1–64 字元，可選可空）。
+
+## [Modified] server/src/routes/issues.ts
+- 定義 `CONTENT_FIELDS`，用於判斷是否為「執行中內容」變更；新增 `hasContentChange`、`previousStatus`、`statusJustBecameTerminal`。
+- Issue 更新時：若有內容變更且該 issue 有 active run，先 cancel 該 run，再依情況加入 `issue_updated_while_running` 或 `issue_updated` 的 wakeup。
+- 新增 `issueUpdatedReason` 時對 assignee 發送 wakeup（source: automation, reason: issue_updated_while_running / issue_updated）。
+- 當 `statusJustBecameTerminal` 且為子 issue 時：若同 parent 下所有兄弟皆為終態，則對 parent 的 assignee 發送 `all_subissues_completed` wakeup。
+
+## [Modified] server/src/services/company-portability.ts
+- `RUNTIME_DEFAULT_RULES` 中 heartbeat.maxConcurrentRuns 預設值由 `3` 改為 `10`。
+
+## [Modified] server/src/services/heartbeat.ts
+- `HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT` 由 `1` 改為 `10`。
+- 新增 `TERMINAL_ISSUE_STATUSES_FOR_Issue`、`canRunIssueWithIssuePolicy`：依 parent 的 executionPolicy 與 siblings 判斷 currentIssueId 是否可執行（parallel/sequential/phased）。
+- run 建立時 mergedConfig：若 workspace 有 model，則不讓 issue 層級 assigneeAdapterOverrides 覆寫 model。
+- run 完成後呼叫 `wakeIssueSiblingsIfReady(run)`；並在 `startNextQueuedRunForAgent` 之後再次呼叫。
+- 新增 `wakeIssueSiblingsIfReady`：當 run 對應的 issue 有 parent、同 assignee 的 siblings 處於 deferred_Issue_dependencies 且依賴已滿足時，對 agent 發送 wake（reason: Issue_predecessor_completed）。
+- `enqueueWakeup` 內 issue 查詢新增 `parentId`、`assigneeAgentId`、`status`、`executionLabel`。
+- 在無 active run 且 issue 有 parent/assignee 時：若 parent 的 executionPolicy 為 sequential 或 phased，檢查 `canRunIssueWithIssuePolicy`；不滿足則寫入 status `deferred_Issue_dependencies`，reason `Issue_dependencies_not_met`，並 return deferred。
+- 建立 run 時將 `issue.executionLabel` 寫入 `contextSnapshot`（runContextSnapshot）。
+
+## [Modified] skills/paperclip/SKILL.md
+- 新增「Wake reason and payload semantics」說明：`all_subissues_completed`、`issue_updated_while_running`、`issue_updated` 的語意與 agent 行為。
+
+## [Modified] skills/paperclip/references/api-reference.md
+- Issue create/update 說明新增 `executionLabel`、`executionPolicy`（subtaskExecutionPolicy、subtaskExecutionOrder、subtaskPhases）。
+- 新增 Wake reasons (automation) 說明：all_subissues_completed、issue_updated_while_running、issue_updated。
+
+## [Modified] ui/src/components/AgentConfigForm.tsx
+- heartbeat.maxConcurrentRuns 預設顯示值由 `1` 改為 `10`。
+
+## [Modified] ui/src/components/IssueProperties.tsx
+- 新增 PropertyRow「Execution label」：input，placeholder "e.g. Frontend-A"，maxLength 64，onUpdate executionLabel。
+- 新增 PropertyRow「Subtask execution」：select（parallel/sequential/phased），onUpdate executionPolicy.subtaskExecutionPolicy，附註 "(for child tasks)"。
+
+## [Modified] ui/src/components/IssuesList.tsx
+- 標題行中若 `issue.executionLabel` 存在，顯示 `[executionLabel]`（小字、muted、font-mono）。
+
+## [Modified] ui/src/components/Layout.tsx
+- 自 useSidebar 解構新增 `sidebarWidth`、`setSidebarWidth`。
+- 新增 `resizeStartX`、`resizeStartWidth` ref。
+- 新增 `onResizePointerDown`：pointer 拖動時以 `setSidebarWidth` 更新寬度，並設定 body cursor、userSelect。
+- 側邊欄寬度由固定 `w-60` 改為 `style={{ width: sidebarOpen ? sidebarWidth : 0 }}`。
+- 側邊欄與主內容之間新增可拖動分隔器按鈕（僅 desktop 且 sidebarOpen 時顯示），onPointerDown 綁定 onResizePointerDown。
+
+## [Modified] ui/src/components/NewIssueDialog.tsx
+- IssueDraft 介面新增 `executionLabel: string`。
+- 新增 state `executionLabel`，並納入 draft 儲存/還原與 submit payload（有 trim 時才傳 executionLabel）。
+- 表單中新增「Execution label (optional)」輸入框，placeholder "e.g. Frontend-A"，maxLength 64。
+
+## [Modified] ui/src/components/OnboardingWizard.tsx
+- 預設 heartbeat 設定中 maxConcurrentRuns 由 `1` 改為 `10`。
+
+## [Modified] ui/src/components/Sidebar.tsx
+- nav 的 className 中 `scrollbar-auto-hide` 改為 `scrollbar-none`。
+
+## [Modified] ui/src/components/SidebarAgents.tsx
+- 新增 import：useCallback、Popover、PopoverContent、PopoverTrigger、Link、getAgentModelId、getModelOptionsFromAgents、Filter。
+- 新增 `AgentTreeNode` 介面與 `buildAgentTree`（取代 sortByHierarchy，改為樹狀結構）。
+- 新增 `SidebarAgentNode` 元件：可折疊/展開子 Agent、縮排、顯示 live 數、NavLink。
+- 新增 state `collapsedIds`、`toggleCollapsed`。
+- 自 URL 讀取 `model` 篩選（modelFilter），agentTree 依 modelFilter 篩選後建樹。
+- 新增 model 篩選 Popover（Filter 圖示）：All models、各 modelOptions 連結，與 Agents 頁篩選同步。
+- 列表改為以 agentTree 渲染 SidebarAgentNode（depth=0）。
+
+## [Modified] ui/src/context/SidebarContext.tsx
+- 新增常數：SIDEBAR_WIDTH_STORAGE_KEY、SIDEBAR_WIDTH_MIN/MAX/DEFAULT、clampSidebarWidth、loadSidebarWidth（localStorage）。
+- Context 型別新增 `sidebarWidth`、`setSidebarWidth`。
+- Provider 內新增 sidebarWidth state（初始值 loadSidebarWidth）、setSidebarWidth（clamp 並寫入 localStorage），並一併提供給 context。
+
+## [Modified] ui/src/index.css
+- 新增 `.scrollbar-none` 類：scrollbar-width: none、-ms-overflow-style: none、::-webkit-scrollbar display: none，用於隱藏捲軸但保留捲動。
+
+## [Modified] ui/src/lib/inbox.test.ts
+- makeIssue 模擬資料新增 `executionPolicy: null`、`executionLabel: null`。
+
+## [Modified] ui/src/pages/AgentDetail.tsx
+- RunListItem 中若 run.contextSnapshot.executionLabel 存在，顯示 `[executionLabel]`（小字、muted、font-mono）。
+
+## [Modified] ui/src/pages/Agents.tsx
+- 新增 useSearchParams、getAgentModelId、getModelOptionsFromAgents。
+- filterAgents 新增參數 modelFilter，篩選時一併依 model 過濾。
+- filterOrgTree 新增參數 agentMap、modelFilter，遞迴與節點 model 比對。
+- 新增 modelFilter（自 URL model）、setModelFilter、modelOptions。
+- Filters 按鈕與篩選面板：新增 Model 區塊（All models、各 modelOptions），篩選啟用時 badge 數量含 modelFilter。
+- Show terminated 核取方塊加上 shrink-0 class。
+
+## [Modified] ui/src/pages/Costs.tsx
+- 新增 import：TokenUsageByAgentChart、TokenUsageByProjectChart、SubscriptionRunsByAgentChart。
+- 在既有 Card 區塊後新增用量圖表區：grid 含 TokenUsageByAgentChart、TokenUsageByProjectChart，以及 SubscriptionRunsByAgentChart。
+
+## [Modified] ui/src/pages/NewAgent.tsx
+- 預設 heartbeat 的 maxConcurrentRuns 由 `1` 改為 `10`。
+
+---
+
+## [Created] packages/db/src/migrations/0028_hopa_execution_policy.sql
+- 新增 migration：對 `issues` 表 ADD COLUMN `execution_policy` jsonb、ADD COLUMN `execution_label` text。
+
+## [Created] scripts/start-for-launchd.sh
+- 新增 bash 腳本：供 launchd 呼叫，載入 .env 後執行 pnpm dev；設定 PATH（.local/bin、homebrew、/usr/local/bin）；set -euo pipefail。
+
+## [Created] ui/src/components/CostCharts.tsx
+- 新增元件：TokenUsageByAgentChart（依 Agent 的 input/output tokens 橫向堆疊長條圖）、TokenUsageByProjectChart（依專案）、SubscriptionRunsByAgentChart（依 Agent 的 subscription run 數）；使用 ChartCard、formatTokens、CHART_COLORS，空資料時顯示 No usage data 訊息。
+
+## [Created] ui/src/lib/agent-utils.ts
+- 新增 getAgentModelId(agent)：自 adapterConfig 取得 model，空字串表示使用 adapter 預設。
+- 新增 getModelOptionsFromAgents(agents)：收集所有出現過的 model ID 去重排序，回傳 { id, label }，id 為空時 label 為 "Default"。

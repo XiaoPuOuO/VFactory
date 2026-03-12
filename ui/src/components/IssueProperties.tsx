@@ -566,6 +566,40 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
           </PropertyRow>
         )}
 
+        <PropertyRow label="Execution label">
+          <input
+            type="text"
+            className="flex-1 min-w-0 px-2 py-1 text-xs bg-transparent border border-transparent hover:border-border rounded outline-none focus:border-ring"
+            placeholder="e.g. Frontend-A"
+            maxLength={64}
+            value={issue.executionLabel ?? ""}
+            onChange={(e) =>
+              onUpdate({
+                executionLabel: e.target.value.trim() || null,
+              })
+            }
+          />
+        </PropertyRow>
+        <PropertyRow label="Subtask execution">
+          <select
+            className="text-xs bg-transparent border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring"
+            value={issue.executionPolicy?.subtaskExecutionPolicy ?? "parallel"}
+            onChange={(e) =>
+              onUpdate({
+                executionPolicy: {
+                  ...(issue.executionPolicy ?? {}),
+                  subtaskExecutionPolicy: e.target.value as "parallel" | "sequential" | "phased",
+                },
+              })
+            }
+          >
+            <option value="parallel">Parallel</option>
+            <option value="sequential">Sequential</option>
+            <option value="phased">Phased</option>
+          </select>
+          <span className="text-[11px] text-muted-foreground ml-1">(for child tasks)</span>
+        </PropertyRow>
+
         {issue.parentId && (
           <PropertyRow label="Parent">
             <Link

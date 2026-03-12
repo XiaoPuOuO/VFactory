@@ -609,6 +609,11 @@ export function IssuesList({
                     {/* Title line */}
                     <span className="line-clamp-2 text-sm sm:order-2 sm:flex-1 sm:min-w-0 sm:line-clamp-none sm:truncate">
                       {issue.title}
+                      {issue.executionLabel && (
+                        <span className="ml-1.5 text-[11px] font-mono text-muted-foreground">
+                          [{issue.executionLabel}]
+                        </span>
+                      )}
                     </span>
 
                     {/* Metadata line */}

@@ -12,6 +12,11 @@ import { StatusBadge } from "../components/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DollarSign } from "lucide-react";
+import {
+  TokenUsageByAgentChart,
+  TokenUsageByProjectChart,
+  SubscriptionRunsByAgentChart,
+} from "../components/CostCharts";
 
 type DatePreset = "mtd" | "7d" | "30d" | "ytd" | "all" | "custom";
 
@@ -168,6 +173,15 @@ export function Costs() {
               )}
             </CardContent>
           </Card>
+
+          {/* 用量圖表 */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <TokenUsageByAgentChart data={data.byAgent} />
+            <TokenUsageByProjectChart data={data.byProject} />
+          </div>
+          <div>
+            <SubscriptionRunsByAgentChart data={data.byAgent} />
+          </div>
 
           {/* By Agent / By Project */}
           <div className="grid md:grid-cols-2 gap-4">

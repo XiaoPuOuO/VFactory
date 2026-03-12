@@ -578,7 +578,7 @@ Per-agent schedule fields in `adapter_config`:
 
 - `enabled` boolean
 - `intervalSec` integer (minimum 30)
-- `maxConcurrentRuns` fixed at `1` for V1
+- `maxConcurrentRuns` default `10` (configurable per agent, max 10)
 
 Scheduler must skip invocation when:
 

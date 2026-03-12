@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate, useLocation } from "@/lib/router";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Link, useNavigate, useLocation, useSearchParams } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { agentsApi, type OrgNode } from "../api/agents";
 import { heartbeatsApi } from "../api/heartbeats";
@@ -14,6 +14,7 @@ import { EntityRow } from "../components/EntityRow";
 import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { relativeTime, cn, agentRouteRef, agentUrl } from "../lib/utils";
+import { getAgentModelId, getModelOptionsFromAgents } from "../lib/agent-utils";
 import { PageTabBar } from "../components/PageTabBar";
 import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -44,14 +45,32 @@ function matchesFilter(status: string, tab: FilterTab, showTerminated: boolean):
   return true;
 }
 
-function filterAgents(agents: Agent[], tab: FilterTab, showTerminated: boolean): Agent[] {
-  return agents.filter((a) => matchesFilter(a.status, tab, showTerminated));
+function filterAgents(
+  agents: Agent[],
+  tab: FilterTab,
+  showTerminated: boolean,
+  modelFilter: string | null
+): Agent[] {
+  return agents.filter((a) => {
+    if (!matchesFilter(a.status, tab, showTerminated)) return false;
+    if (modelFilter !== null && getAgentModelId(a) !== modelFilter) return false;
+    return true;
+  });
 }
 
-function filterOrgTree(nodes: OrgNode[], tab: FilterTab, showTerminated: boolean): OrgNode[] {
+function filterOrgTree(
+  nodes: OrgNode[],
+  tab: FilterTab,
+  showTerminated: boolean,
+  agentMap: Map<string, Agent>,
+  modelFilter: string | null
+): OrgNode[] {
   return nodes.reduce<OrgNode[]>((acc, node) => {
-    const filteredReports = filterOrgTree(node.reports, tab, showTerminated);
-    if (matchesFilter(node.status, tab, showTerminated) || filteredReports.length > 0) {
+    const filteredReports = filterOrgTree(node.reports, tab, showTerminated, agentMap, modelFilter);
+    const agent = agentMap.get(node.id);
+    const statusOk = matchesFilter(node.status, tab, showTerminated);
+    const modelOk = modelFilter === null || (agent && getAgentModelId(agent) === modelFilter);
+    if ((statusOk && modelOk) || filteredReports.length > 0) {
       acc.push({ ...node, reports: filteredReports });
     }
     return acc;
@@ -71,6 +90,19 @@ export function Agents() {
   const forceListView = isMobile;
   const effectiveView: "list" | "org" = forceListView ? "list" : view;
   const [showTerminated, setShowTerminated] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const modelFilter = searchParams.has("model") ? (searchParams.get("model") ?? "") : null;
+  const setModelFilter = useCallback(
+    (v: string | null) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (v === null) next.delete("model");
+        else next.set("model", v);
+        return next;
+      });
+    },
+    [setSearchParams]
+  );
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data: agents, isLoading, error } = useQuery({
@@ -113,6 +145,12 @@ export function Agents() {
     return map;
   }, [agents]);
 
+  /** 目前有被 Agent 使用的模型選項（與 Configuration 頁的模型一致，僅顯示實際在用的）。 */
+  const modelOptions = useMemo(
+    () => getModelOptionsFromAgents(agents ?? []),
+    [agents]
+  );
+
   useEffect(() => {
     setBreadcrumbs([{ label: "Agents" }]);
   }, [setBreadcrumbs]);
@@ -125,8 +163,8 @@ export function Agents() {
     return <PageSkeleton variant="list" />;
   }
 
-  const filtered = filterAgents(agents ?? [], tab, showTerminated);
-  const filteredOrg = filterOrgTree(orgTree ?? [], tab, showTerminated);
+  const filtered = filterAgents(agents ?? [], tab, showTerminated, modelFilter);
+  const filteredOrg = filterOrgTree(orgTree ?? [], tab, showTerminated, agentMap, modelFilter);
 
   return (
     <div className="space-y-4">
@@ -149,22 +187,53 @@ export function Agents() {
             <button
               className={cn(
                 "flex items-center gap-1.5 px-2 py-1.5 text-xs transition-colors border border-border",
-                filtersOpen || showTerminated ? "text-foreground bg-accent" : "text-muted-foreground hover:bg-accent/50"
+                filtersOpen || showTerminated || modelFilter !== null
+                  ? "text-foreground bg-accent"
+                  : "text-muted-foreground hover:bg-accent/50"
               )}
               onClick={() => setFiltersOpen(!filtersOpen)}
             >
               <SlidersHorizontal className="h-3 w-3" />
               Filters
-              {showTerminated && <span className="ml-0.5 px-1 bg-foreground/10 rounded text-[10px]">1</span>}
+              {(showTerminated || modelFilter !== null) && (
+                <span className="ml-0.5 px-1 bg-foreground/10 rounded text-[10px]">
+                  {[showTerminated, modelFilter !== null].filter(Boolean).length}
+                </span>
+              )}
             </button>
             {filtersOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-48 border border-border bg-popover shadow-md p-1">
+              <div className="absolute right-0 top-full mt-1 z-50 w-56 border border-border bg-popover shadow-md p-1">
+                <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Model
+                </div>
+                <button
+                  className={cn(
+                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent/50 transition-colors",
+                    modelFilter === null && "bg-accent"
+                  )}
+                  onClick={() => { setModelFilter(null); }}
+                >
+                  All models
+                </button>
+                {modelOptions.map((opt) => (
+                  <button
+                    key={opt.id === "" ? "__default__" : opt.id}
+                    className={cn(
+                      "flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent/50 transition-colors truncate",
+                      modelFilter === opt.id && "bg-accent"
+                    )}
+                    onClick={() => setModelFilter(opt.id)}
+                  >
+                    <span className="truncate" title={opt.id || "Default"}>{opt.label}</span>
+                  </button>
+                ))}
+                <div className="border-t border-border my-1" />
                 <button
                   className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left hover:bg-accent/50 transition-colors"
                   onClick={() => setShowTerminated(!showTerminated)}
                 >
                   <span className={cn(
-                    "flex items-center justify-center h-3.5 w-3.5 border border-border rounded-sm",
+                    "flex items-center justify-center h-3.5 w-3.5 border border-border rounded-sm shrink-0",
                     showTerminated && "bg-foreground"
                   )}>
                     {showTerminated && <span className="text-background text-[10px] leading-none">&#10003;</span>}

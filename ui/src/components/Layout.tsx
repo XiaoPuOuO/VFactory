@@ -28,7 +28,7 @@ import { NotFoundPage } from "../pages/NotFound";
 import { Button } from "@/components/ui/button";
 
 export function Layout() {
-  const { sidebarOpen, setSidebarOpen, toggleSidebar, isMobile } = useSidebar();
+  const { sidebarOpen, setSidebarOpen, toggleSidebar, isMobile, sidebarWidth, setSidebarWidth } = useSidebar();
   const { openNewIssue, openOnboarding } = useDialog();
   const { togglePanelVisible } = usePanel();
   const {
@@ -45,6 +45,8 @@ export function Layout() {
   const onboardingTriggered = useRef(false);
   const lastMainScrollTop = useRef(0);
   const [mobileNavVisible, setMobileNavVisible] = useState(true);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
   const nextTheme = theme === "dark" ? "light" : "dark";
   const matchedCompany = useMemo(() => {
     if (!companyPrefix) return null;
@@ -166,6 +168,32 @@ export function Layout() {
     };
   }, [isMobile, sidebarOpen, setSidebarOpen]);
 
+  const onResizePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      resizeStartX.current = e.clientX;
+      resizeStartWidth.current = sidebarWidth;
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const onPointerMove = (e: PointerEvent) => {
+        setSidebarWidth(resizeStartWidth.current + (e.clientX - resizeStartX.current));
+      };
+      const onPointerUp = () => {
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+        document.removeEventListener("pointercancel", onPointerUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+      document.addEventListener("pointercancel", onPointerUp);
+    },
+    [sidebarWidth, setSidebarWidth]
+  );
+
   const updateMobileNavVisibility = useCallback((currentTop: number) => {
     const delta = currentTop - lastMainScrollTop.current;
 
@@ -267,40 +295,51 @@ export function Layout() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col shrink-0 h-full">
-          <div className="flex flex-1 min-h-0">
-            <CompanyRail />
-            <div
-              className={cn(
-                "overflow-hidden transition-[width] duration-100 ease-out",
-                sidebarOpen ? "w-60" : "w-0"
-              )}
-            >
-              <Sidebar />
-            </div>
-          </div>
-          <div className="border-t border-r border-border px-3 py-2">
-            <div className="flex items-center gap-1">
-              <SidebarNavItem
-                to="/docs"
-                label="Documentation"
-                icon={BookOpen}
-                className="flex-1 min-w-0"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground shrink-0"
-                onClick={toggleTheme}
-                aria-label={`Switch to ${nextTheme} mode`}
-                title={`Switch to ${nextTheme} mode`}
+        <>
+          <div className="flex flex-col shrink-0 h-full">
+            <div className="flex flex-1 min-h-0">
+              <CompanyRail />
+              <div
+                className="overflow-hidden transition-[width] duration-100 ease-out"
+                style={{ width: sidebarOpen ? sidebarWidth : 0 }}
               >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </Button>
+                <Sidebar />
+              </div>
+            </div>
+            <div className="border-t border-r border-border px-3 py-2">
+              <div className="flex items-center gap-1">
+                <SidebarNavItem
+                  to="/docs"
+                  label="Documentation"
+                  icon={BookOpen}
+                  className="flex-1 min-w-0"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground shrink-0"
+                  onClick={toggleTheme}
+                  aria-label={`Switch to ${nextTheme} mode`}
+                  title={`Switch to ${nextTheme} mode`}
+                >
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+
+          {/* 可拖動分隔器：僅在桌面版且側邊欄開啟時顯示 */}
+          {sidebarOpen && (
+            <button
+              type="button"
+              className="shrink-0 w-1 h-full bg-border hover:bg-primary/20 focus:bg-primary/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 cursor-col-resize transition-colors"
+              style={{ minWidth: 4 }}
+              onPointerDown={onResizePointerDown}
+              aria-label="拖動以調整側邊欄寬度"
+            />
+          )}
+        </>
       )}
 
       {/* Main content */}

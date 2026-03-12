@@ -69,6 +69,7 @@ interface IssueDraft {
   assigneeThinkingEffort: string;
   assigneeChrome: boolean;
   useIsolatedExecutionWorkspace: boolean;
+  executionLabel: string;
 }
 
 const ISSUE_OVERRIDE_ADAPTER_TYPES = new Set(["claude_local", "codex_local", "opencode_local"]);
@@ -180,6 +181,7 @@ export function NewIssueDialog() {
   const [assigneeThinkingEffort, setAssigneeThinkingEffort] = useState("");
   const [assigneeChrome, setAssigneeChrome] = useState(false);
   const [useIsolatedExecutionWorkspace, setUseIsolatedExecutionWorkspace] = useState(false);
+  const [executionLabel, setExecutionLabel] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [dialogCompanyId, setDialogCompanyId] = useState<string | null>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -301,6 +303,7 @@ export function NewIssueDialog() {
       assigneeThinkingEffort,
       assigneeChrome,
       useIsolatedExecutionWorkspace,
+      executionLabel,
     });
   }, [
     title,
@@ -313,6 +316,7 @@ export function NewIssueDialog() {
     assigneeThinkingEffort,
     assigneeChrome,
     useIsolatedExecutionWorkspace,
+    executionLabel,
     newIssueOpen,
     scheduleSave,
   ]);
@@ -335,6 +339,7 @@ export function NewIssueDialog() {
       setAssigneeThinkingEffort("");
       setAssigneeChrome(false);
       setUseIsolatedExecutionWorkspace(false);
+      setExecutionLabel("");
     } else if (draft && draft.title.trim()) {
       setTitle(draft.title);
       setDescription(draft.description);
@@ -346,6 +351,7 @@ export function NewIssueDialog() {
       setAssigneeThinkingEffort(draft.assigneeThinkingEffort ?? "");
       setAssigneeChrome(draft.assigneeChrome ?? false);
       setUseIsolatedExecutionWorkspace(draft.useIsolatedExecutionWorkspace ?? false);
+      setExecutionLabel(draft.executionLabel ?? "");
     } else {
       setStatus(newIssueDefaults.status ?? "todo");
       setPriority(newIssueDefaults.priority ?? "");
@@ -355,6 +361,7 @@ export function NewIssueDialog() {
       setAssigneeThinkingEffort("");
       setAssigneeChrome(false);
       setUseIsolatedExecutionWorkspace(false);
+      setExecutionLabel("");
     }
   }, [newIssueOpen, newIssueDefaults]);
 
@@ -447,6 +454,7 @@ export function NewIssueDialog() {
       ...(projectId ? { projectId } : {}),
       ...(assigneeAdapterOverrides ? { assigneeAdapterOverrides } : {}),
       ...(executionWorkspaceSettings ? { executionWorkspaceSettings } : {}),
+      ...(executionLabel.trim() ? { executionLabel: executionLabel.trim() } : {}),
     });
   }
 
@@ -827,6 +835,18 @@ export function NewIssueDialog() {
             </div>
           </div>
         )}
+
+        <div className="px-4 pb-2 shrink-0">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Execution label (optional)</label>
+          <input
+            type="text"
+            className="w-full px-3 py-2 text-sm bg-transparent border border-border rounded-md outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+            placeholder="e.g. Frontend-A"
+            maxLength={64}
+            value={executionLabel}
+            onChange={(e) => setExecutionLabel(e.target.value)}
+          />
+        </div>
 
         {supportsAssigneeOverrides && (
           <div className="px-4 pb-2 shrink-0">

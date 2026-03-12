@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { NavLink, useLocation } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Plus } from "lucide-react";
@@ -9,16 +9,30 @@ import { agentsApi } from "../api/agents";
 import { heartbeatsApi } from "../api/heartbeats";
 import { queryKeys } from "../lib/queryKeys";
 import { cn, agentRouteRef, agentUrl } from "../lib/utils";
+import { getAgentModelId, getModelOptionsFromAgents } from "../lib/agent-utils";
 import { AgentIcon } from "./AgentIconPicker";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Link } from "@/lib/router";
 import type { Agent } from "@paperclipai/shared";
+import { Filter } from "lucide-react";
 
-/** BFS sort: roots first (no reportsTo), then their direct reports, etc. */
-function sortByHierarchy(agents: Agent[]): Agent[] {
+/** 樹節點：由內到外（上層在上，下層在下、縮排）。 */
+export interface AgentTreeNode {
+  agent: Agent;
+  children: AgentTreeNode[];
+}
+
+/** 依 reportsTo 建樹，根節點（無 reportsTo 或 parent 不在列表中）在前。 */
+function buildAgentTree(agents: Agent[]): AgentTreeNode[] {
   const byId = new Map(agents.map((a) => [a.id, a]));
   const childrenOf = new Map<string | null, Agent[]>();
   for (const a of agents) {
@@ -27,19 +41,115 @@ function sortByHierarchy(agents: Agent[]): Agent[] {
     list.push(a);
     childrenOf.set(parent, list);
   }
-  const sorted: Agent[] = [];
-  const queue = childrenOf.get(null) ?? [];
-  while (queue.length > 0) {
-    const agent = queue.shift()!;
-    sorted.push(agent);
-    const children = childrenOf.get(agent.id);
-    if (children) queue.push(...children);
+  function toNode(agent: Agent): AgentTreeNode {
+    const children = (childrenOf.get(agent.id) ?? []).map(toNode);
+    return { agent, children };
   }
-  return sorted;
+  const roots = childrenOf.get(null) ?? [];
+  return roots.map(toNode);
+}
+
+/** 單一節點：可折疊/展開 SubAgents，由內到外縮排。 */
+function SidebarAgentNode({
+  node,
+  depth,
+  liveCountByAgent,
+  activeAgentId,
+  collapsedIds,
+  onToggle,
+  isMobile,
+  setSidebarOpen,
+}: {
+  node: AgentTreeNode;
+  depth: number;
+  liveCountByAgent: Map<string, number>;
+  activeAgentId: string | null;
+  collapsedIds: Set<string>;
+  onToggle: (agentId: string) => void;
+  isMobile: boolean;
+  setSidebarOpen: (open: boolean) => void;
+}) {
+  const { agent, children } = node;
+  const hasChildren = children.length > 0;
+  const isExpanded = !collapsedIds.has(agent.id);
+  const runCount = liveCountByAgent.get(agent.id) ?? 0;
+  const isActive = activeAgentId === agentRouteRef(agent);
+
+  return (
+    <div className="flex flex-col gap-0">
+      <div
+        className="flex items-center gap-0.5 min-w-0 text-[13px] font-medium transition-colors"
+        style={{ paddingLeft: `${12 + depth * 16}px` }}
+      >
+        {hasChildren ? (
+          <button
+            type="button"
+            className="flex items-center justify-center h-6 w-5 shrink-0 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent/30"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggle(agent.id);
+            }}
+            aria-label={isExpanded ? "Collapse sub-agents" : "Expand sub-agents"}
+          >
+            <ChevronRight
+              className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-90")}
+            />
+          </button>
+        ) : (
+          <span className="w-5 shrink-0" aria-hidden />
+        )}
+        <NavLink
+          to={agentUrl(agent)}
+          onClick={() => {
+            if (isMobile) setSidebarOpen(false);
+          }}
+          className={cn(
+            "flex items-center gap-2.5 flex-1 min-w-0 py-1.5 pr-3 rounded-md transition-colors",
+            isActive
+              ? "bg-accent text-foreground"
+              : "text-foreground/80 hover:bg-accent/50 hover:text-foreground"
+          )}
+        >
+          <AgentIcon icon={agent.icon} className="shrink-0 h-3.5 w-3.5 text-muted-foreground" />
+          <span className="flex-1 truncate">{agent.name}</span>
+          {runCount > 0 && (
+            <span className="ml-auto flex items-center gap-1.5 shrink-0">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+              </span>
+              <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400">
+                {runCount} live
+              </span>
+            </span>
+          )}
+        </NavLink>
+      </div>
+      {hasChildren && isExpanded && (
+        <div className="flex flex-col gap-0">
+          {children.map((child) => (
+            <SidebarAgentNode
+              key={child.agent.id}
+              node={child}
+              depth={depth + 1}
+              liveCountByAgent={liveCountByAgent}
+              activeAgentId={activeAgentId}
+              collapsedIds={collapsedIds}
+              onToggle={onToggle}
+              isMobile={isMobile}
+              setSidebarOpen={setSidebarOpen}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SidebarAgents() {
   const [open, setOpen] = useState(true);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const { selectedCompanyId } = useCompany();
   const { openNewAgent } = useDialog();
   const { isMobile, setSidebarOpen } = useSidebar();
@@ -66,15 +176,36 @@ export function SidebarAgents() {
     return counts;
   }, [liveRuns]);
 
-  const visibleAgents = useMemo(() => {
-    const filtered = (agents ?? []).filter(
-      (a: Agent) => a.status !== "terminated"
-    );
-    return sortByHierarchy(filtered);
-  }, [agents]);
+  /** URL 上的 ?model= 與 Agents 頁面篩選同步，側邊欄只顯示該模型的 Agent。 */
+  const modelFilter = useMemo(() => {
+    const q = new URLSearchParams(location.search);
+    return q.has("model") ? (q.get("model") ?? "") : null;
+  }, [location.search]);
+
+  const agentTree = useMemo(() => {
+    let list = (agents ?? []).filter((a: Agent) => a.status !== "terminated");
+    if (modelFilter !== null) {
+      list = list.filter((a) => getAgentModelId(a) === modelFilter);
+    }
+    return buildAgentTree(list);
+  }, [agents, modelFilter]);
+
+  const toggleCollapsed = useCallback((agentId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(agentId)) next.delete(agentId);
+      else next.add(agentId);
+      return next;
+    });
+  }, []);
 
   const agentMatch = location.pathname.match(/^\/(?:[^/]+\/)?agents\/([^/]+)/);
   const activeAgentId = agentMatch?.[1] ?? null;
+
+  const modelOptions = useMemo(
+    () => getModelOptionsFromAgents(agents ?? []),
+    [agents]
+  );
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -91,6 +222,51 @@ export function SidebarAgents() {
               Agents
             </span>
           </CollapsibleTrigger>
+          <Popover>
+            <PopoverTrigger
+              asChild
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                className={cn(
+                  "flex items-center justify-center h-4 w-4 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent/50 transition-colors",
+                  modelFilter !== null && "text-foreground"
+                )}
+                aria-label="Filter by model"
+              >
+                <Filter className="h-3 w-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-1" align="start" side="right">
+              <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Model
+              </div>
+              <Link
+                to="/agents/all"
+                className={cn(
+                  "block px-2 py-1.5 text-xs rounded hover:bg-accent/50 transition-colors",
+                  modelFilter === null && "bg-accent"
+                )}
+              >
+                All models
+              </Link>
+              {modelOptions.map((opt) => {
+                const to = `/agents/all${opt.id === "" ? "?model=" : `?model=${encodeURIComponent(opt.id)}`}`;
+                return (
+                  <Link
+                    key={opt.id === "" ? "__default__" : opt.id}
+                    to={to}
+                    className={cn(
+                      "block px-2 py-1.5 text-xs rounded hover:bg-accent/50 transition-colors truncate",
+                      modelFilter === opt.id && "bg-accent"
+                    )}
+                  >
+                    {opt.label}
+                  </Link>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -106,38 +282,19 @@ export function SidebarAgents() {
 
       <CollapsibleContent>
         <div className="flex flex-col gap-0.5 mt-0.5">
-          {visibleAgents.map((agent: Agent) => {
-            const runCount = liveCountByAgent.get(agent.id) ?? 0;
-            return (
-              <NavLink
-                key={agent.id}
-                to={agentUrl(agent)}
-                onClick={() => {
-                  if (isMobile) setSidebarOpen(false);
-                }}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-1.5 text-[13px] font-medium transition-colors",
-                  activeAgentId === agentRouteRef(agent)
-                    ? "bg-accent text-foreground"
-                    : "text-foreground/80 hover:bg-accent/50 hover:text-foreground"
-                )}
-              >
-                <AgentIcon icon={agent.icon} className="shrink-0 h-3.5 w-3.5 text-muted-foreground" />
-                <span className="flex-1 truncate">{agent.name}</span>
-                {runCount > 0 && (
-                  <span className="ml-auto flex items-center gap-1.5 shrink-0">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
-                    </span>
-                    <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400">
-                      {runCount} live
-                    </span>
-                  </span>
-                )}
-              </NavLink>
-            );
-          })}
+          {agentTree.map((node) => (
+            <SidebarAgentNode
+              key={node.agent.id}
+              node={node}
+              depth={0}
+              liveCountByAgent={liveCountByAgent}
+              activeAgentId={activeAgentId}
+              collapsedIds={collapsedIds}
+              onToggle={toggleCollapsed}
+              isMobile={isMobile}
+              setSidebarOpen={setSidebarOpen}
+            />
+          ))}
         </div>
       </CollapsibleContent>
     </Collapsible>

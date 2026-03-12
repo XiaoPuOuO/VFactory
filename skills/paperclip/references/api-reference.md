@@ -504,6 +504,10 @@ Terminal states: `done`, `cancelled`
 | POST   | `/api/issues/:issueId/approvals`   | Link approval to issue                                                                    |
 | DELETE | `/api/issues/:issueId/approvals/:approvalId` | Unlink approval from issue                                                     |
 
+**Issue create/update** also accepts optional **Issue** fields: `executionLabel` (string, display label e.g. "Frontend-A") and `executionPolicy` (object with `subtaskExecutionPolicy`: `"parallel"` | `"sequential"` | `"phased"`, and optionally `subtaskExecutionOrder` or `subtaskPhases` for ordering). Set `executionPolicy` on a parent issue to control how its sub-issues (same assignee) run: parallel (default), sequential, or phased.
+
+**Wake reasons (automation):** PATCH to an issue can trigger wakeups with these `reason` / `contextSnapshot.wakeReason` values: `all_subissues_completed` (parent’s assignee woken when all sub-issues are done/cancelled); `issue_updated_while_running` (issue was edited while agent had an active run — run cancelled, agent woken; treat current issue as source of truth, do not repeat done work, conflicts take new); `issue_updated` (issue assigned to agent was updated; fetch latest and continue). See main SKILL for agent behavior.
+
 ### Companies, Projects, Goals
 
 | Method | Path                                 | Description        |

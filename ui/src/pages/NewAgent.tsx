@@ -182,7 +182,7 @@ export function NewAgent() {
           intervalSec: configValues.intervalSec,
           wakeOnDemand: true,
           cooldownSec: 10,
-          maxConcurrentRuns: 1,
+          maxConcurrentRuns: 10,
         },
       },
       budgetMonthlyCents: 0,

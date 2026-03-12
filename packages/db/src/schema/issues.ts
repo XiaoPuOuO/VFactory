@@ -41,6 +41,16 @@ export const issues = pgTable(
     billingCode: text("billing_code"),
     assigneeAdapterOverrides: jsonb("assignee_adapter_overrides").$type<Record<string, unknown>>(),
     executionWorkspaceSettings: jsonb("execution_workspace_settings").$type<Record<string, unknown>>(),
+    /** Issue: 同 parent + 同 assignee 之子任務的執行語意（parallel | sequential | phased）與順序/階段。僅對有 children 的 issue 有意義。 */
+    executionPolicy: jsonb("execution_policy").$type<{
+      subtaskExecutionPolicy?: "parallel" | "sequential" | "phased";
+      /** Sequential 時為 issue id 陣列；phased 時由 subtaskPhases 表示。 */
+      subtaskExecutionOrder?: string[];
+      /** Phased 時每 phase 為一組 issue id。 */
+      subtaskPhases?: string[][];
+    } | null>(),
+    /** Issue: 顯示用標籤（如 Frontend-A），可帶入 run context / UI，不影響排程。 */
+    executionLabel: text("execution_label"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),

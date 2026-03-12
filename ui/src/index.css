@@ -189,6 +189,15 @@
   background: oklch(0.5 0 0) !important;
 }
 
+/* Hide scrollbar completely while keeping scroll behaviour (sidebar, etc.) */
+.scrollbar-none {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE / legacy Edge */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* WebKit (Chrome, Safari, Edge) */
+}
+
 /* Expandable dialog transition for max-width changes */
 [data-slot="dialog-content"] {
   transition: max-width 200ms cubic-bezier(0.16, 1, 0.3, 1);

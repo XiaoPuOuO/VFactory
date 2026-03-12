@@ -41,7 +41,7 @@ import {
 } from "./execution-workspace-policy.js";
 
 const MAX_LIVE_LOG_CHUNK_BYTES = 8 * 1024;
-const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 1;
+const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 10;
 const HEARTBEAT_MAX_CONCURRENT_RUNS_MAX = 10;
 const DEFERRED_WAKE_CONTEXT_KEY = "_paperclipWakeContext";
 const startLocksByAgent = new Map<string, Promise<void>>();
@@ -353,6 +353,55 @@ function runTaskKey(run: typeof heartbeatRuns.$inferSelect) {
 
 function isSameTaskScope(left: string | null, right: string | null) {
   return (left ?? null) === (right ?? null);
+}
+
+const TERMINAL_ISSUE_STATUSES_FOR_Issue = new Set(["done", "cancelled"]);
+
+/**
+ * Issue: 檢查在給定 parent 的 executionPolicy 與 siblings 下，currentIssueId 是否可執行（前序依賴已滿足）。
+ */
+function canRunIssueWithIssuePolicy(
+  currentIssueId: string,
+  policy: {
+    subtaskExecutionPolicy?: string;
+    subtaskExecutionOrder?: string[];
+    subtaskPhases?: string[][];
+  } | null | undefined,
+  siblings: Array<{ id: string; status: string; createdAt: Date; issueNumber: number | null }>,
+): boolean {
+  if (!policy?.subtaskExecutionPolicy || policy.subtaskExecutionPolicy === "parallel") return true;
+  const terminal = TERMINAL_ISSUE_STATUSES_FOR_Issue;
+  const byId = new Map(siblings.map((s) => [s.id, s]));
+
+  if (policy.subtaskExecutionPolicy === "sequential") {
+    const order =
+      (policy.subtaskExecutionOrder?.length ?? 0) > 0
+        ? (policy.subtaskExecutionOrder ?? []).filter((id) => byId.has(id))
+        : [...siblings]
+            .sort((a, b) => (a.issueNumber ?? 0) - (b.issueNumber ?? 0) || a.createdAt.getTime() - b.createdAt.getTime())
+            .map((s) => s.id);
+    const idx = order.indexOf(currentIssueId);
+    if (idx <= 0) return true;
+    for (let i = 0; i < idx; i++) {
+      const prev = byId.get(order[i]);
+      if (!prev || !terminal.has(prev.status)) return false;
+    }
+    return true;
+  }
+
+  if (policy.subtaskExecutionPolicy === "phased") {
+    const phases = policy.subtaskPhases ?? [];
+    const phaseIndex = phases.findIndex((phase) => phase.includes(currentIssueId));
+    if (phaseIndex <= 0) return true;
+    const prevPhase = phases[phaseIndex - 1] ?? [];
+    for (const prevId of prevPhase) {
+      const prev = byId.get(prevId);
+      if (!prev || !terminal.has(prev.status)) return false;
+    }
+    return true;
+  }
+
+  return true;
 }
 
 function truncateDisplayId(value: string | null | undefined, max = 128) {
@@ -1167,6 +1216,10 @@ export function heartbeatService(db: Db) {
     const mergedConfig = issueAssigneeOverrides?.adapterConfig
       ? { ...workspaceManagedConfig, ...issueAssigneeOverrides.adapterConfig }
       : workspaceManagedConfig;
+    // 同一個 Agent 的多個執行（如 Frontend-A、Frontend-B）一律使用該 Agent 的 model，不讓 issue 層級的 assigneeAdapterOverrides 覆寫
+    if (Object.prototype.hasOwnProperty.call(workspaceManagedConfig, "model")) {
+      mergedConfig.model = workspaceManagedConfig.model;
+    }
     const { config: resolvedConfig, secretKeys } = await secretsSvc.resolveAdapterConfigForRuntime(
       agent.companyId,
       mergedConfig,
@@ -1810,7 +1863,10 @@ export function heartbeatService(db: Db) {
       }
     });
 
-    if (!promotedRun) return;
+    if (!promotedRun) {
+      await wakeIssueSiblingsIfReady(run);
+      return;
+    }
 
     publishLiveEvent({
       companyId: promotedRun.companyId,
@@ -1825,6 +1881,96 @@ export function heartbeatService(db: Db) {
     });
 
     await startNextQueuedRunForAgent(promotedRun.agentId);
+    await wakeIssueSiblingsIfReady(run);
+  }
+
+  /**
+   * Issue: 當 run 完成後，若該 run 對應的 issue 有同 parent、同 assignee 的 siblings 處於 deferred_Issue_dependencies，
+   * 且依賴已滿足，則對該 agent 發送 wake（會重新進入 enqueueWakeup，通過依賴檢查後建立 run）。
+   */
+  async function wakeIssueSiblingsIfReady(run: typeof heartbeatRuns.$inferSelect) {
+    const context = parseObject(run.contextSnapshot);
+    const issueId = readNonEmptyString(context?.issueId);
+    if (!issueId) return;
+
+    const issue = await db
+      .select({
+        id: issues.id,
+        parentId: issues.parentId,
+        assigneeAgentId: issues.assigneeAgentId,
+        companyId: issues.companyId,
+      })
+      .from(issues)
+      .where(and(eq(issues.id, issueId), eq(issues.companyId, run.companyId)))
+      .then((rows) => rows[0] ?? null);
+    if (!issue?.parentId || !issue.assigneeAgentId) return;
+
+    const parent = await db
+      .select({ executionPolicy: issues.executionPolicy })
+      .from(issues)
+      .where(and(eq(issues.id, issue.parentId), eq(issues.companyId, issue.companyId)))
+      .then((rows) => rows[0] ?? null);
+    const policy = parent?.executionPolicy as
+      | { subtaskExecutionPolicy?: string; subtaskExecutionOrder?: string[]; subtaskPhases?: string[][] }
+      | null
+      | undefined;
+    if (
+      policy?.subtaskExecutionPolicy !== "sequential" &&
+      policy?.subtaskExecutionPolicy !== "phased"
+    ) {
+      return;
+    }
+
+    const siblings = await db
+      .select({
+        id: issues.id,
+        status: issues.status,
+        createdAt: issues.createdAt,
+        issueNumber: issues.issueNumber,
+      })
+      .from(issues)
+      .where(
+        and(
+          eq(issues.parentId, issue.parentId),
+          eq(issues.assigneeAgentId, issue.assigneeAgentId),
+        ),
+      );
+    const deferredForSiblings = await db
+      .select({
+        id: agentWakeupRequests.id,
+        payload: agentWakeupRequests.payload,
+      })
+      .from(agentWakeupRequests)
+      .where(
+        and(
+          eq(agentWakeupRequests.companyId, run.companyId),
+          eq(agentWakeupRequests.agentId, run.agentId),
+          eq(agentWakeupRequests.status, "deferred_Issue_dependencies"),
+        ),
+      );
+    const siblingIdsWithDeferred = new Set(
+      deferredForSiblings
+        .map((r) => readNonEmptyString(parseObject(r.payload)?.issueId))
+        .filter((id): id is string => !!id),
+    );
+    for (const siblingId of siblingIdsWithDeferred) {
+      if (siblingId === issueId) continue;
+      if (!canRunIssueWithIssuePolicy(siblingId, policy, siblings)) continue;
+      try {
+        await enqueueWakeup(run.agentId, {
+          source: "automation",
+          triggerDetail: "system",
+          reason: "Issue_predecessor_completed",
+          payload: { issueId: siblingId },
+          contextSnapshot: { issueId: siblingId },
+        });
+      } catch (err) {
+        logger.warn(
+          { err, completedRunId: run.id, siblingIssueId: siblingId, agentId: run.agentId },
+          "Issue: failed to wake sibling after predecessor completed",
+        );
+      }
+    }
   }
 
   async function enqueueWakeup(agentId: string, opts: WakeupOptions = {}) {
@@ -1901,8 +2047,12 @@ export function heartbeatService(db: Db) {
           .select({
             id: issues.id,
             companyId: issues.companyId,
+            parentId: issues.parentId,
+            assigneeAgentId: issues.assigneeAgentId,
+            status: issues.status,
             executionRunId: issues.executionRunId,
             executionAgentNameKey: issues.executionAgentNameKey,
+            executionLabel: issues.executionLabel,
           })
           .from(issues)
           .where(and(eq(issues.id, issueId), eq(issues.companyId, agent.companyId)))
@@ -2099,6 +2249,57 @@ export function heartbeatService(db: Db) {
           return { kind: "deferred" as const };
         }
 
+        if (!activeExecutionRun && issue.parentId && issue.assigneeAgentId) {
+          const parent = await tx
+            .select({ executionPolicy: issues.executionPolicy })
+            .from(issues)
+            .where(and(eq(issues.id, issue.parentId), eq(issues.companyId, issue.companyId)))
+            .then((rows) => rows[0] ?? null);
+          const policy = parent?.executionPolicy as
+            | { subtaskExecutionPolicy?: string; subtaskExecutionOrder?: string[]; subtaskPhases?: string[][] }
+            | null
+            | undefined;
+          if (
+            policy?.subtaskExecutionPolicy === "sequential" ||
+            policy?.subtaskExecutionPolicy === "phased"
+          ) {
+            const siblings = await tx
+              .select({
+                id: issues.id,
+                status: issues.status,
+                createdAt: issues.createdAt,
+                issueNumber: issues.issueNumber,
+              })
+              .from(issues)
+              .where(
+                and(
+                  eq(issues.parentId, issue.parentId),
+                  eq(issues.assigneeAgentId, issue.assigneeAgentId),
+                ),
+              );
+            if (!canRunIssueWithIssuePolicy(issue.id, policy, siblings)) {
+              const deferredPayload = {
+                ...(payload ?? {}),
+                issueId,
+                [DEFERRED_WAKE_CONTEXT_KEY]: enrichedContextSnapshot,
+              };
+              await tx.insert(agentWakeupRequests).values({
+                companyId: agent.companyId,
+                agentId,
+                source,
+                triggerDetail,
+                reason: "Issue_dependencies_not_met",
+                payload: deferredPayload,
+                status: "deferred_Issue_dependencies",
+                requestedByActorType: opts.requestedByActorType ?? null,
+                requestedByActorId: opts.requestedByActorId ?? null,
+                idempotencyKey: opts.idempotencyKey ?? null,
+              });
+              return { kind: "deferred" as const };
+            }
+          }
+        }
+
         const wakeupRequest = await tx
           .insert(agentWakeupRequests)
           .values({
@@ -2116,6 +2317,9 @@ export function heartbeatService(db: Db) {
           .returning()
           .then((rows) => rows[0]);
 
+        const runContextSnapshot: Record<string, unknown> = { ...enrichedContextSnapshot };
+        if (issue.executionLabel) runContextSnapshot.executionLabel = issue.executionLabel;
+
         const newRun = await tx
           .insert(heartbeatRuns)
           .values({
@@ -2125,7 +2329,7 @@ export function heartbeatService(db: Db) {
             triggerDetail,
             status: "queued",
             wakeupRequestId: wakeupRequest.id,
-            contextSnapshot: enrichedContextSnapshot,
+            contextSnapshot: runContextSnapshot,
             sessionIdBefore: sessionBefore,
           })
           .returning()

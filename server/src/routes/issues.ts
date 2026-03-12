@@ -573,9 +573,42 @@ export function issueRoutes(db: Db, storage: StorageService) {
       issue.status !== "backlog" &&
       req.body.status !== undefined;
 
+    /** 與「執行中內容」相關的欄位變更（不含僅加 comment）才觸發 issue_updated / issue_updated_while_running */
+    const CONTENT_FIELDS = ["title", "description", "status", "priority"];
+    const hasContentChange = CONTENT_FIELDS.some((k) => k in previous);
+    const previousStatus = previous.status as string | undefined;
+    const statusJustBecameTerminal =
+      previousStatus !== "done" && previousStatus !== "cancelled" && (issue.status === "done" || issue.status === "cancelled");
+
     // Merge all wakeups from this update into one enqueue per agent to avoid duplicate runs.
     void (async () => {
       const wakeups = new Map<string, Parameters<typeof heartbeat.wakeup>[1]>();
+
+      // 二、Issue 被修改時：若有該 issue 的 active run 先 cancel，再於下方加入 issue_updated* wake
+      let issueUpdatedReason: "issue_updated_while_running" | "issue_updated" | null = null;
+      if (hasContentChange && issue.assigneeAgentId) {
+        let activeRun: Awaited<ReturnType<typeof heartbeat.getRun>> = null;
+        if (issue.executionRunId) {
+          const run = await heartbeat.getRun(issue.executionRunId);
+          if (run && (run.status === "running" || run.status === "queued")) activeRun = run;
+        }
+        if (!activeRun && issue.assigneeAgentId) {
+          const run = await heartbeat.getActiveRunForAgent(issue.assigneeAgentId);
+          const snapshotIssueId =
+            run?.contextSnapshot && typeof run.contextSnapshot === "object" && "issueId" in run.contextSnapshot
+              ? (run.contextSnapshot as Record<string, unknown>).issueId
+              : undefined;
+          if (run && run.status === "running" && snapshotIssueId === issue.id) activeRun = run;
+        }
+        if (activeRun) {
+          await heartbeat.cancelRun(activeRun.id).catch((err) =>
+            logger.warn({ err, issueId: issue.id, runId: activeRun!.id }, "failed to cancel run on issue update"),
+          );
+          issueUpdatedReason = "issue_updated_while_running";
+        } else {
+          issueUpdatedReason = "issue_updated";
+        }
+      }
 
       if (assigneeChanged && issue.assigneeAgentId && issue.status !== "backlog") {
         wakeups.set(issue.assigneeAgentId, {
@@ -598,6 +631,18 @@ export function issueRoutes(db: Db, storage: StorageService) {
           requestedByActorType: actor.actorType,
           requestedByActorId: actor.actorId,
           contextSnapshot: { issueId: issue.id, source: "issue.status_change" },
+        });
+      }
+
+      if (issueUpdatedReason && issue.assigneeAgentId) {
+        wakeups.set(issue.assigneeAgentId, {
+          source: "automation",
+          triggerDetail: "system",
+          reason: issueUpdatedReason,
+          payload: { issueId: issue.id },
+          requestedByActorType: actor.actorType,
+          requestedByActorId: actor.actorId,
+          contextSnapshot: { issueId: issue.id, wakeReason: issueUpdatedReason },
         });
       }
 
@@ -628,6 +673,30 @@ export function issueRoutes(db: Db, storage: StorageService) {
               source: "comment.mention",
             },
           });
+        }
+      }
+
+      if (statusJustBecameTerminal && issue.parentId) {
+        const parent = await svc.getById(issue.parentId);
+        if (parent) {
+          const siblings = await svc.list(issue.companyId, { parentId: issue.parentId });
+          const allTerminal =
+            siblings.length >= 1 &&
+            siblings.every((s) => s.status === "done" || s.status === "cancelled");
+          if (allTerminal) {
+            const parentAgentId = parent.assigneeAgentId ?? parent.createdByAgentId ?? null;
+            if (parentAgentId && !wakeups.has(parentAgentId)) {
+              wakeups.set(parentAgentId, {
+                source: "automation",
+                triggerDetail: "system",
+                reason: "all_subissues_completed",
+                payload: { parentIssueId: parent.id, completedIssueIds: siblings.map((s) => s.id) },
+                requestedByActorType: actor.actorType,
+                requestedByActorId: actor.actorId,
+                contextSnapshot: { parentIssueId: parent.id, wakeReason: "all_subissues_completed" },
+              });
+            }
+          }
         }
       }
 
