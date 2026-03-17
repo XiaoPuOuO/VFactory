@@ -1,0 +1,95 @@
+# Change Log: 2026-03-17 20:15
+
+## [Modified] .env.example
+- 第 1 行：`DATABASE_URL=postgres://paperclip:paperclip@localhost:5432/paperclip` 改為 `DATABASE_URL=`，移除預設本機連線字串，避免誤用預設帳號密碼。
+- 第 3 行：`SERVE_UI=false` 改為 `SERVE_UI=true`，預設啟用 UI 伺服，讓開發者啟動專案即可看到前端介面。
+- 第 5 行：新增註解 `# 未設定則無法為 Agent 注入 PAPERCLIP_API_KEY（無法呼叫 Paperclip API）`，說明 `PAPERCLIP_AGENT_JWT_SECRET` 之用途。
+- 第 7 行：新增環境變數 `PAPERCLIP_AGENT_JWT_SECRET=`，作為 Agent JWT 簽章密鑰占位設定。
+- 第 10 行：新增區塊註解 `# ── 執行 / 遷移 ──────────────────────────────────────────────────────────`，將執行與遷移相關設定分組。
+- 第 11 行：新增註解 `# 非互動環境自動套用 DB migration（launchd / CI 建議設 true）`，說明自動遷移在非互動環境下的建議用途。
+- 第 12 行：新增環境變數 `PAPERCLIP_MIGRATION_AUTO_APPLY=true`，預設啟用資料庫遷移自動套用。
+- 第 15 行：將原本被註解的 `# GOOGLE_CLIENT_ID=你的_Google_OAuth_Client_ID` 改為明確占位 `GOOGLE_CLIENT_ID=`，方便直接填入值。
+- 第 16 行：將原本被註解的 `# GOOGLE_CLIENT_SECRET=你的_Google_OAuth_Client_Secret` 改為明確占位 `GOOGLE_CLIENT_SECRET=`。
+- 第 18 行：新增 `PAPERCLIP_PUBLIC_URL=http://127.0.0.1:3100`，定義對外可存取的服務 URL。
+- 第 20 行：新增 `PAPERCLIP_ALLOWED_ATTACHMENT_TYPES=...`，列出允許上傳的附件 MIME 類型清單，涵蓋圖片、文字、PDF、Office 文件、試算表與 JSON，強化上傳安全白名單。
+
+## [Modified] documents/backup.md
+- 第 11 行：`**Chat ↔ Issue 整合強化**` 改為 `**Chat ↔ Issue 整合強化（已完成✅）**`，標示此項目已經完成。
+- 第 18 行：`**Board Inbox 強化（真正變成「需要人處理的佇列」）**` 改為 `**Board Inbox 強化（真正變成「需要人處理的佇列」）（已完成✅）**`，同樣標記該功能已完成實作。
+
+## [Modified] ui/src/components/ChatMessageIssueRunCard.tsx
+- 匯入區：加入 `useMutation`、`useQueryClient` 從 `@tanstack/react-query` 匯入，以支援在卡片中直接觸發停止執行的 mutation 並處理快取失效。
+- 匯入區：新增 `Button` 由 `./ui/button` 匯入，用於渲染停止按鈕。
+- 元件內部：新增 `const queryClient = useQueryClient();`，用於後續在 mutation 成功後手動 invalidation 相關快取。
+- 資料查詢：新增 `useQuery` 以 `queryKeys.issues.activeRun(issue?.id ?? "")` 取得當前 Issue 的 `activeRun`，並設定 `enabled: !!issue?.id` 與 `refetchInterval: 3000`，每 3 秒輪詢最新執行情況。
+- 資料合併：新增 `const effectiveRuns = activeRun ? [activeRun, ...liveRuns] : liveRuns;` 將 `activeRun` 置於 liveRuns 陣列最前端，確保顯示與 transcript 使用最新執行。
+- `latestRun` 計算：由原本 `liveRuns[0]` 改為 `effectiveRuns[0]`，以支援 activeRun 被加入排序後的最新值。
+- Mutation：新增 `stopIssueRun = useMutation({ ... })`，在 `mutationFn` 中檢查 `activeRun?.id` 是否存在，若存在則呼叫 `heartbeatsApi.cancel(activeRun.id)` 送出停止請求。
+- Mutation：`onSuccess` 中檢查 `issue?.id` 存在後，依序 `queryClient.invalidateQueries` 針對 `queryKeys.issues.activeRun(issue.id)`、`queryKeys.issues.liveRuns(issue.id)`、`queryKeys.issues.runs(issue.id)` 做快取失效，確保 UI 反映最新狀態。
+- Header 排版：原本僅單層 `span` 包含 `StatusBadge`，改為外層 `div.chat-message-issue-run-card-status-row`，內含 `StatusBadge` 與條件渲染的 Live 標記。
+- Live 標記：在 `activeRun` 存在時渲染 `<span className="chat-message-issue-run-card-live-dot">`，內部包含動畫點狀元素 `chat-message-issue-run-card-live-dot-inner` 與文字 `Live`，視覺化顯示 Issue 正在執行。
+- 停止按鈕：在 header 右側新增條件渲染的 `<Button>`，class 設為 `chat-message-issue-run-card-stop`，variant 使用 `ghost`、size `xs`，點擊時若 `activeRun.id` 存在且 mutation 非 pending 則呼叫 `stopIssueRun.mutate()`，並依 `stopIssueRun.isPending` 切換文案為 `t("chatIssue.stoppingIssueFromChat")` 或 `t("chatIssue.stopIssueFromChat")`，同時在 pending 狀態下 disabled 按鈕。
+
+## [Modified] ui/src/locales/en.json
+- 新增 `chatIssue` 命名空間：
+  - `stopIssueFromChat`: 新增字串 `"Stop"`，對應聊天室內停止 Issue 執行的按鈕文字。
+  - `stoppingIssueFromChat`: 新增字串 `"Stopping…"`，對應停止執行中的 loading 狀態提示。
+  - `sourceChatTitle`: 新增字串 `"Source chat"`，顯示於 Issue 詳細頁來源對話區塊標題。
+  - `sourceChatHint`: 新增字串 `"This issue was created from a chat room. Open the chat to see the full discussion."`，提示此議題來自聊天室並引導回看完整脈絡。
+  - `viewChat`: 新增字串 `"View chat"`，作為導向聊天室按鈕標籤。
+  - `attachImageFromChat`: 新增字串 `"Attach file"`，預備用於從聊天室建立 Issue 或附加檔案的操作文案。
+
+## [Modified] ui/src/locales/zh-TW.json
+- 新增 `chatIssue` 命名空間：
+  - `stopIssueFromChat`: 新增字串 `"停止"`，對應聊天室內停止 Issue 執行的按鈕文字。
+  - `stoppingIssueFromChat`: 新增字串 `"停止中…"`，顯示停止請求送出後的處理狀態。
+  - `sourceChatTitle`: 新增字串 `"來源對話"`，顯示於 Issue 詳細頁來源對話提示區塊標題。
+  - `sourceChatHint`: 新增字串 `"此議題由聊天建立，可前往聊天室查看完整討論脈絡。"`，說明此 Issue 與特定聊天室的來源關聯。
+  - `viewChat`: 新增字串 `"前往聊天室"`，用於導向原始聊天室的按鈕文字。
+  - `attachImageFromChat`: 新增字串 `"上傳附件"`，預留給從聊天附加檔案的場景。
+
+## [Modified] ui/src/pages/ChatRoom.tsx
+- 匯入區：在 React 匯入中加入 `useRef`，以管理檔案輸入 DOM 參考。
+- 匯入區：新增 `assetsApi` 自 `"../api/assets"` 匯入，用於上傳聊天室圖片或附件。
+- 匯入圖示：從 `lucide-react` 匯入 `Paperclip`，作為附件按鈕圖示。
+- 狀態宣告：新增 `const fileInputRef = useRef<HTMLInputElement | null>(null);`，用於觸發隱藏的檔案選擇器。
+- Mutation：新增 `uploadChatImage = useMutation({ mutationFn })`，在 `mutationFn` 中檢查 `selectedCompanyId` 是否存在，若不存在則丟出錯誤 `"No company selected"`；存在時呼叫 `assetsApi.uploadImage(selectedCompanyId, file, \`chat/${roomId ?? "draft"}\`)` 上傳檔案並以聊天室 ID 或 draft 作為路徑前綴。
+- 麵包屑設定：在 `useEffect` 內新增 `const trimmedTitle = titleName.trim();`，僅當 `trimmedTitle` 非空時才設定兩層麵包屑（`chat.title` 與實際標題），避免空字串顯示在導覽路徑。
+- Composer 佈局：在 JSX 中為輸入與操作區加入 `chat-room-composer-actions` 容器及隱藏的 `<input type="file" ref={fileInputRef} className="chat-room-file-input" />`，並以 `Button` 加上 `Paperclip` 圖示作為觸發按鈕，點擊後呼叫 `fileInputRef.current?.click()` 開啟檔案選擇器。
+- 檔案處理：在檔案選擇事件處理函式中，取得第一個 `File` 並呼叫 `uploadChatImage.mutate(file)`，將選擇的影像上傳至後端，並在成功或完成後重置 input 值，避免多次選同檔無法觸發 change。
+
+## [Modified] ui/src/pages/IssueDetail.css
+- 新增 `.issue-detail-source-chat`：設定圓角邊框、`border: 1px solid var(--border)`、背景色 `var(--muted)` 與 padding，作為來源聊天室提示卡片容器。
+- 新增 `.issue-detail-source-chat-header`：定義 flex 佈局、垂直置中與水平間距，承載圖示、文字與按鈕。
+- 新增 `.issue-detail-source-chat-icon`：限制圖示寬高為 `1rem` 並使用 `var(--muted-foreground)` 顏色，維持與整體 UI 一致。
+- 新增 `.issue-detail-source-chat-text`：設定 `flex: 1` 與 `min-width: 0`，確保文字區塊在窄寬度下仍能正確截斷。
+- 新增 `.issue-detail-source-chat-title`：字級設為 `0.8rem` 並加粗，作為卡片標題。
+- 新增 `.issue-detail-source-chat-hint`：字級 `0.75rem`，顏色採用 `var(--muted-foreground)` 並於上方留出 `margin-top: 0.125rem`，呈現次要說明文字。
+- 新增 `.issue-detail-source-chat-button`：為導向聊天室按鈕加上 `margin-left: auto` 與 `white-space: nowrap`，確保按鈕靠右對齊且文字不換行。
+
+## [Modified] ui/src/pages/IssueDetail.tsx
+- 匯入圖示：自 `lucide-react` 中移除 `Paperclip` 與 `Trash2`，新增 `MessageCircle` 作為來源聊天室提示圖示。
+- 狀態清理：移除 `attachmentError` state 與 `fileInputRef` 相關的 `useRef`，不再於 Issue 詳細頁直接管理附件上傳 Input。
+- 附件查詢：刪除 `useQuery` 取得 `attachments` 清單與對應的 `queryKeys.issues.attachments(issueId!)` 查詢，Issue 頁面不再顯示附件清單。
+- 上傳附件 mutation：保留 `uploadAttachment` Mutation 但移除原本 `onSuccess` 與 `onError` 中的錯誤狀態處理與附件清單快取失效邏輯，以便後續在其他入口（例如聊天）處理附件行為。
+- 刪除附件 mutation：完全移除 `deleteAttachment` Mutation 及其相關邏輯。
+- 協助方法：新增 `const sourceChatRoomId = issue.sourceChatRoomId ?? null;`，將 Issue 來源聊天室 ID 正規化為可用變數。
+- JSX 結構：刪除原本「Attachments」區塊，包括標題、上傳按鈕、錯誤訊息、附件列表、刪除按鈕與圖片預覽等整段 UI。
+- 新增來源對話區塊：在原附件區塊位置新增條件渲染，當 `sourceChatRoomId` 存在時顯示：
+  - 外層 `div.issue-detail-source-chat` 作為容器。
+  - 內層 `div.issue-detail-source-chat-header` 包含：
+    - `MessageCircle` 圖示，套用 `issue-detail-source-chat-icon` class。
+    - 文字區 `issue-detail-source-chat-text`，使用 `t("chatIssue.sourceChatTitle")` 作為標題、`t("chatIssue.sourceChatHint")` 作為說明。
+    - `Button` 元件，variant 設為 `outline`、size 為 `sm`，class `issue-detail-source-chat-button`，點擊後根據是否有 `issue.companyPrefix` 決定導向路徑為 `/${issue.companyPrefix}/chat/${sourceChatRoomId}` 或 `/chat/${sourceChatRoomId}`，文字為 `t("chatIssue.viewChat")`。
+
+## [Modified] ui/src/styles/chat.css
+- `.chat-room-composer-row`：新增 `align-items: flex-end;`，讓輸入框與右側按鈕群在底部對齊，視覺上更接近 Apple 風格訊息輸入列。
+- 新增 `.chat-room-composer-actions`：定義為 `display: flex; align-items: center; gap: 0.25rem;`，作為送出按鈕與附件按鈕的橫向排列容器。
+- 新增 `.chat-room-file-input`：設定 `display: none;` 隱藏原生檔案輸入欄位，只透過自訂按鈕觸發。
+- 新增 `.chat-room-attach-btn`：設定 `flex-shrink: 0;`，避免在狹窄螢幕寬度下被壓縮。
+- 新增 `.chat-room-attach-icon`：設定寬高為 `1rem`，讓 Paperclip 圖示大小與工具列其他圖示一致。
+- `.chat-message-issue-run-card-header`：將 `gap` 由 `0.5rem` 調整為 `0.375rem`，細緻壓縮水平間距，使多個元件在單行排版時更緊湊。
+- 新增 `.chat-message-issue-run-card-status-row`：定義為 `inline-flex`，水平排列狀態徽章與 Live 標記，保持在同一行。
+- 新增 `.chat-message-issue-run-card-live-dot`：定義 inline-flex，使用 `font-size: 0.7rem` 與 `color: #16a34a`，呈現綠色 Live 状態文字與點。
+- 新增 `.chat-message-issue-run-card-live-dot-inner`：設定 0.5rem 圓點、背景色 `#22c55e` 並加上 `box-shadow` 模擬發光效果，形成醒目的 Live 狀態指示。
+- 新增 `.chat-message-issue-run-card-stop`：設定 `margin-left: auto` 推到最右側，字級 `0.7rem`、高度 `1.5rem` 與水平 padding `0.5rem`，適應緊湊的卡片工具列。

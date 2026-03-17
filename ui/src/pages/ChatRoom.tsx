@@ -6,6 +6,7 @@ import { chatApi } from "../api/chat";
 import { heartbeatsApi } from "../api/heartbeats";
 import { agentsApi } from "../api/agents";
 import { projectsApi } from "../api/projects";
+import { assetsApi } from "../api/assets";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
@@ -17,7 +18,7 @@ import { MarkdownEditor, type MentionOption } from "@/components/MarkdownEditor"
 import { MarkdownBody } from "@/components/MarkdownBody";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AgentIcon } from "@/components/AgentIconPicker";
-import { MessageCircle, X, UserPlus, Square } from "lucide-react";
+import { MessageCircle, X, UserPlus, Square, Paperclip } from "lucide-react";
 import type { ChatMessage } from "@paperclipai/shared";
 import { MAX_GROUP_AGENT_COUNT } from "@paperclipai/shared";
 import {
@@ -80,6 +81,7 @@ export function ChatRoom() {
   const queryClient = useQueryClient();
   const { theme } = useTheme();
   const [body, setBody] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const [addToGroupOpen, setAddToGroupOpen] = useState(false);
@@ -175,6 +177,13 @@ export function ChatRoom() {
     },
   });
 
+  const uploadChatImage = useMutation({
+    mutationFn: async (file: File) => {
+      if (!selectedCompanyId) throw new Error("No company selected");
+      return assetsApi.uploadImage(selectedCompanyId, file, `chat/${roomId ?? "draft"}`);
+    },
+  });
+
   const isDirect = roomDetail?.room?.type === "direct";
   const currentAgentId = useMemo(() => {
     const agentMember = roomDetail?.members?.find((m) => m.memberType === "agent");
@@ -216,10 +225,15 @@ export function ChatRoom() {
   const titleName = note || displayName || roomId?.slice(0, 8) || "";
 
   useEffect(() => {
-    setBreadcrumbs([
-      { label: t("chat.title") },
-      { label: titleName },
-    ]);
+    const trimmedTitle = titleName.trim();
+    if (trimmedTitle) {
+      setBreadcrumbs([
+        { label: t("chat.title") },
+        { label: trimmedTitle },
+      ]);
+    } else {
+      setBreadcrumbs([{ label: t("chat.title") }]);
+    }
   }, [setBreadcrumbs, t, titleName]);
 
   useEffect(() => {
@@ -336,7 +350,46 @@ export function ChatRoom() {
                 const trimmed = body.trim();
                 if (trimmed) addMessage.mutate({ text: trimmed, projectId: selectedProjectId || null });
               }}
+              imageUploadHandler={async (file) => {
+                const asset = await uploadChatImage.mutateAsync(file);
+                return asset.contentPath;
+              }}
             />
+          </div>
+          <div className="chat-room-composer-actions">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="chat-room-file-input"
+              onChange={async (evt) => {
+                const file = evt.target.files?.[0];
+                if (!file) return;
+                try {
+                  const asset = await uploadChatImage.mutateAsync(file);
+                  const name = file.name || "attachment";
+                  const ct = (asset.contentType || "").toLowerCase();
+                  const isImage = ct.startsWith("image/");
+                  const suffix = isImage
+                    ? `![${name}](${asset.contentPath})`
+                    : `[${name}](${asset.contentPath})`;
+                  setBody((prev) => (prev ? `${prev}\n\n${suffix}` : suffix));
+                } finally {
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="chat-room-attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadChatImage.isPending}
+              aria-label={t("chatIssue.attachImageFromChat") ?? "Attach file"}
+              title={t("chatIssue.attachImageFromChat") ?? "Attach file"}
+            >
+              <Paperclip className="chat-room-attach-icon" aria-hidden />
+            </Button>
           </div>
           <Button
             onClick={() => {

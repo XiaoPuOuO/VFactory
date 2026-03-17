@@ -153,6 +153,14 @@
     "newGroupConfirm": "Create group",
     "newGroupAgentLimitHint": "Select up to 19 agents"
   },
+  "chatIssue": {
+    "stopIssueFromChat": "Stop",
+    "stoppingIssueFromChat": "Stopping…",
+    "sourceChatTitle": "Source chat",
+    "sourceChatHint": "This issue was created from a chat room. Open the chat to see the full discussion.",
+    "viewChat": "View chat",
+    "attachImageFromChat": "Attach file"
+  },
   "instance": {
     "instanceSettings": "Instance Settings",
     "instanceSettingsDesc": "Manage global settings for this instance.",

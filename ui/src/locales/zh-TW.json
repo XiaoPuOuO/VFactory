@@ -153,6 +153,14 @@
     "newGroupConfirm": "建立群組",
     "newGroupAgentLimitHint": "最多可選 19 位 AI 員工"
   },
+  "chatIssue": {
+    "stopIssueFromChat": "停止",
+    "stoppingIssueFromChat": "停止中…",
+    "sourceChatTitle": "來源對話",
+    "sourceChatHint": "此議題由聊天建立，可前往聊天室查看完整討論脈絡。",
+    "viewChat": "前往聊天室",
+    "attachImageFromChat": "上傳附件"
+  },
   "instance": {
     "instanceSettings": "此站設定",
     "instanceSettingsDesc": "管理此站的全域設定。",

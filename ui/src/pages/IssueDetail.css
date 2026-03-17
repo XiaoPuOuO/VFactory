@@ -73,6 +73,46 @@
   gap: 0.75rem;
 }
 
+.issue-detail-source-chat {
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background-color: var(--muted);
+  padding: 0.5rem 0.75rem;
+}
+
+.issue-detail-source-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.issue-detail-source-chat-icon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+}
+
+.issue-detail-source-chat-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.issue-detail-source-chat-title {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.issue-detail-source-chat-hint {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin-top: 0.125rem;
+}
+
+.issue-detail-source-chat-button {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .issue-detail-toolbar {
   display: flex;
   align-items: center;

@@ -42,9 +42,8 @@ import {
   ListTree,
   MessageSquare,
   MoreHorizontal,
-  Paperclip,
   SlidersHorizontal,
-  Trash2,
+  MessageCircle,
 } from "lucide-react";
 import type { ActivityEvent } from "@paperclipai/shared";
 import type { Agent, IssueAttachment } from "@paperclipai/shared";
@@ -162,8 +161,6 @@ export function IssueDetail() {
     approvals: false,
     cost: false,
   });
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastMarkedReadIssueIdRef = useRef<string | null>(null);
 
   const { data: issue, isLoading, error } = useQuery({
@@ -194,12 +191,6 @@ export function IssueDetail() {
   const { data: linkedApprovals } = useQuery({
     queryKey: queryKeys.issues.approvals(issueId!),
     queryFn: () => issuesApi.listApprovals(issueId!),
-    enabled: !!issueId,
-  });
-
-  const { data: attachments } = useQuery({
-    queryKey: queryKeys.issues.attachments(issueId!),
-    queryFn: () => issuesApi.listAttachments(issueId!),
     enabled: !!issueId,
   });
 
@@ -452,26 +443,6 @@ export function IssueDetail() {
       if (!selectedCompanyId) throw new Error("No company selected");
       return issuesApi.uploadAttachment(selectedCompanyId, issueId!, file);
     },
-    onSuccess: () => {
-      setAttachmentError(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.issues.attachments(issueId!) });
-      invalidateIssue();
-    },
-    onError: (err) => {
-      setAttachmentError(err instanceof Error ? err.message : "Upload failed");
-    },
-  });
-
-  const deleteAttachment = useMutation({
-    mutationFn: (attachmentId: string) => issuesApi.deleteAttachment(attachmentId),
-    onSuccess: () => {
-      setAttachmentError(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.issues.attachments(issueId!) });
-      invalidateIssue();
-    },
-    onError: (err) => {
-      setAttachmentError(err instanceof Error ? err.message : "Delete failed");
-    },
   });
 
   useEffect(() => {
@@ -511,15 +482,7 @@ export function IssueDetail() {
 
   // Ancestors are returned oldest-first from the server (root at end, immediate parent at start)
   const ancestors = issue.ancestors ?? [];
-
-  const handleFilePicked = async (evt: ChangeEvent<HTMLInputElement>) => {
-    const file = evt.target.files?.[0];
-    if (!file) return;
-    await uploadAttachment.mutateAsync(file);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
+  const sourceChatRoomId = issue.sourceChatRoomId ?? null;
 
   const isImageAttachment = (attachment: IssueAttachment) => attachment.contentType.startsWith("image/");
 
@@ -680,73 +643,33 @@ export function IssueDetail() {
       </div>
 
       <div className="issue-detail-section">
-        <div className="issue-detail-attachments-header">
-          <h3 className="issue-detail-collapsible-label">Attachments</h3>
-          <div className="issue-detail-attachments-actions">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              className="issue-detail-file-input"
-              onChange={handleFilePicked}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadAttachment.isPending}
-            >
-              <Paperclip className="issue-detail-toolbar-icon" />
-              {uploadAttachment.isPending ? "Uploading..." : "Upload image"}
-            </Button>
-          </div>
-        </div>
-
-        {attachmentError && (
-          <p className="issue-detail-attachment-error">{attachmentError}</p>
-        )}
-
-        {(!attachments || attachments.length === 0) ? (
-          <p className="issue-detail-attachment-empty">No attachments yet.</p>
-        ) : (
-          <div className="issue-detail-attachments-list">
-            {attachments.map((attachment) => (
-              <div key={attachment.id} className="issue-detail-attachment-card">
-                <div className="issue-detail-attachment-card-header">
-                  <a
-                    href={attachment.contentPath}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="issue-detail-attachment-link"
-                    title={attachment.originalFilename ?? attachment.id}
-                  >
-                    {attachment.originalFilename ?? attachment.id}
-                  </a>
-                  <button
-                    type="button"
-                    className="issue-detail-attachment-delete"
-                    onClick={() => deleteAttachment.mutate(attachment.id)}
-                    disabled={deleteAttachment.isPending}
-                    title="Delete attachment"
-                  >
-                    <Trash2 className="issue-detail-toolbar-icon" />
-                  </button>
+        {sourceChatRoomId && (
+          <div className="issue-detail-source-chat">
+            <div className="issue-detail-source-chat-header">
+              <MessageCircle className="issue-detail-source-chat-icon" />
+              <div className="issue-detail-source-chat-text">
+                <div className="issue-detail-source-chat-title">
+                  {t("chatIssue.sourceChatTitle")}
                 </div>
-                <p className="issue-detail-attachment-meta">
-                  {attachment.contentType} · {(attachment.byteSize / 1024).toFixed(1)} KB
-                </p>
-                {isImageAttachment(attachment) && (
-                  <a href={attachment.contentPath} target="_blank" rel="noreferrer">
-                    <img
-                      src={attachment.contentPath}
-                      alt={attachment.originalFilename ?? "attachment"}
-                      className="issue-detail-attachment-img"
-                      loading="lazy"
-                    />
-                  </a>
-                )}
+                <div className="issue-detail-source-chat-hint">
+                  {t("chatIssue.sourceChatHint")}
+                </div>
               </div>
-            ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="issue-detail-source-chat-button"
+                onClick={() => {
+                  const path =
+                    issue.companyPrefix && issue.companyPrefix.length > 0
+                      ? `/${issue.companyPrefix}/chat/${sourceChatRoomId}`
+                      : `/chat/${sourceChatRoomId}`;
+                  navigate(path);
+                }}
+              >
+                {t("chatIssue.viewChat")}
+              </Button>
+            </div>
           </div>
         )}
       </div>

@@ -8,7 +8,7 @@
 
 ### Level 1：低成本、立即提升體驗的功能
 
-- **Chat ↔ Issue 整合強化**
+- **Chat ↔ Issue 整合強化（已完成✅）**
   - **機會**：現在 chat 與 issues 有 schema 上的關聯（例如 `sourceChatRoomId`），但 UX 還不算一條龍。
   - **建議功能**：  
     - 在聊天室訊息上提供「建立 Issue」與「附加到現有 Issue」。  
@@ -16,7 +16,7 @@
     - 在 issue detail 顯示「來自哪個 chat room」並可跳回對話。
   - **影響層**：Server（issues/chat routes 聚合）、UI（`ChatRoom`、`IssueDetail`）、Doc（board/agent 使用手冊）。
 
-- **Board Inbox 強化（真正變成「需要人處理的佇列」）**
+- **Board Inbox 強化（真正變成「需要人處理的佇列」）（已完成✅）**
   - **機會**：現在 Inbox 已存在，但可以更偏「待辦中心」，聚焦需要人介入的事件。
   - **建議功能**：  
     - Inbox 裡集中：pending approvals、失敗的 heartbeat runs、被 budget 停用的 agents、blocked issues。  
