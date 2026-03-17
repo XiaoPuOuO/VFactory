@@ -1,0 +1,825 @@
+/**
+ * Chat 頁面 — 原生 CSS（無 Tailwind）
+ * 聊天佈局、左欄列表、右欄空白/對話室、訊息氣泡、輸入區
+ */
+
+/* ==========================================================================
+   頁面佈局（Chat.tsx）
+   ========================================================================== */
+.chat-page {
+  display: flex;
+  gap: 1.5rem;
+  flex: 1;
+  min-height: calc(100vh - 7rem);
+  max-height: calc(100vh - 7rem);
+}
+
+.chat-page-empty-wrap {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-page-empty-inner {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-list-panel {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 100%;
+  min-height: 0;
+  width: 280px;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+
+.chat-main-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   空白狀態（ChatEmpty.tsx）
+   ========================================================================== */
+.chat-empty {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+
+.chat-empty-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.4;
+}
+
+.chat-empty-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   左欄列表（ChatList.tsx）
+   ========================================================================== */
+.chat-list-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+}
+
+.chat-list-header {
+  flex-shrink: 0;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-list-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 0.5rem;
+}
+
+.chat-list-search {
+  height: 2rem;
+  font-size: 0.875rem;
+}
+
+.chat-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.chat-list-loading,
+.chat-list-empty {
+  padding: 1rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.chat-list-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.chat-list-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-list-section-header-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+}
+
+.chat-list-section-header {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.chat-list-section-header:hover {
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+}
+
+/* 固定寬度與右對齊，讓兩個區塊的 + 按鈕 x 位置一致 */
+.chat-list-section-add-slot {
+  flex-shrink: 0;
+  width: 2rem;
+  margin-right: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* 兩個區塊的 + 按鈕：一律用原生 button + 此 class，樣式完全一致 */
+.chat-list-section-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
+  color: var(--muted-foreground);
+  box-shadow: 0 1px 2px color-mix(in oklab, black 15%, transparent);
+  cursor: pointer;
+  font: inherit;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.chat-list-section-add-btn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--muted) 70%, transparent);
+  color: var(--foreground);
+}
+
+.chat-list-section-add-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+.chat-list-section-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chat-list-section-add-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: inherit;
+}
+
+.chat-list-agent-empty {
+  padding: 0.75rem 1rem;
+  list-style: none;
+}
+
+.chat-list-agent-empty-text {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+.chat-list-section-chevron {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+  transition: transform 0.2s;
+}
+
+.chat-list-section-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-list-ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chat-list-row-link,
+.chat-list-row-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.625rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+  transition: background-color 0.15s;
+  text-decoration: none;
+  color: inherit;
+  box-sizing: border-box;
+}
+
+.chat-list-row-link:hover,
+.chat-list-row-button:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.chat-list-row-button {
+  text-align: left;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font: inherit;
+}
+
+.chat-list-row-button:disabled,
+.chat-list-row-button[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chat-list-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-list-row-title {
+  font-weight: 500;
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-list-row-preview {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-list-row-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.chat-list-pin-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.chat-list-pin-icon.pinned {
+  color: #eab308;
+}
+
+.dark .chat-list-pin-icon.pinned {
+  color: #facc15;
+}
+
+.chat-list-menu-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.chat-list-menu-item-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.5rem;
+}
+
+/* Agent 樹狀：「與 Agent 的對話」算一層，底下的 Agent 與對話往內一層 */
+.chat-list-agent-tree {
+  padding-left: 0;
+}
+
+/* 第一層縮排：CEO（Agent）與單一房列都在此層 */
+.chat-list-agent-tree > li {
+  padding-left: 1.25rem;
+}
+
+/* 群組區塊：底下列表往內一層 */
+.chat-list-group-tree > li {
+  padding-left: 1.25rem;
+}
+
+.chat-list-agent-group {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chat-list-agent-header {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding: 0.375rem 0.75rem 0.25rem;
+  margin-top: 0.25rem;
+  min-height: 2rem;
+  box-sizing: border-box;
+}
+
+.chat-list-agent-header-collapsible {
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: background-color 0.15s;
+}
+
+.chat-list-agent-header-collapsible:hover {
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+}
+
+.chat-list-agent-chevron {
+  flex-shrink: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.chat-list-agent-header-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-list-agent-header-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.chat-list-agent-group:first-child .chat-list-agent-header {
+  margin-top: 0;
+}
+
+.chat-list-agent-rooms {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chat-list-row-indent {
+  padding-left: 1.25rem;
+}
+
+.chat-list-new-session-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+/* ==========================================================================
+   對話室（ChatRoom.tsx）
+   ========================================================================== */
+.chat-room-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  overflow: hidden;
+}
+
+.chat-room-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+}
+
+.chat-room-header-label {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.chat-room-header-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-room-header-btn {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.chat-room-header-btn:hover {
+  color: var(--foreground);
+}
+
+.chat-room-header-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.chat-room-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.chat-room-messages-loading {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.chat-room-messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chat-room-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: var(--muted-foreground);
+}
+
+.chat-room-empty-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.5;
+}
+
+.chat-room-empty-text {
+  font-size: 0.875rem;
+}
+
+.chat-room-composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-room-composer-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat-room-composer-editor-wrap {
+  flex: 1;
+  min-width: 0;
+  border-radius: 0.375rem;
+  border: 1px solid var(--input);
+}
+
+.chat-composer-stop-icon {
+  width: 1em;
+  height: 1em;
+  margin-right: 0.375rem;
+  vertical-align: -0.15em;
+}
+
+.chat-room-project-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.chat-room-project-label {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+/* 訊息氣泡與 typing */
+/** Agent 名稱：與頭貼同一列，顯示在氣泡上方靠左、灰色小字（LINE 風格）。 */
+.chat-bubble-author-name {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  line-height: 1.2;
+}
+
+.chat-bubble-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.chat-bubble-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+}
+
+.chat-bubble-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.chat-bubble-row-user {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.chat-bubble-avatar {
+  flex-shrink: 0;
+}
+
+/* Agent 圖示頭像（與 Avatar sm 同尺寸，對齊氣泡） */
+.chat-bubble-avatar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--muted-foreground);
+}
+
+.chat-bubble-agent-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.chat-bubble-content {
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  max-width: 85%;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.chat-bubble-content .paperclip-markdown,
+.chat-bubble-content .paperclip-markdown * {
+  color: inherit !important;
+}
+
+/* 氣泡內嵌 Issue 狀態 + Run 預覽卡（與 Dashboard 卡片同概念） */
+.chat-bubble-issue-cards {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.chat-message-issue-run-card {
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+  background: color-mix(in oklab, currentColor 12%, transparent);
+  overflow: hidden;
+}
+
+.chat-message-issue-run-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  flex-wrap: wrap;
+}
+
+.chat-message-issue-run-card-status {
+  flex-shrink: 0;
+}
+
+.chat-message-issue-run-card-status .ui-status-badge {
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+}
+
+.chat-message-issue-run-card-issue-link {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: underline;
+  color: inherit;
+  opacity: 0.95;
+}
+
+.chat-message-issue-run-card-issue-link:hover {
+  opacity: 1;
+}
+
+.chat-message-issue-run-card-open {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: 0.125rem;
+  color: inherit;
+  opacity: 0.8;
+}
+
+.chat-message-issue-run-card-open:hover {
+  opacity: 1;
+}
+
+.chat-message-issue-run-card-open svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.chat-message-issue-run-card-body {
+  border-top: 1px solid color-mix(in oklab, currentColor 18%, transparent);
+  padding: 0.375rem 0.5rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.chat-message-issue-run-card-body .transcript-list {
+  padding: 0;
+}
+
+.chat-message-issue-run-card-body .transcript-tool-card,
+.chat-message-issue-run-card-body .transcript-command-group,
+.chat-message-issue-run-card-body .transcript-activity-row,
+.chat-message-issue-run-card-body .transcript-stdout-row {
+  font-size: 0.7rem;
+}
+
+.chat-message-issue-run-thinking {
+  font-size: 0.65rem !important;
+  line-height: 1.25 !important;
+}
+
+.chat-bubble-time {
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+  position: absolute;
+  right: 0.2rem;
+  bottom: 0rem;
+}
+
+/* 氣泡主題色由 inline style 或 data-theme 提供，此處只做結構 */
+
+.chat-typing-bubble {
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  max-width: 85%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+/* Typing 動畫（自 index.css 移入） */
+@keyframes chat-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
+}
+
+.chat-typing-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  margin: 0 1px;
+  animation: chat-typing-bounce 1.4s ease-in-out infinite;
+}
+
+.chat-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.chat-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+.chat-typing-dot:nth-child(4) { animation-delay: 0.6s; }
+
+/* Add to group dialog 選項列 */
+.chat-add-group-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.chat-add-group-option:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.chat-add-group-option.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chat-add-group-option-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.chat-dialog-hint {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.chat-new-group-name-input {
+  margin-bottom: 0.5rem;
+}
+
+.chat-dialog-scroll {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.chat-dialog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-project-trigger-dot {
+  height: 0.625rem;
+  width: 0.625rem;
+  flex-shrink: 0;
+  border-radius: 0.125rem;
+}
+
+.chat-project-trigger-value {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-project-trigger-value span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-project-trigger-placeholder {
+  color: var(--muted-foreground);
+}
+
+.chat-room-project-select {
+  max-width: 220px;
+}
+
+@media (min-width: 640px) {
+  .chat-dialog-add-group {
+    max-width: 28rem;
+  }
+}

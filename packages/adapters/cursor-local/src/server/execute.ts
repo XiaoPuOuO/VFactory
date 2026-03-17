@@ -64,13 +64,167 @@ function normalizeMode(rawMode: string): "plan" | "ask" | null {
   return null;
 }
 
+async function postChatReplyIfNeeded(opts: {
+  env: Record<string, string>;
+  summary: string | null | undefined;
+  onLog: AdapterExecutionContext["onLog"];
+}) {
+  const { env, summary, onLog } = opts;
+  const body = (summary ?? "").trim();
+  if (!body) return;
+
+  const roomId = env.PAPERCLIP_CHAT_ROOM_ID;
+  const companyId = env.PAPERCLIP_COMPANY_ID;
+  const apiUrl = env.PAPERCLIP_API_URL || process.env.PAPERCLIP_API_URL;
+  const apiKey = env.PAPERCLIP_API_KEY || process.env.PAPERCLIP_API_KEY;
+  if (!roomId || !companyId || !apiUrl || !apiKey) return;
+
+  const runId = env.PAPERCLIP_RUN_ID;
+  const baseUrl = `${apiUrl.replace(/\/+$/, "")}/api/companies/${companyId}/chat/rooms/${roomId}/messages`;
+
+  /** 若本 run 已透過工具（API）發送過訊息，則不再以 summary 重複張貼，避免群組聊天出現兩則相同回覆。 */
+  if (runId) {
+    try {
+      const listRes = await fetch(`${baseUrl}?limit=10`, {
+        method: "GET",
+        headers: { Accept: "application/json", Authorization: `Bearer ${apiKey}` },
+      });
+      if (listRes.ok) {
+        const listJson = (await listRes.json()) as unknown;
+        if (Array.isArray(listJson)) {
+          const alreadyPosted = listJson.some(
+            (m: { authorRunId?: string | null }) => m && m.authorRunId === runId,
+          );
+          if (alreadyPosted) return;
+        }
+      }
+    } catch {
+      // 取得失敗時仍嘗試 fallback POST，避免漏回覆
+    }
+  }
+
+  try {
+    const res = await fetch(baseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        ...(runId ? { "X-Paperclip-Run-Id": runId } : {}),
+      },
+      body: JSON.stringify({ body }),
+    });
+    if (!res.ok) {
+      await onLog(
+        "stderr",
+        `[paperclip] Failed to POST chat reply (${res.status} ${res.statusText}) to ${baseUrl}\n`,
+      );
+    }
+  } catch (err) {
+    await onLog(
+      "stderr",
+      `[paperclip] Error while POSTing chat reply to ${baseUrl}: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`,
+    );
+  }
+}
+
+function shortId(value: string): string {
+  return value.slice(0, 8);
+}
+
+async function buildChatTranscript(opts: {
+  env: Record<string, string>;
+  onLog: AdapterExecutionContext["onLog"];
+  limit?: number;
+}): Promise<string | null> {
+  const { env, onLog, limit = 20 } = opts;
+  const roomId = env.PAPERCLIP_CHAT_ROOM_ID;
+  const companyId = env.PAPERCLIP_COMPANY_ID;
+  const apiUrl = env.PAPERCLIP_API_URL || process.env.PAPERCLIP_API_URL;
+  const apiKey = env.PAPERCLIP_API_KEY || process.env.PAPERCLIP_API_KEY;
+  if (!roomId || !companyId || !apiUrl || !apiKey) return null;
+
+  const url = `${apiUrl.replace(/\/+$/, "")}/api/companies/${companyId}/chat/rooms/${roomId}/messages?limit=${encodeURIComponent(
+    String(limit),
+  )}`;
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) {
+      await onLog(
+        "stderr",
+        `[paperclip] Failed to fetch chat transcript (${res.status} ${res.statusText}) from ${url}\n`,
+      );
+      return null;
+    }
+    const json = (await res.json()) as unknown;
+    if (!Array.isArray(json)) return null;
+
+    type ChatMessageLike = {
+      id: string;
+      body: string;
+      createdAt: string;
+      authorAgentId: string | null;
+      authorUserId: string | null;
+      authorAgentName?: string | null;
+    };
+
+    const messages = json.filter((m): m is ChatMessageLike => typeof m === "object" && m !== null) as ChatMessageLike[];
+    if (messages.length === 0) return null;
+
+    // API 回傳為最新在前；為便於模型閱讀，改成時間由舊到新。
+    const ordered = [...messages].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+
+    const agentId = env.PAPERCLIP_AGENT_ID;
+    const lines: string[] = [];
+    for (const msg of ordered) {
+      const when = new Date(msg.createdAt);
+      const hh = when.getHours().toString().padStart(2, "0");
+      const mm = when.getMinutes().toString().padStart(2, "0");
+      let speaker = "User";
+      if (msg.authorAgentId) {
+        if (agentId && msg.authorAgentId === agentId) {
+          speaker = "You (CEO agent)";
+        } else {
+          const name = msg.authorAgentName && msg.authorAgentName.trim().length > 0
+            ? msg.authorAgentName
+            : `Agent ${shortId(msg.authorAgentId)}`;
+          speaker = name;
+        }
+      } else if (msg.authorUserId) {
+        speaker = "Board";
+      }
+      lines.push(`[${hh}:${mm}] ${speaker}: ${msg.body}`);
+    }
+
+    return lines.join("\n");
+  } catch (err) {
+    await onLog(
+      "stderr",
+      `[paperclip] Error while fetching chat transcript from ${url}: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`,
+    );
+    return null;
+  }
+}
+
 function renderPaperclipEnvNote(env: Record<string, string>): string {
   const paperclipKeys = Object.keys(env)
     .filter((key) => key.startsWith("PAPERCLIP_"))
     .sort();
   if (paperclipKeys.length === 0) return "";
   return [
-    "Paperclip runtime note:",
+    "VFactory runtime note:",
     `The following PAPERCLIP_* environment variables are available in this run: ${paperclipKeys.join(", ")}`,
     "Do not assume these variables are missing without checking your shell environment.",
     "",
@@ -153,7 +307,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
   const promptTemplate = asString(
     config.promptTemplate,
-    "You are agent {{agent.id}} ({{agent.name}}). Continue your Paperclip work.",
+    "You are agent {{agent.id}} ({{agent.name}}). Continue your VFactory work.",
   );
   const command = asString(config.command, "agent");
   const model = asString(config.model, DEFAULT_CURSOR_LOCAL_MODEL).trim();
@@ -223,6 +377,34 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   if (linkedIssueIds.length > 0) {
     env.PAPERCLIP_LINKED_ISSUE_IDS = linkedIssueIds.join(",");
   }
+  const chatRoomId =
+    typeof context.roomId === "string" && context.roomId.trim().length > 0 ? context.roomId.trim() : null;
+  const chatRoomType =
+    context.chatRoomType === "direct" || context.chatRoomType === "group" ? context.chatRoomType : null;
+  const chatMessageId =
+    typeof context.messageId === "string" && context.messageId.trim().length > 0 ? context.messageId.trim() : null;
+  const wakeReasonLabel =
+    typeof context.wakeReasonLabel === "string" && context.wakeReasonLabel.trim().length > 0
+      ? context.wakeReasonLabel.trim()
+      : null;
+  if (chatRoomId) {
+    env.PAPERCLIP_CHAT_ROOM_ID = chatRoomId;
+    // Enable adapter-managed chat replies so agents do not need to call the chat API directly.
+    env.PAPERCLIP_CHAT_AUTO_REPLY = "1";
+  }
+  if (chatRoomType) env.PAPERCLIP_CHAT_ROOM_TYPE = chatRoomType;
+  if (chatMessageId) env.PAPERCLIP_CHAT_MESSAGE_ID = chatMessageId;
+  if (wakeReasonLabel) env.PAPERCLIP_WAKE_REASON_LABEL = wakeReasonLabel;
+  const chatProjectId =
+    typeof context.chatProjectId === "string" && context.chatProjectId.trim().length > 0
+      ? context.chatProjectId.trim()
+      : null;
+  const chatProjectName =
+    typeof context.chatProjectName === "string" && context.chatProjectName.trim().length > 0
+      ? context.chatProjectName.trim()
+      : null;
+  if (chatProjectId) env.PAPERCLIP_CHAT_PROJECT_ID = chatProjectId;
+  if (chatProjectName) env.PAPERCLIP_CHAT_PROJECT_NAME = chatProjectName;
   if (effectiveWorkspaceCwd) {
     env.PAPERCLIP_WORKSPACE_CWD = effectiveWorkspaceCwd;
   }
@@ -316,17 +498,69 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     return notes;
   })();
 
+  const chatTranscript = await buildChatTranscript({ env, onLog, limit: 20 }).catch(() => null);
+  const crossChatSummary =
+    context && typeof context === "object" && typeof (context as Record<string, unknown>).crossChatMemorySummary === "string"
+      ? ((context as Record<string, unknown>).crossChatMemorySummary as string).trim()
+      : "";
+  const roomEarlierSummary =
+    context && typeof context === "object" && typeof (context as Record<string, unknown>).roomEarlierSummary === "string"
+      ? ((context as Record<string, unknown>).roomEarlierSummary as string).trim()
+      : "";
+
+  const paperclipCompany =
+    (context && typeof context === "object" && (context as Record<string, unknown>).paperclipCompany) as
+      | { id: string; name: string; description: string | null; issuePrefix: string }
+      | undefined;
+  const company = paperclipCompany ?? { id: agent.companyId, name: "", description: null, issuePrefix: "PAP" };
   const renderedPrompt = renderTemplate(promptTemplate, {
     agentId: agent.id,
     companyId: agent.companyId,
     runId,
-    company: { id: agent.companyId },
+    company,
     agent,
     run: { id: runId, source: "on_demand" },
     context,
   });
+  const chatRoomIdForPrompt = env.PAPERCLIP_CHAT_ROOM_ID;
+  const chatRoomTypeForPrompt = env.PAPERCLIP_CHAT_ROOM_TYPE;
+  const wakeReasonLabelForPrompt = env.PAPERCLIP_WAKE_REASON_LABEL;
+  const chatModePrefix =
+    chatRoomIdForPrompt && chatRoomTypeForPrompt
+      ? [
+          // English system framing for generic models
+          "You are currently responding inside a live VFactory chat room, not an issue comment.",
+          "Treat this heartbeat as a single conversational turn directed at you.",
+          "Your job in this mode is to read the latest chat messages and reply naturally to the user in the same language they used (for this company that is usually Traditional Chinese).",
+          "You MUST send your reply by calling POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\": \"your reply text\"} (and include header X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID). The reply will only appear in the chat when you POST it; do not only output reply text in your response without calling this API.",
+          "Keep your reply short and conversational (1–3 short paragraphs or a concise bullet list). Do NOT write a long status report unless the user explicitly asked for one.",
+          "Write your reply text exactly as it should appear in the chat bubble. Do not describe what you will reply; just reply.",
+          "",
+          // Explicit role / hierarchy hint in Traditional Chinese for chat context
+          "（重要身分說明）",
+          "在這個聊天室裡，你是公司的代理人（例如 CEO / CXO / 專責代理人），而正在跟你說話的是「董事長 / Board 使用者」。",
+          "請把董事長的每一句話都當成最高優先等級的指令或需求來處理，先用自然、精簡的繁體中文回覆他，必要時再幫他拆解成任務或專案。",
+          "當董事長在聊天中下達需要「持續追蹤」或「多步驟」的工作指令時，你除了回覆之外，**必須**在同一個 heartbeat 內建立至少一個 Issue，或更新既有 Issue，並在聊天回覆中清楚標出 Issue identifier（例如 `PAP-123`）。",
+          "回覆語氣要專業但直接，像對董事長做口頭簡報，不要在聊天裡寫長篇報告或重複自我介紹。",
+          wakeReasonLabelForPrompt ? `Wake context: ${wakeReasonLabelForPrompt}` : "",
+          "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : "";
+  const crossChatBlock =
+    crossChatSummary !== ""
+      ? `Cross-chat context (brief; things you remembered across conversations):\n${crossChatSummary}\n\n`
+      : "";
+  const roomEarlierBlock =
+    roomEarlierSummary !== ""
+      ? `Earlier in this room (summary):\n${roomEarlierSummary}\n\n`
+      : "";
+  const chatHistoryBlock = chatTranscript
+    ? `Here is the recent chat transcript for this room (oldest first, newest last). Read it carefully and respond to the latest user message.\n\n${chatTranscript}\n\n`
+    : "";
   const paperclipEnvNote = renderPaperclipEnvNote(env);
-  const prompt = `${instructionsPrefix}${paperclipEnvNote}${renderedPrompt}`;
+  const prompt = `${instructionsPrefix}${paperclipEnvNote}${chatModePrefix}${crossChatBlock}${roomEarlierBlock}${chatHistoryBlock}${renderedPrompt}`;
 
   const buildArgs = (resumeSessionId: string | null) => {
     const args = ["-p", "--output-format", "stream-json", "--workspace", cwd];
@@ -467,6 +701,17 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   };
 
   const initial = await runAttempt(sessionId);
+  if (
+    !initial.proc.timedOut &&
+    (initial.proc.exitCode ?? 0) === 0 &&
+    env.PAPERCLIP_CHAT_AUTO_REPLY === "1"
+  ) {
+    await postChatReplyIfNeeded({
+      env,
+      summary: initial.parsed.summary,
+      onLog,
+    });
+  }
   if (
     sessionId &&
     !initial.proc.timedOut &&

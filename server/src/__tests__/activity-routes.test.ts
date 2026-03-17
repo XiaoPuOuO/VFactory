@@ -34,7 +34,6 @@ function createApp() {
       userId: "user-1",
       companyIds: ["company-1"],
       source: "session",
-      isInstanceAdmin: false,
     };
     next();
   });

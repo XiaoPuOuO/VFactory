@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { projects, projectGoals, goals, projectWorkspaces, workspaceRuntimeServices } from "@paperclipai/db";
+import { badRequest, conflict } from "../errors.js";
+import { projects, projectGoals, goals, projectWorkspaces, workspaceRuntimeServices, assets } from "@paperclipai/db";
 import {
   PROJECT_COLORS,
   deriveProjectUrlKey,
@@ -35,6 +36,8 @@ interface ProjectWithGoals extends Omit<ProjectRow, "executionWorkspacePolicy"> 
   executionWorkspacePolicy: ProjectExecutionWorkspacePolicy | null;
   workspaces: ProjectWorkspace[];
   primaryWorkspace: ProjectWorkspace | null;
+  /** API 回傳：圖示 URL，僅在 iconAssetId 有值且 asset 屬同一公司時存在。 */
+  iconContentPath?: string | null;
 }
 
 interface ProjectShortnameRow {
@@ -194,6 +197,31 @@ async function attachWorkspaces(db: Db, rows: ProjectWithGoals[]): Promise<Proje
   });
 }
 
+/** Batch-attach iconContentPath for projects that have iconAssetId (asset 須屬同一 company). */
+async function attachIconContentPath(db: Db, list: ProjectWithGoals[]): Promise<ProjectWithGoals[]> {
+  const pairs = list.filter((p) => p.iconAssetId).map((p) => ({ companyId: p.companyId, assetId: p.iconAssetId! }));
+  if (pairs.length === 0) {
+    return list.map((p) => ({ ...p, iconContentPath: null as string | null }));
+  }
+  const valid = await db
+    .select({ companyId: assets.companyId, id: assets.id })
+    .from(assets)
+    .where(
+      inArray(
+        assets.id,
+        pairs.map((x) => x.assetId),
+      ),
+    );
+  const validSet = new Set(valid.map((a) => `${a.companyId}:${a.id}`));
+  return list.map((p) => ({
+    ...p,
+    iconContentPath:
+      p.iconAssetId && validSet.has(`${p.companyId}:${p.iconAssetId}`)
+        ? `/api/assets/${p.iconAssetId}/content`
+        : null,
+  }));
+}
+
 /** Sync the project_goals join table for a single project. */
 async function syncGoalLinks(db: Db, projectId: string, companyId: string, goalIds: string[]) {
   // Delete existing links
@@ -226,6 +254,30 @@ function normalizeWorkspaceCwd(value: unknown): string | null {
   const cwd = readNonEmptyString(value);
   if (!cwd) return null;
   return cwd === REPO_ONLY_CWD_SENTINEL ? null : cwd;
+}
+
+/** 同一公司內專案工作區的 cwd 不可重複（一徑一路一專案）。 */
+async function assertProjectWorkspaceCwdUnique(
+  dbOrTx: Db,
+  companyId: string,
+  normalizedCwd: string,
+  excludeWorkspaceId: string | null,
+): Promise<void> {
+  const conditions = [
+    eq(projectWorkspaces.companyId, companyId),
+    eq(projectWorkspaces.cwd, normalizedCwd),
+  ];
+  if (excludeWorkspaceId != null) {
+    conditions.push(ne(projectWorkspaces.id, excludeWorkspaceId));
+  }
+  const existing = await dbOrTx
+    .select({ id: projectWorkspaces.id })
+    .from(projectWorkspaces)
+    .where(and(...conditions))
+    .limit(1);
+  if (existing.length > 0) {
+    throw conflict("此工作目錄已被同一公司內其他專案工作區使用，請改用其他路徑。");
+  }
 }
 
 function deriveNameFromCwd(cwd: string): string {
@@ -326,7 +378,8 @@ export function projectService(db: Db) {
     list: async (companyId: string): Promise<ProjectWithGoals[]> => {
       const rows = await db.select().from(projects).where(eq(projects.companyId, companyId));
       const withGoals = await attachGoals(db, rows);
-      return attachWorkspaces(db, withGoals);
+      const withWorkspaces = await attachWorkspaces(db, withGoals);
+      return attachIconContentPath(db, withWorkspaces);
     },
 
     listByIds: async (companyId: string, ids: string[]): Promise<ProjectWithGoals[]> => {
@@ -338,7 +391,8 @@ export function projectService(db: Db) {
         .where(and(eq(projects.companyId, companyId), inArray(projects.id, dedupedIds)));
       const withGoals = await attachGoals(db, rows);
       const withWorkspaces = await attachWorkspaces(db, withGoals);
-      const byId = new Map(withWorkspaces.map((project) => [project.id, project]));
+      const withIcons = await attachIconContentPath(db, withWorkspaces);
+      const byId = new Map(withIcons.map((project) => [project.id, project]));
       return dedupedIds.map((id) => byId.get(id)).filter((project): project is ProjectWithGoals => Boolean(project));
     },
 
@@ -351,7 +405,9 @@ export function projectService(db: Db) {
       if (!row) return null;
       const [withGoals] = await attachGoals(db, [row]);
       if (!withGoals) return null;
-      const [enriched] = await attachWorkspaces(db, [withGoals]);
+      const [withWorkspaces] = await attachWorkspaces(db, [withGoals]);
+      if (!withWorkspaces) return null;
+      const [enriched] = await attachIconContentPath(db, [withWorkspaces]);
       return enriched ?? null;
     },
 
@@ -390,7 +446,8 @@ export function projectService(db: Db) {
       }
 
       const [withGoals] = await attachGoals(db, [row]);
-      const [enriched] = withGoals ? await attachWorkspaces(db, [withGoals]) : [];
+      const [withWorkspaces] = withGoals ? await attachWorkspaces(db, [withGoals]) : [];
+      const [enriched] = withWorkspaces ? await attachIconContentPath(db, [withWorkspaces]) : [];
       return enriched!;
     },
 
@@ -421,6 +478,18 @@ export function projectService(db: Db) {
         }
       }
 
+      if (projectData.iconAssetId != null) {
+        const [asset] = await db
+          .select({ id: assets.id })
+          .from(assets)
+          .where(
+            and(eq(assets.id, projectData.iconAssetId), eq(assets.companyId, existingProject.companyId)),
+          );
+        if (!asset) {
+          throw badRequest("iconAssetId 必須為本公司之 asset");
+        }
+      }
+
       // Keep legacy goalId column in sync
       const updates: Partial<typeof projects.$inferInsert> = {
         ...projectData,
@@ -443,7 +512,8 @@ export function projectService(db: Db) {
       }
 
       const [withGoals] = await attachGoals(db, [row]);
-      const [enriched] = withGoals ? await attachWorkspaces(db, [withGoals]) : [];
+      const [withWorkspaces] = withGoals ? await attachWorkspaces(db, [withGoals]) : [];
+      const [enriched] = withWorkspaces ? await attachIconContentPath(db, [withWorkspaces]) : [];
       return enriched ?? null;
     },
 
@@ -492,6 +562,9 @@ export function projectService(db: Db) {
       const cwd = normalizeWorkspaceCwd(data.cwd);
       const repoUrl = readNonEmptyString(data.repoUrl);
       if (!cwd && !repoUrl) return null;
+      if (cwd) {
+        await assertProjectWorkspaceCwdUnique(db, project.companyId, cwd, null);
+      }
       const name = deriveWorkspaceName({
         name: data.name,
         cwd,
@@ -565,6 +638,9 @@ export function projectService(db: Db) {
           ? readNonEmptyString(data.repoUrl)
           : readNonEmptyString(existing.repoUrl);
       if (!nextCwd && !nextRepoUrl) return null;
+      if (nextCwd) {
+        await assertProjectWorkspaceCwdUnique(db, existing.companyId, nextCwd, workspaceId);
+      }
 
       const patch: Partial<typeof projectWorkspaces.$inferInsert> = {
         updatedAt: new Date(),

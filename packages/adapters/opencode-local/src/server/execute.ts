@@ -87,7 +87,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
   const promptTemplate = asString(
     config.promptTemplate,
-    "You are agent {{agent.id}} ({{agent.name}}). Continue your Paperclip work.",
+    "You are agent {{agent.id}} ({{agent.name}}). Continue your VFactory work.",
   );
   const command = asString(config.command, "opencode");
   const model = asString(config.model, "").trim();
@@ -145,6 +145,35 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   if (approvalId) env.PAPERCLIP_APPROVAL_ID = approvalId;
   if (approvalStatus) env.PAPERCLIP_APPROVAL_STATUS = approvalStatus;
   if (linkedIssueIds.length > 0) env.PAPERCLIP_LINKED_ISSUE_IDS = linkedIssueIds.join(",");
+  const chatRoomId =
+    typeof context.roomId === "string" && context.roomId.trim().length > 0 ? context.roomId.trim() : null;
+  const chatRoomType =
+    context.chatRoomType === "direct" || context.chatRoomType === "group" ? context.chatRoomType : null;
+  const chatMessageId =
+    typeof context.messageId === "string" && context.messageId.trim().length > 0 ? context.messageId.trim() : null;
+  const wakeReasonLabel =
+    typeof context.wakeReasonLabel === "string" && context.wakeReasonLabel.trim().length > 0
+      ? context.wakeReasonLabel.trim()
+      : null;
+  const chatMode =
+    typeof context.chatMode === "string" && context.chatMode.trim().length > 0
+      ? context.chatMode.trim()
+      : null;
+  if (chatRoomId) env.PAPERCLIP_CHAT_ROOM_ID = chatRoomId;
+  if (chatRoomType) env.PAPERCLIP_CHAT_ROOM_TYPE = chatRoomType;
+  if (chatMessageId) env.PAPERCLIP_CHAT_MESSAGE_ID = chatMessageId;
+  if (wakeReasonLabel) env.PAPERCLIP_WAKE_REASON_LABEL = wakeReasonLabel;
+  if (chatMode) env.PAPERCLIP_CHAT_MODE = chatMode;
+  const chatProjectId =
+    typeof context.chatProjectId === "string" && context.chatProjectId.trim().length > 0
+      ? context.chatProjectId.trim()
+      : null;
+  const chatProjectName =
+    typeof context.chatProjectName === "string" && context.chatProjectName.trim().length > 0
+      ? context.chatProjectName.trim()
+      : null;
+  if (chatProjectId) env.PAPERCLIP_CHAT_PROJECT_ID = chatProjectId;
+  if (chatProjectName) env.PAPERCLIP_CHAT_PROJECT_NAME = chatProjectName;
   if (effectiveWorkspaceCwd) env.PAPERCLIP_WORKSPACE_CWD = effectiveWorkspaceCwd;
   if (workspaceSource) env.PAPERCLIP_WORKSPACE_SOURCE = workspaceSource;
   if (workspaceId) env.PAPERCLIP_WORKSPACE_ID = workspaceId;

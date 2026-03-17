@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@/lib/router";
+import "./InviteLanding.css";
 import { accessApi } from "../api/access";
 import { authApi } from "../api/auth";
 import { healthApi } from "../api/health";
@@ -14,8 +15,11 @@ const joinAdapterOptions: AgentAdapterType[] = [...AGENT_ADAPTER_TYPES];
 
 const adapterLabels: Record<string, string> = {
   claude_local: "Claude (local)",
+  claude_remote: "Claude (remote)",
   codex_local: "Codex (local)",
+  codex_remote: "Codex (remote)",
   gemini_local: "Gemini CLI (local)",
+  gemini_remote: "Gemini (remote)",
   opencode_local: "OpenCode (local)",
   openclaw_gateway: "OpenClaw Gateway",
   cursor: "Cursor (local)",
@@ -23,7 +27,16 @@ const adapterLabels: Record<string, string> = {
   http: "HTTP",
 };
 
-const ENABLED_INVITE_ADAPTERS = new Set(["claude_local", "codex_local", "gemini_local", "opencode_local", "cursor"]);
+const ENABLED_INVITE_ADAPTERS = new Set([
+  "claude_local",
+  "claude_remote",
+  "codex_local",
+  "codex_remote",
+  "gemini_local",
+  "gemini_remote",
+  "opencode_local",
+  "cursor",
+]);
 
 function dateTime(value: string) {
   return new Date(value).toLocaleString();
@@ -65,6 +78,8 @@ export function InviteLandingPage() {
     enabled: token.length > 0,
     retry: false,
   });
+  /** 邀請頁不依權限過濾（使用者尚未加入公司）；顯示所有啟用的 adapter，後端在建立 agent 時再檢查權限。 */
+  const inviteAdapterOptions = joinAdapterOptions.filter((t) => ENABLED_INVITE_ADAPTERS.has(t));
 
   const invite = inviteQuery.data;
   const allowedJoinTypes = invite?.allowedJoinTypes ?? "both";
@@ -79,6 +94,12 @@ export function InviteLandingPage() {
       setJoinType(availableJoinTypes[0] ?? "human");
     }
   }, [availableJoinTypes, joinType]);
+
+  useEffect(() => {
+    if (joinType === "agent" && adapterType && !inviteAdapterOptions.includes(adapterType)) {
+      setAdapterType(inviteAdapterOptions[0] ?? "claude_remote");
+    }
+  }, [joinType, adapterType, inviteAdapterOptions]);
 
   const requiresAuthForHuman =
     joinType === "human" &&
@@ -115,19 +136,23 @@ export function InviteLandingPage() {
   });
 
   if (!token) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-destructive">Invalid invite token.</div>;
+    return (
+      <div className="invite-landing-root invite-landing-message error">Invalid invite token.</div>
+    );
   }
 
   if (inviteQuery.isLoading || healthQuery.isLoading || sessionQuery.isLoading) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Loading invite...</div>;
+    return (
+      <div className="invite-landing-root invite-landing-message muted">Loading invite...</div>
+    );
   }
 
   if (inviteQuery.error || !invite) {
     return (
-      <div className="mx-auto max-w-xl py-10">
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h1 className="text-lg font-semibold">Invite not available</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <div className="invite-landing-root">
+        <div className="invite-landing-card">
+          <h1>Invite not available</h1>
+          <p className="invite-landing-card-desc">
             This invite may be expired, revoked, or already used.
           </p>
         </div>
@@ -137,13 +162,13 @@ export function InviteLandingPage() {
 
   if (result?.kind === "bootstrap") {
     return (
-      <div className="mx-auto max-w-xl py-10">
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h1 className="text-lg font-semibold">Bootstrap complete</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <div className="invite-landing-root">
+        <div className="invite-landing-card">
+          <h1>Bootstrap complete</h1>
+          <p className="invite-landing-card-desc">
             The first instance admin is now configured. You can continue to the board.
           </p>
-          <Button asChild className="mt-4">
+          <Button asChild className="invite-landing-card-actions">
             <Link to="/">Open board</Link>
           </Button>
         </div>
@@ -172,46 +197,44 @@ export function InviteLandingPage() {
     const onboardingTextPath = readNestedString(payload.onboarding, ["textInstructions", "path"]);
     const diagnostics = Array.isArray(payload.diagnostics) ? payload.diagnostics : [];
     return (
-      <div className="mx-auto max-w-xl py-10">
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h1 className="text-lg font-semibold">Join request submitted</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <div className="invite-landing-root">
+        <div className="invite-landing-card">
+          <h1>Join request submitted</h1>
+          <p className="invite-landing-card-desc">
             Your request is pending admin approval. You will not have access until approved.
           </p>
-          <div className="mt-4 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-            Request ID: <span className="font-mono">{payload.id}</span>
+          <div className="invite-landing-block">
+            Request ID: <span className="invite-landing-mono">{payload.id}</span>
           </div>
           {claimSecret && claimApiKeyPath && (
-            <div className="mt-3 space-y-1 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-              <p className="font-medium text-foreground">One-time claim secret (save now)</p>
-              <p className="font-mono break-all">{claimSecret}</p>
-              <p className="font-mono break-all">POST {claimApiKeyPath}</p>
+            <div className="invite-landing-block">
+              <p className="invite-landing-block-title">One-time claim secret (save now)</p>
+              <p className="invite-landing-mono invite-landing-break">{claimSecret}</p>
+              <p className="invite-landing-mono invite-landing-break">POST {claimApiKeyPath}</p>
             </div>
           )}
           {(onboardingSkillUrl || onboardingSkillPath || onboardingInstallPath) && (
-            <div className="mt-3 space-y-1 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-              <p className="font-medium text-foreground">Paperclip skill bootstrap</p>
-              {onboardingSkillUrl && <p className="font-mono break-all">GET {onboardingSkillUrl}</p>}
-              {!onboardingSkillUrl && onboardingSkillPath && <p className="font-mono break-all">GET {onboardingSkillPath}</p>}
-              {onboardingInstallPath && <p className="font-mono break-all">Install to {onboardingInstallPath}</p>}
+            <div className="invite-landing-block">
+              <p className="invite-landing-block-title">VFactory skill bootstrap</p>
+              {onboardingSkillUrl && <p className="invite-landing-mono invite-landing-break">GET {onboardingSkillUrl}</p>}
+              {!onboardingSkillUrl && onboardingSkillPath && <p className="invite-landing-mono invite-landing-break">GET {onboardingSkillPath}</p>}
+              {onboardingInstallPath && <p className="invite-landing-mono invite-landing-break">Install to {onboardingInstallPath}</p>}
             </div>
           )}
           {(onboardingTextUrl || onboardingTextPath) && (
-            <div className="mt-3 space-y-1 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-              <p className="font-medium text-foreground">Agent-readable onboarding text</p>
-              {onboardingTextUrl && <p className="font-mono break-all">GET {onboardingTextUrl}</p>}
-              {!onboardingTextUrl && onboardingTextPath && <p className="font-mono break-all">GET {onboardingTextPath}</p>}
+            <div className="invite-landing-block">
+              <p className="invite-landing-block-title">Agent-readable onboarding text</p>
+              {onboardingTextUrl && <p className="invite-landing-mono invite-landing-break">GET {onboardingTextUrl}</p>}
+              {!onboardingTextUrl && onboardingTextPath && <p className="invite-landing-mono invite-landing-break">GET {onboardingTextPath}</p>}
             </div>
           )}
           {diagnostics.length > 0 && (
-            <div className="mt-3 space-y-1 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-              <p className="font-medium text-foreground">Connectivity diagnostics</p>
+            <div className="invite-landing-block">
+              <p className="invite-landing-block-title">Connectivity diagnostics</p>
               {diagnostics.map((diag, idx) => (
-                <div key={`${diag.code}:${idx}`} className="space-y-0.5">
-                  <p className={diag.level === "warn" ? "text-amber-600 dark:text-amber-400" : undefined}>
-                    [{diag.level}] {diag.message}
-                  </p>
-                  {diag.hint && <p className="font-mono break-all">{diag.hint}</p>}
+                <div key={`${diag.code}:${idx}`} className="invite-landing-diag-item" data-level={diag.level}>
+                  <p>[{diag.level}] {diag.message}</p>
+                  {diag.hint && <p className="invite-landing-mono invite-landing-break">{diag.hint}</p>}
                 </div>
               ))}
             </div>
@@ -222,25 +245,21 @@ export function InviteLandingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl py-10">
-      <div className="rounded-lg border border-border bg-card p-6">
-        <h1 className="text-xl font-semibold">
-          {invite.inviteType === "bootstrap_ceo" ? "Bootstrap your Paperclip instance" : "Join this Paperclip company"}
+    <div className="invite-landing-root">
+      <div className="invite-landing-card">
+        <h1 className="large">
+          {invite.inviteType === "bootstrap_ceo" ? "Bootstrap your VFactory instance" : "Join this VFactory company"}
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">Invite expires {dateTime(invite.expiresAt)}.</p>
+        <p className="invite-landing-card-desc">Invite expires {dateTime(invite.expiresAt)}.</p>
 
         {invite.inviteType !== "bootstrap_ceo" && (
-          <div className="mt-5 flex gap-2">
+          <div className="invite-landing-join-tabs">
             {availableJoinTypes.map((type) => (
               <button
                 key={type}
                 type="button"
                 onClick={() => setJoinType(type)}
-                className={`rounded-md border px-3 py-1.5 text-sm ${
-                  joinType === type
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border bg-background text-foreground"
-                }`}
+                className={joinType === type ? "invite-landing-join-tab active" : "invite-landing-join-tab"}
               >
                 Join as {type}
               </button>
@@ -249,33 +268,33 @@ export function InviteLandingPage() {
         )}
 
         {joinType === "agent" && invite.inviteType !== "bootstrap_ceo" && (
-          <div className="mt-4 space-y-3">
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Agent name</span>
+          <div className="invite-landing-form">
+            <label className="invite-landing-label">
+              <span className="invite-landing-label-caption">Agent name</span>
               <input
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="invite-landing-input"
                 value={agentName}
                 onChange={(event) => setAgentName(event.target.value)}
               />
             </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Adapter type</span>
+            <label className="invite-landing-label">
+              <span className="invite-landing-label-caption">Adapter type</span>
               <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="invite-landing-input"
                 value={adapterType}
                 onChange={(event) => setAdapterType(event.target.value as AgentAdapterType)}
               >
-                {joinAdapterOptions.map((type) => (
+                {inviteAdapterOptions.map((type) => (
                   <option key={type} value={type} disabled={!ENABLED_INVITE_ADAPTERS.has(type)}>
                     {adapterLabels[type]}{!ENABLED_INVITE_ADAPTERS.has(type) ? " (Coming soon)" : ""}
                   </option>
                 ))}
               </select>
             </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted-foreground">Capabilities (optional)</span>
+            <label className="invite-landing-label">
+              <span className="invite-landing-label-caption">Capabilities (optional)</span>
               <textarea
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="invite-landing-input"
                 rows={4}
                 value={capabilities}
                 onChange={(event) => setCapabilities(event.target.value)}
@@ -285,9 +304,9 @@ export function InviteLandingPage() {
         )}
 
         {requiresAuthForHuman && (
-          <div className="mt-4 rounded-md border border-border bg-muted/30 p-3 text-sm">
+          <div className="invite-landing-auth-note">
             Sign in or create an account before submitting a human join request.
-            <div className="mt-2">
+            <div className="invite-landing-auth-note-actions">
               <Button asChild size="sm" variant="outline">
                 <Link to={`/auth?next=${encodeURIComponent(`/invite/${token}`)}`}>Sign in / Create account</Link>
               </Button>
@@ -295,10 +314,10 @@ export function InviteLandingPage() {
           </div>
         )}
 
-        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+        {error && <p className="invite-landing-error">{error}</p>}
 
         <Button
-          className="mt-5"
+          className="invite-landing-submit"
           disabled={
             acceptMutation.isPending ||
             (joinType === "agent" && invite.inviteType !== "bootstrap_ceo" && agentName.trim().length === 0) ||

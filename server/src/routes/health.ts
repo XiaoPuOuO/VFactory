@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Db } from "@paperclipai/db";
-import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
-import { instanceUserRoles, invites } from "@paperclipai/db";
+import { and, count, eq, gt, isNull } from "drizzle-orm";
+import { authUsers, invites } from "@paperclipai/db";
 import type { DeploymentExposure, DeploymentMode } from "@paperclipai/shared";
 
 export function healthRoutes(
@@ -12,10 +12,10 @@ export function healthRoutes(
     authReady: boolean;
     companyDeletionEnabled: boolean;
   } = {
-    deploymentMode: "local_trusted",
+    deploymentMode: "authenticated",
     deploymentExposure: "private",
-    authReady: true,
-    companyDeletionEnabled: true,
+    authReady: false,
+    companyDeletionEnabled: false,
   },
 ) {
   const router = Router();
@@ -29,12 +29,12 @@ export function healthRoutes(
     let bootstrapStatus: "ready" | "bootstrap_pending" = "ready";
     let bootstrapInviteActive = false;
     if (opts.deploymentMode === "authenticated") {
-      const roleCount = await db
+      const adminUserCount = await db
         .select({ count: count() })
-        .from(instanceUserRoles)
-        .where(sql`${instanceUserRoles.role} = 'instance_admin'`)
+        .from(authUsers)
+        .where(eq(authUsers.group, "admin"))
         .then((rows) => Number(rows[0]?.count ?? 0));
-      bootstrapStatus = roleCount > 0 ? "ready" : "bootstrap_pending";
+      bootstrapStatus = adminUserCount > 0 ? "ready" : "bootstrap_pending";
 
       if (bootstrapStatus === "bootstrap_pending") {
         const now = new Date();

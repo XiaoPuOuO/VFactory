@@ -1,6 +1,15 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GOAL_STATUSES, GOAL_LEVELS } from "@paperclipai/shared";
+import {
+  GOAL_STATUSES,
+  GOAL_LEVELS,
+  GOAL_RECURRENCES,
+  GOAL_RECURRENCE_INTERVAL_DAYS_MAX,
+  GOAL_RECURRENCE_INTERVAL_HOURS_MAX,
+  GOAL_RECURRENCE_INTERVAL_MINUTES_MAX,
+  GOAL_RECURRENCE_INTERVAL_SECONDS_MAX,
+} from "@paperclipai/shared";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
 import { goalsApi } from "../api/goals";
@@ -21,19 +30,35 @@ import {
   Minimize2,
   Target,
   Layers,
+  Repeat,
 } from "lucide-react";
-import { cn } from "../lib/utils";
 import { MarkdownEditor, type MarkdownEditorRef } from "./MarkdownEditor";
 import { StatusBadge } from "./StatusBadge";
 
-const levelLabels: Record<string, string> = {
-  company: "Company",
-  team: "Team",
-  agent: "Agent",
-  task: "Task",
+const GOAL_LEVEL_KEYS: Record<string, string> = {
+  company: "goals.levelCompany",
+  team: "goals.levelTeam",
+  agent: "goals.levelAgent",
+  task: "goals.levelTask",
+};
+
+const GOAL_STATUS_KEYS: Record<string, string> = {
+  planned: "goals.statusPlanned",
+  active: "goals.statusActive",
+  achieved: "goals.statusAchieved",
+  cancelled: "goals.statusCancelled",
+};
+
+const GOAL_RECURRENCE_KEYS: Record<string, string> = {
+  one_time: "goals.recurrenceOneTime",
+  daily: "goals.recurrenceDaily",
+  weekly: "goals.recurrenceWeekly",
+  monthly: "goals.recurrenceMonthly",
+  custom: "goals.recurrenceCustom",
 };
 
 export function NewGoalDialog() {
+  const { t } = useTranslation();
   const { newGoalOpen, newGoalDefaults, closeNewGoal } = useDialog();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const queryClient = useQueryClient();
@@ -41,11 +66,17 @@ export function NewGoalDialog() {
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("planned");
   const [level, setLevel] = useState("task");
+  const [recurrence, setRecurrence] = useState<"one_time" | "daily" | "weekly" | "monthly" | "custom">("one_time");
+  const [recurrenceIntervalDays, setRecurrenceIntervalDays] = useState(0);
+  const [recurrenceIntervalHours, setRecurrenceIntervalHours] = useState(0);
+  const [recurrenceIntervalMinutes, setRecurrenceIntervalMinutes] = useState(0);
+  const [recurrenceIntervalSeconds, setRecurrenceIntervalSeconds] = useState(0);
   const [parentId, setParentId] = useState("");
   const [expanded, setExpanded] = useState(false);
 
   const [statusOpen, setStatusOpen] = useState(false);
   const [levelOpen, setLevelOpen] = useState(false);
+  const [recurrenceOpen, setRecurrenceOpen] = useState(false);
   const [parentOpen, setParentOpen] = useState(false);
   const descriptionEditorRef = useRef<MarkdownEditorRef>(null);
 
@@ -80,17 +111,34 @@ export function NewGoalDialog() {
     setDescription("");
     setStatus("planned");
     setLevel("task");
+    setRecurrence("one_time");
+    setRecurrenceIntervalDays(0);
+    setRecurrenceIntervalHours(0);
+    setRecurrenceIntervalMinutes(0);
+    setRecurrenceIntervalSeconds(0);
     setParentId("");
     setExpanded(false);
   }
 
+  const isCustomIntervalValid =
+    recurrence !== "custom" ||
+    recurrenceIntervalDays > 0 ||
+    recurrenceIntervalHours > 0 ||
+    recurrenceIntervalMinutes > 0 ||
+    recurrenceIntervalSeconds > 0;
+
   function handleSubmit() {
-    if (!selectedCompanyId || !title.trim()) return;
+    if (!selectedCompanyId || !title.trim() || !isCustomIntervalValid) return;
     createGoal.mutate({
       title: title.trim(),
       description: description.trim() || undefined,
       status,
       level,
+      recurrence,
+      recurrenceIntervalDays: recurrence === "custom" ? recurrenceIntervalDays : undefined,
+      recurrenceIntervalHours: recurrence === "custom" ? recurrenceIntervalHours : undefined,
+      recurrenceIntervalMinutes: recurrence === "custom" ? recurrenceIntervalMinutes : undefined,
+      recurrenceIntervalSeconds: recurrence === "custom" ? recurrenceIntervalSeconds : undefined,
       ...(appliedParentId ? { parentId: appliedParentId } : {}),
     });
   }
@@ -116,45 +164,43 @@ export function NewGoalDialog() {
     >
       <DialogContent
         showCloseButton={false}
-        className={cn("p-0 gap-0", expanded ? "sm:max-w-2xl" : "sm:max-w-lg")}
+        className={["ui-form-dialog-content", expanded ? "expanded" : ""].filter(Boolean).join(" ")}
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="ui-form-dialog-header">
+          <div className="ui-form-dialog-header-left">
             {selectedCompany && (
-              <span className="bg-muted px-1.5 py-0.5 rounded text-xs font-medium">
+              <span className="ui-form-dialog-header-company">
                 {selectedCompany.name.slice(0, 3).toUpperCase()}
               </span>
             )}
-            <span className="text-muted-foreground/60">&rsaquo;</span>
-            <span>{newGoalDefaults.parentId ? "New sub-goal" : "New goal"}</span>
+            <span className="ui-form-dialog-header-sep">&rsaquo;</span>
+            <span>{newGoalDefaults.parentId ? t("goals.newSubGoal") : t("goals.newGoal")}</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="ui-form-dialog-header-actions">
             <Button
               variant="ghost"
               size="icon-xs"
-              className="text-muted-foreground"
               onClick={() => setExpanded(!expanded)}
             >
-              {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              {expanded ? <Minimize2 /> : <Maximize2 />}
             </Button>
             <Button
               variant="ghost"
               size="icon-xs"
-              className="text-muted-foreground"
               onClick={() => { reset(); closeNewGoal(); }}
             >
-              <span className="text-lg leading-none">&times;</span>
+              <span className="ui-form-dialog-close-char">&times;</span>
             </Button>
           </div>
         </div>
 
         {/* Title */}
-        <div className="px-4 pt-4 pb-2 shrink-0">
+        <div className="ui-form-dialog-title-wrap">
           <input
-            className="w-full text-lg font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
-            placeholder="Goal title"
+            className="ui-form-dialog-title-input"
+            placeholder={t("goals.goalTitlePlaceholder")}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => {
@@ -168,14 +214,14 @@ export function NewGoalDialog() {
         </div>
 
         {/* Description */}
-        <div className="px-4 pb-2">
+        <div className="ui-form-dialog-body">
           <MarkdownEditor
             ref={descriptionEditorRef}
             value={description}
             onChange={setDescription}
-            placeholder="Add description..."
+            placeholder={t("goals.addDescriptionPlaceholder")}
             bordered={false}
-            contentClassName={cn("text-sm text-muted-foreground", expanded ? "min-h-[220px]" : "min-h-[120px]")}
+            contentClassName={["ui-form-dialog-content-editor", expanded ? "expanded" : ""].filter(Boolean).join(" ")}
             imageUploadHandler={async (file) => {
               const asset = await uploadDescriptionImage.mutateAsync(file);
               return asset.contentPath;
@@ -184,25 +230,23 @@ export function NewGoalDialog() {
         </div>
 
         {/* Property chips */}
-        <div className="flex items-center gap-1.5 px-4 py-2 border-t border-border flex-wrap">
+        <div className="ui-form-dialog-chips">
           {/* Status */}
           <Popover open={statusOpen} onOpenChange={setStatusOpen}>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
+              <button type="button" className="ui-form-dialog-chip">
                 <StatusBadge status={status} />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-40 p-1" align="start">
+            <PopoverContent className="ui-form-dialog-popover-content w-40" align="start">
               {GOAL_STATUSES.map((s) => (
                 <button
                   key={s}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 capitalize",
-                    s === status && "bg-accent"
-                  )}
+                  type="button"
+                  className={["ui-form-dialog-popover-item", s === status ? "active" : ""].filter(Boolean).join(" ")}
                   onClick={() => { setStatus(s); setStatusOpen(false); }}
                 >
-                  {s}
+                  {GOAL_STATUS_KEYS[s] ? t(GOAL_STATUS_KEYS[s]) : s}
                 </button>
               ))}
             </PopoverContent>
@@ -211,52 +255,126 @@ export function NewGoalDialog() {
           {/* Level */}
           <Popover open={levelOpen} onOpenChange={setLevelOpen}>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
-                <Layers className="h-3 w-3 text-muted-foreground" />
-                {levelLabels[level] ?? level}
+              <button type="button" className="ui-form-dialog-chip">
+                <Layers className="ui-form-dialog-chip-icon" />
+                {GOAL_LEVEL_KEYS[level] ? t(GOAL_LEVEL_KEYS[level]) : level}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-40 p-1" align="start">
+            <PopoverContent className="ui-form-dialog-popover-content w-40" align="start">
               {GOAL_LEVELS.map((l) => (
                 <button
                   key={l}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-                    l === level && "bg-accent"
-                  )}
+                  type="button"
+                  className={["ui-form-dialog-popover-item", l === level ? "active" : ""].filter(Boolean).join(" ")}
                   onClick={() => { setLevel(l); setLevelOpen(false); }}
                 >
-                  {levelLabels[l] ?? l}
+                  {GOAL_LEVEL_KEYS[l] ? t(GOAL_LEVEL_KEYS[l]) : l}
                 </button>
               ))}
+            </PopoverContent>
+          </Popover>
+
+          {/* Recurrence */}
+          <Popover open={recurrenceOpen} onOpenChange={setRecurrenceOpen}>
+            <PopoverTrigger asChild>
+              <button type="button" className="ui-form-dialog-chip">
+                <Repeat className="ui-form-dialog-chip-icon" />
+                {recurrence === "custom"
+                  ? t("goals.recurrenceIntervalLabel", {
+                      days: recurrenceIntervalDays,
+                      hours: recurrenceIntervalHours,
+                      minutes: recurrenceIntervalMinutes,
+                      seconds: recurrenceIntervalSeconds,
+                    })
+                  : (GOAL_RECURRENCE_KEYS[recurrence] ? t(GOAL_RECURRENCE_KEYS[recurrence]) : recurrence)}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="ui-form-dialog-popover-content w-56" align="start">
+              <div className="ui-form-dialog-popover-list">
+                {GOAL_RECURRENCES.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    className={["ui-form-dialog-popover-item", r === recurrence ? "active" : ""].filter(Boolean).join(" ")}
+                    onClick={() => { setRecurrence(r); if (r !== "custom") setRecurrenceOpen(false); }}
+                  >
+                    {GOAL_RECURRENCE_KEYS[r] ? t(GOAL_RECURRENCE_KEYS[r]) : r}
+                  </button>
+                ))}
+              </div>
+              {recurrence === "custom" && (
+                <div className="ui-form-dialog-recurrence-custom">
+                  <div className="ui-form-dialog-recurrence-grid">
+                    <div className="ui-form-dialog-recurrence-field">
+                      <label>{t("goals.recurrenceIntervalDays")}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={GOAL_RECURRENCE_INTERVAL_DAYS_MAX}
+                        value={recurrenceIntervalDays}
+                        onChange={(e) => setRecurrenceIntervalDays(parseInt(e.target.value, 10) || 0)}
+                      />
+                    </div>
+                    <div className="ui-form-dialog-recurrence-field">
+                      <label>{t("goals.recurrenceIntervalHours")}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={GOAL_RECURRENCE_INTERVAL_HOURS_MAX}
+                        value={recurrenceIntervalHours}
+                        onChange={(e) => setRecurrenceIntervalHours(parseInt(e.target.value, 10) || 0)}
+                      />
+                    </div>
+                    <div className="ui-form-dialog-recurrence-field">
+                      <label>{t("goals.recurrenceIntervalMinutes")}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={GOAL_RECURRENCE_INTERVAL_MINUTES_MAX}
+                        value={recurrenceIntervalMinutes}
+                        onChange={(e) => setRecurrenceIntervalMinutes(parseInt(e.target.value, 10) || 0)}
+                      />
+                    </div>
+                    <div className="ui-form-dialog-recurrence-field">
+                      <label>{t("goals.recurrenceIntervalSeconds")}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={GOAL_RECURRENCE_INTERVAL_SECONDS_MAX}
+                        value={recurrenceIntervalSeconds}
+                        onChange={(e) => setRecurrenceIntervalSeconds(parseInt(e.target.value, 10) || 0)}
+                      />
+                    </div>
+                  </div>
+                  {!isCustomIntervalValid && (
+                    <p className="ui-form-dialog-recurrence-error">{t("goals.recurrenceIntervalAllZero")}</p>
+                  )}
+                </div>
+              )}
             </PopoverContent>
           </Popover>
 
           {/* Parent goal */}
           <Popover open={parentOpen} onOpenChange={setParentOpen}>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
-                <Target className="h-3 w-3 text-muted-foreground" />
-                {currentParent ? currentParent.title : "Parent goal"}
+              <button type="button" className="ui-form-dialog-chip">
+                <Target className="ui-form-dialog-chip-icon" />
+                {currentParent ? currentParent.title : t("goals.parentGoal")}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-48 p-1" align="start">
+            <PopoverContent className="ui-form-dialog-popover-content w-48" align="start">
               <button
-                className={cn(
-                  "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-                  !appliedParentId && "bg-accent"
-                )}
+                type="button"
+                className={["ui-form-dialog-popover-item", !appliedParentId ? "active" : ""].filter(Boolean).join(" ")}
                 onClick={() => { setParentId(""); setParentOpen(false); }}
               >
-                No parent
+                {t("goals.noParent")}
               </button>
               {(goals ?? []).map((g) => (
                 <button
                   key={g.id}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 truncate",
-                    g.id === appliedParentId && "bg-accent"
-                  )}
+                  type="button"
+                  className={["ui-form-dialog-popover-item truncate", g.id === appliedParentId ? "active" : ""].filter(Boolean).join(" ")}
                   onClick={() => { setParentId(g.id); setParentOpen(false); }}
                 >
                   {g.title}
@@ -267,13 +385,13 @@ export function NewGoalDialog() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end px-4 py-2.5 border-t border-border">
+        <div className="ui-form-dialog-footer">
           <Button
             size="sm"
-            disabled={!title.trim() || createGoal.isPending}
+            disabled={!title.trim() || !isCustomIntervalValid || createGoal.isPending}
             onClick={handleSubmit}
           >
-            {createGoal.isPending ? "Creating…" : newGoalDefaults.parentId ? "Create sub-goal" : "Create goal"}
+            {createGoal.isPending ? t("goals.creating") : newGoalDefaults.parentId ? t("goals.createSubGoal") : t("goals.createGoal")}
           </Button>
         </div>
       </DialogContent>

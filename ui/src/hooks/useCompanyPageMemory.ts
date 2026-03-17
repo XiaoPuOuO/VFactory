@@ -53,7 +53,7 @@ export function useCompanyPageMemory() {
     }
   }, [fullPath]);
 
-  // Navigate to saved path when company changes
+  // 切換公司時一律導向該公司 dashboard，避免 URL 重複疊加（saved path 可能已含錯亂 prefix）
   useEffect(() => {
     if (!selectedCompanyId) return;
 
@@ -62,11 +62,7 @@ export function useCompanyPageMemory() {
       selectedCompanyId !== prevCompanyId.current
     ) {
       if (selectionSource !== "route_sync" && selectedCompany) {
-        const paths = getCompanyPaths();
-        const savedPath = paths[selectedCompanyId];
-        const relativePath = savedPath ? toCompanyRelativePath(savedPath) : "/dashboard";
-        const targetPath = isRememberableCompanyPath(relativePath) ? relativePath : "/dashboard";
-        navigate(`/${selectedCompany.issuePrefix}${targetPath}`, { replace: true });
+        navigate(`/${selectedCompany.issuePrefix}/dashboard`, { replace: true });
       }
     }
     prevCompanyId.current = selectedCompanyId;

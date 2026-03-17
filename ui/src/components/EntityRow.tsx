@@ -1,6 +1,5 @@
 import { type ReactNode } from "react";
 import { Link } from "@/lib/router";
-import { cn } from "../lib/utils";
 
 interface EntityRowProps {
   leading?: ReactNode;
@@ -26,43 +25,36 @@ export function EntityRow({
   className,
 }: EntityRowProps) {
   const isClickable = !!(to || onClick);
-  const classes = cn(
-    "flex items-center gap-3 px-4 py-2 text-sm border-b border-border last:border-b-0 transition-colors",
-    isClickable && "cursor-pointer hover:bg-accent/50",
-    selected && "bg-accent/30",
-    className
-  );
+  const rowClass = ["entity-row", isClickable && "clickable", selected && "selected", className].filter(Boolean).join(" ");
 
   const content = (
     <>
-      {leading && <div className="flex items-center gap-2 shrink-0">{leading}</div>}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          {identifier && (
-            <span className="text-xs text-muted-foreground font-mono shrink-0 relative top-[1px]">
-              {identifier}
-            </span>
+      {leading && <div className="entity-row-leading">{leading}</div>}
+      <div className="entity-row-body">
+        <div className="entity-row-body-inner">
+          {identifier != null && identifier !== "" && (
+            <span className="entity-row-identifier">{identifier}</span>
           )}
-          <span className="truncate">{title}</span>
+          <span className="entity-row-title">{title}</span>
         </div>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>
+        {subtitle != null && subtitle !== "" && (
+          <p className="entity-row-subtitle">{subtitle}</p>
         )}
       </div>
-      {trailing && <div className="flex items-center gap-2 shrink-0">{trailing}</div>}
+      {trailing != null && <div className="entity-row-trailing">{trailing}</div>}
     </>
   );
 
   if (to) {
     return (
-      <Link to={to} className={cn(classes, "no-underline text-inherit")} onClick={onClick}>
+      <Link to={to} className={`${rowClass} entity-row-link`} onClick={onClick}>
         {content}
       </Link>
     );
   }
 
   return (
-    <div className={classes} onClick={onClick}>
+    <div className={rowClass} onClick={onClick} role={isClickable ? "button" : undefined}>
       {content}
     </div>
   );

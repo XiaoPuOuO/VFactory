@@ -7,13 +7,13 @@ import { errorHandler } from "../middleware/index.js";
 const mockAccessService = vi.hoisted(() => ({
   hasPermission: vi.fn(),
   canUser: vi.fn(),
-  isInstanceAdmin: vi.fn(),
+  hasInstanceFullAccess: vi.fn(),
+  getInstancePermissionsForUser: vi.fn(),
+  setUserGroup: vi.fn(),
   getMembership: vi.fn(),
   ensureMembership: vi.fn(),
   listMembers: vi.fn(),
   setMemberPermissions: vi.fn(),
-  promoteInstanceAdmin: vi.fn(),
-  demoteInstanceAdmin: vi.fn(),
   listUserCompanyAccess: vi.fn(),
   setUserCompanyAccess: vi.fn(),
   setPrincipalGrants: vi.fn(),
@@ -66,7 +66,7 @@ function createApp(actor: Record<string, unknown>, db: Record<string, unknown>) 
   app.use(
     "/api",
     accessRoutes(db as any, {
-      deploymentMode: "local_trusted",
+      deploymentMode: "authenticated",
       deploymentExposure: "private",
       bindHost: "127.0.0.1",
       allowedHostnames: [],
@@ -144,7 +144,6 @@ describe("POST /companies/:companyId/openclaw/invite-prompt", () => {
         userId: "user-1",
         companyIds: ["company-1"],
         source: "session",
-        isInstanceAdmin: false,
       },
       db,
     );
@@ -166,7 +165,6 @@ describe("POST /companies/:companyId/openclaw/invite-prompt", () => {
         userId: "user-1",
         companyIds: ["company-1"],
         source: "session",
-        isInstanceAdmin: false,
       },
       db,
     );

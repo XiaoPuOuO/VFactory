@@ -142,7 +142,7 @@ export interface AdapterEnvironmentTestContext {
   adapterType: string;
   config: Record<string, unknown>;
   deployment?: {
-    mode?: "local_trusted" | "authenticated";
+    mode?: "authenticated";
     exposure?: "private" | "public";
     bindHost?: string | null;
     allowedHostnames?: string[];

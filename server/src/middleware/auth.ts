@@ -2,7 +2,16 @@ import { createHash } from "node:crypto";
 import type { Request, RequestHandler } from "express";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agentApiKeys, agents, companyMemberships, instanceUserRoles } from "@paperclipai/db";
+import {
+  agentApiKeys,
+  agents,
+  authUsers,
+  companies,
+  companyMemberships,
+  instanceSettings,
+  tenantMemberships,
+} from "@paperclipai/db";
+import { instanceGroupsService } from "../services/instance-groups.js";
 import { verifyLocalAgentJwt } from "../agent-auth-jwt.js";
 import type { DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
@@ -12,23 +21,27 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/** 查詢使用者封禁狀態；傳入 undefined 時不檢查（如 local_trusted 模式） */
+export type GetBanStatusFn = (
+  userId: string,
+) => Promise<{ banned: boolean; reason: string | null; bannedUntil: Date | null } | null>;
+
 interface ActorMiddlewareOptions {
   deploymentMode: DeploymentMode;
   resolveSession?: (req: Request) => Promise<BetterAuthSessionResult | null>;
+  getBanStatus?: GetBanStatusFn;
 }
 
 export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHandler {
   return async (req, _res, next) => {
-    req.actor =
-      opts.deploymentMode === "local_trusted"
-        ? { type: "board", userId: "local-board", isInstanceAdmin: true, source: "local_implicit" }
-        : { type: "none", source: "none" };
+    const requireSession = opts.deploymentMode === "authenticated";
+    req.actor = { type: "none", source: "none" };
 
     const runIdHeader = req.header("x-paperclip-run-id");
 
     const authHeader = req.header("authorization");
     if (!authHeader?.toLowerCase().startsWith("bearer ")) {
-      if (opts.deploymentMode === "authenticated" && opts.resolveSession) {
+      if (requireSession && opts.resolveSession) {
         let session: BetterAuthSessionResult | null = null;
         try {
           session = await opts.resolveSession(req);
@@ -40,11 +53,24 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         }
         if (session?.user?.id) {
           const userId = session.user.id;
-          const [roleRow, memberships] = await Promise.all([
+          if (opts.getBanStatus) {
+            const banStatus = await opts.getBanStatus(userId);
+            if (banStatus?.banned) {
+              req.actor = {
+                type: "banned",
+                userId,
+                reason: banStatus.reason ?? "Account suspended",
+                bannedUntil: banStatus.bannedUntil ?? null,
+              };
+              next();
+              return;
+            }
+          }
+          const [userRow, memberships, tenantMembership, defaultGroupRow] = await Promise.all([
             db
-              .select({ id: instanceUserRoles.id })
-              .from(instanceUserRoles)
-              .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
+              .select({ group: authUsers.group })
+              .from(authUsers)
+              .where(eq(authUsers.id, userId))
               .then((rows) => rows[0] ?? null),
             db
               .select({ companyId: companyMemberships.companyId })
@@ -56,12 +82,51 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
                   eq(companyMemberships.status, "active"),
                 ),
               ),
+            req.tenantId
+              ? db
+                  .select({ id: tenantMemberships.id })
+                  .from(tenantMemberships)
+                  .where(
+                    and(
+                      eq(tenantMemberships.tenantId, req.tenantId),
+                      eq(tenantMemberships.userId, userId),
+                    ),
+                  )
+                  .then((rows) => rows[0] ?? null)
+              : Promise.resolve(null),
+            db
+              .select({ value: instanceSettings.value })
+              .from(instanceSettings)
+              .where(eq(instanceSettings.key, "default_group"))
+              .then((rows) => rows[0] ?? null),
           ]);
+          const defaultGroupName =
+            defaultGroupRow?.value != null && String(defaultGroupRow.value).trim() !== ""
+              ? defaultGroupRow.value.trim()
+              : "default";
+          const groupForPermissions =
+            userRow?.group != null && String(userRow.group).trim() !== ""
+              ? userRow.group
+              : defaultGroupName;
+          const instanceGroupSvc = instanceGroupsService(db);
+          const permissions = await instanceGroupSvc.getEffectivePermissionKeysByGroupName(groupForPermissions);
+          let companyIds = memberships.map((row) => row.companyId);
+          const hasInstanceGroup = permissions.length > 0;
+          if (req.tenantId && !tenantMembership && !hasInstanceGroup) {
+            companyIds = [];
+          } else if (req.tenantId && (tenantMembership || hasInstanceGroup)) {
+            const companiesInTenant = await db
+              .select({ id: companies.id })
+              .from(companies)
+              .where(eq(companies.tenantId, req.tenantId));
+            const tenantCompanyIds = new Set(companiesInTenant.map((c) => c.id));
+            companyIds = companyIds.filter((id) => tenantCompanyIds.has(id));
+          }
           req.actor = {
             type: "board",
             userId,
-            companyIds: memberships.map((row) => row.companyId),
-            isInstanceAdmin: Boolean(roleRow),
+            companyIds,
+            permissions: permissions.length > 0 ? permissions : undefined,
             runId: runIdHeader ?? undefined,
             source: "session",
           };
@@ -110,6 +175,21 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         return;
       }
 
+      const companyRow = await db
+        .select({ tenantId: companies.tenantId })
+        .from(companies)
+        .where(eq(companies.id, agentRecord.companyId))
+        .then((rows) => rows[0] ?? null);
+      if (!companyRow) {
+        next();
+        return;
+      }
+      if (req.tenantId && companyRow.tenantId !== req.tenantId) {
+        next();
+        return;
+      }
+      if (!req.tenantId) req.tenantId = companyRow.tenantId;
+
       req.actor = {
         type: "agent",
         agentId: claims.sub,
@@ -137,6 +217,21 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
       next();
       return;
     }
+
+    const companyRow = await db
+      .select({ tenantId: companies.tenantId })
+      .from(companies)
+      .where(eq(companies.id, agentRecord.companyId))
+      .then((rows) => rows[0] ?? null);
+    if (!companyRow) {
+      next();
+      return;
+    }
+    if (req.tenantId && companyRow.tenantId !== req.tenantId) {
+      next();
+      return;
+    }
+    if (!req.tenantId) req.tenantId = companyRow.tenantId;
 
     req.actor = {
       type: "agent",

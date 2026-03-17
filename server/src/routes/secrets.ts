@@ -21,17 +21,17 @@ export function secretRoutes(db: Db) {
       : "local_encrypted"
   ) as SecretProvider;
 
-  router.get("/companies/:companyId/secret-providers", (req, res) => {
+  router.get("/companies/:companyId/secret-providers", async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     res.json(svc.listProviders());
   });
 
   router.get("/companies/:companyId/secrets", async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const secrets = await svc.list(companyId);
     res.json(secrets);
   });
@@ -39,7 +39,7 @@ export function secretRoutes(db: Db) {
   router.post("/companies/:companyId/secrets", validate(createSecretSchema), async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
 
     const created = await svc.create(
       companyId,
@@ -74,7 +74,7 @@ export function secretRoutes(db: Db) {
       res.status(404).json({ error: "Secret not found" });
       return;
     }
-    assertCompanyAccess(req, existing.companyId);
+    await assertCompanyAccess(req, existing.companyId, db);
 
     const rotated = await svc.rotate(
       id,
@@ -106,7 +106,7 @@ export function secretRoutes(db: Db) {
       res.status(404).json({ error: "Secret not found" });
       return;
     }
-    assertCompanyAccess(req, existing.companyId);
+    await assertCompanyAccess(req, existing.companyId, db);
 
     const updated = await svc.update(id, {
       name: req.body.name,
@@ -140,7 +140,7 @@ export function secretRoutes(db: Db) {
       res.status(404).json({ error: "Secret not found" });
       return;
     }
-    assertCompanyAccess(req, existing.companyId);
+    await assertCompanyAccess(req, existing.companyId, db);
 
     const removed = await svc.remove(id);
     if (!removed) {

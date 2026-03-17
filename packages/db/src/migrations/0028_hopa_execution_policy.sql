@@ -1,2 +1,2 @@
-ALTER TABLE "issues" ADD COLUMN "execution_policy" jsonb;--> statement-breakpoint
-ALTER TABLE "issues" ADD COLUMN "execution_label" text;
+ALTER TABLE "issues" ADD COLUMN IF NOT EXISTS "execution_policy" jsonb;--> statement-breakpoint
+ALTER TABLE "issues" ADD COLUMN IF NOT EXISTS "execution_label" text;

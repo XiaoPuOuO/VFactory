@@ -1,0 +1,339 @@
+/**
+ * ApprovalDetail 頁面 — 原生 CSS（無 Tailwind）
+ */
+
+.approval-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 48rem;
+}
+
+.approval-detail-banner {
+  border: 1px solid #86efac;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f0fdf4;
+  animation: approval-detail-fade-in 0.3s ease;
+}
+
+.dark .approval-detail-banner {
+  border-color: color-mix(in oklab, #22c55e 40%, transparent);
+  background: color-mix(in oklab, #166534 20%, transparent);
+}
+
+.approval-detail-banner-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.approval-detail-banner-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.approval-detail-banner-icon-wrap {
+  position: relative;
+  margin-top: 0.125rem;
+}
+
+.approval-detail-banner-icon {
+  width: 1rem;
+  height: 1rem;
+  color: #16a34a;
+}
+
+.dark .approval-detail-banner-icon {
+  color: #4ade80;
+}
+
+.approval-detail-banner-sparkle {
+  width: 0.75rem;
+  height: 0.75rem;
+  color: #22c55e;
+  position: absolute;
+  right: -0.5rem;
+  top: -0.25rem;
+  animation: approval-detail-pulse 2s ease-in-out infinite;
+}
+
+.dark .approval-detail-banner-sparkle {
+  color: #86efac;
+}
+
+.approval-detail-banner-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #166534;
+}
+
+.dark .approval-detail-banner-title {
+  color: #dcfce7;
+}
+
+.approval-detail-banner-desc {
+  font-size: 0.75rem;
+  color: color-mix(in oklab, #15803d 90%, #166534);
+}
+
+.dark .approval-detail-banner-desc {
+  color: color-mix(in oklab, #bbf7d0 90%, transparent);
+}
+
+.approval-detail-banner-cta {
+  border-color: #4ade80;
+  color: #166534;
+}
+
+.approval-detail-banner-cta:hover:not(:disabled) {
+  background: #dcfce7;
+}
+
+.dark .approval-detail-banner-cta {
+  border-color: color-mix(in oklab, #22c55e 50%, transparent);
+  color: #dcfce7;
+}
+
+.dark .approval-detail-banner-cta:hover:not(:disabled) {
+  background: color-mix(in oklab, #166534 30%, transparent);
+}
+
+.approval-detail-card {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.approval-detail-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.approval-detail-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.approval-detail-card-type-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.approval-detail-card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.approval-detail-card-id {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  font-family: ui-monospace, monospace;
+}
+
+.approval-detail-body {
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.approval-detail-requested-by {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.approval-detail-requested-by-label {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.approval-detail-toggle-raw {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.approval-detail-toggle-raw:hover {
+  color: var(--foreground);
+}
+
+.approval-detail-toggle-raw svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.approval-detail-toggle-raw.expanded svg {
+  transform: rotate(90deg);
+}
+
+.approval-detail-raw-payload {
+  font-size: 0.75rem;
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+}
+
+.approval-detail-decision-note {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.approval-detail-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.approval-detail-linked {
+  padding-top: 0.5rem;
+  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+
+.approval-detail-linked-title {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin-bottom: 0.375rem;
+}
+
+.approval-detail-linked-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.approval-detail-linked-item {
+  display: block;
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  padding: 0.375rem 0.5rem;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.approval-detail-linked-item:hover {
+  background: color-mix(in oklab, var(--accent) 20%, transparent);
+}
+
+.approval-detail-linked-item-id {
+  font-family: ui-monospace, monospace;
+  color: var(--muted-foreground);
+  margin-right: 0.5rem;
+}
+
+.approval-detail-linked-note {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 0.5rem;
+}
+
+.approval-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.approval-detail-btn-approve {
+  background: #15803d;
+  color: white;
+  border: none;
+}
+
+.approval-detail-btn-approve:hover:not(:disabled) {
+  background: #166534;
+}
+
+.approval-detail-btn-destructive-outline {
+  color: var(--destructive);
+  border-color: color-mix(in oklab, var(--destructive) 40%, transparent);
+}
+
+.approval-detail-comments-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.approval-detail-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.approval-detail-comment {
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+}
+
+.approval-detail-comment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.approval-detail-comment-time {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.approval-detail-comment-author-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.approval-detail-comment-author-link:hover {
+  text-decoration: underline;
+}
+
+.approval-detail-comment-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.approval-detail-not-found {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+@keyframes approval-detail-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes approval-detail-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

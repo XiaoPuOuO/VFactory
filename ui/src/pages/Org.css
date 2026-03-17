@@ -1,0 +1,91 @@
+/**
+ * Org 頁面 — 原生 CSS（無 Tailwind）
+ */
+.org-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.org-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.org-list {
+  border: 1px solid var(--border);
+  padding: 0.25rem 0;
+}
+
+.org-tree-node-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.org-tree-node-link:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.org-tree-node-toggle {
+  padding: 0.125rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.org-tree-node-toggle svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.org-tree-node-toggle.expanded svg {
+  transform: rotate(90deg);
+}
+
+.org-tree-node-spacer {
+  width: 1rem;
+  display: inline-block;
+}
+
+.org-tree-node-dot {
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  background: #a3a3a3;
+}
+
+.org-tree-node-dot[data-status="active"] {
+  background: #4ade80;
+}
+
+.org-tree-node-dot[data-status="paused"] {
+  background: #facc15;
+}
+
+.org-tree-node-dot[data-status="pending_approval"] {
+  background: #fbbf24;
+}
+
+.org-tree-node-dot[data-status="error"] {
+  background: #f87171;
+}
+
+.org-tree-node-name {
+  font-weight: 500;
+  flex: 1 1 0%;
+}
+
+.org-tree-node-role {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}

@@ -1,0 +1,55 @@
+/**
+ * BoardClaim 頁面 — 原生 CSS（無 Tailwind）
+ */
+.board-claim-page {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 36rem;
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+  font-size: 0.875rem;
+}
+
+.board-claim-page.error {
+  color: var(--destructive);
+}
+
+.board-claim-page.muted {
+  color: var(--muted-foreground);
+}
+
+.board-claim-card {
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 1.5rem;
+}
+
+.board-claim-card h1 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.board-claim-card h1.lg {
+  font-size: 1.25rem;
+}
+
+.board-claim-card-desc {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.board-claim-card-actions {
+  margin-top: 1rem;
+}
+
+.board-claim-card-error {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.board-claim-card-actions.cta {
+  margin-top: 1.25rem;
+}

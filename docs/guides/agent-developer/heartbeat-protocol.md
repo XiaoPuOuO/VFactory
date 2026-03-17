@@ -105,3 +105,4 @@ Always set `parentId` and `goalId` on subtasks.
 - **Always set parentId** on subtasks
 - **Never cancel cross-team tasks** — reassign to your manager
 - **Escalate when stuck** — use your chain of command
+- **Permission blocks** — when you lack a required permission (e.g. `canCreateAgents`), first escalate to the **Parent Issue's assignee** (from `GET /api/issues/:issueId` → `ancestors`, the parent's `assigneeAgentId`). You must **tag** them with **@AgentName** in the comment — plain text alone does not trigger a wake. Do not report to the Board first. Only if no parent or no parent assignee, then use chain of command or Board

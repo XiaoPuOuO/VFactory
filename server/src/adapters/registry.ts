@@ -64,8 +64,31 @@ const claudeLocalAdapter: ServerAdapterModule = {
   agentConfigurationDoc: claudeAgentConfigurationDoc,
 };
 
+/** Same execute as local; runtime uses ANTHROPIC_API_KEY (required for this type). */
+const claudeRemoteAdapter: ServerAdapterModule = {
+  type: "claude_remote",
+  execute: claudeExecute,
+  testEnvironment: claudeTestEnvironment,
+  sessionCodec: claudeSessionCodec,
+  models: claudeModels,
+  supportsLocalAgentJwt: true,
+  agentConfigurationDoc: claudeAgentConfigurationDoc,
+};
+
 const codexLocalAdapter: ServerAdapterModule = {
   type: "codex_local",
+  execute: codexExecute,
+  testEnvironment: codexTestEnvironment,
+  sessionCodec: codexSessionCodec,
+  models: codexModels,
+  listModels: listCodexModels,
+  supportsLocalAgentJwt: true,
+  agentConfigurationDoc: codexAgentConfigurationDoc,
+};
+
+/** Same execute as local; runtime uses OPENAI_API_KEY (required for this type). */
+const codexRemoteAdapter: ServerAdapterModule = {
+  type: "codex_remote",
   execute: codexExecute,
   testEnvironment: codexTestEnvironment,
   sessionCodec: codexSessionCodec,
@@ -88,6 +111,17 @@ const cursorLocalAdapter: ServerAdapterModule = {
 
 const geminiLocalAdapter: ServerAdapterModule = {
   type: "gemini_local",
+  execute: geminiExecute,
+  testEnvironment: geminiTestEnvironment,
+  sessionCodec: geminiSessionCodec,
+  models: geminiModels,
+  supportsLocalAgentJwt: true,
+  agentConfigurationDoc: geminiAgentConfigurationDoc,
+};
+
+/** Same execute as local; runtime uses GEMINI_API_KEY/GOOGLE_API_KEY (required for this type). */
+const geminiRemoteAdapter: ServerAdapterModule = {
+  type: "gemini_remote",
   execute: geminiExecute,
   testEnvironment: geminiTestEnvironment,
   sessionCodec: geminiSessionCodec,
@@ -130,11 +164,14 @@ const piLocalAdapter: ServerAdapterModule = {
 const adaptersByType = new Map<string, ServerAdapterModule>(
   [
     claudeLocalAdapter,
+    claudeRemoteAdapter,
     codexLocalAdapter,
+    codexRemoteAdapter,
     openCodeLocalAdapter,
     piLocalAdapter,
     cursorLocalAdapter,
     geminiLocalAdapter,
+    geminiRemoteAdapter,
     openclawGatewayAdapter,
     processAdapter,
     httpAdapter,

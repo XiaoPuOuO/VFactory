@@ -1,0 +1,170 @@
+/**
+ * InstanceCompanyManagement 頁面 — 此站設定 > Company 管理
+ */
+.instance-company-management-page {
+  max-width: 64rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.instance-company-management-loading,
+.instance-company-management-error {
+  font-size: 0.875rem;
+}
+
+.instance-company-management-error {
+  color: var(--destructive);
+}
+
+.instance-company-management-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.instance-company-management-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.instance-company-management-title-wrap svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.instance-company-management-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.instance-company-management-desc {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.instance-company-management-archive-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  margin-top: 0.25rem;
+}
+
+.instance-company-management-archive-link:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+.instance-company-management-archive-link svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.instance-company-management-card-content {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.instance-company-management-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.instance-company-management-table th,
+.instance-company-management-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.instance-company-management-table th {
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.instance-company-management-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.instance-company-management-th-name,
+.instance-company-management-td-name {
+  min-width: 10rem;
+}
+
+.instance-company-management-th-desc,
+.instance-company-management-td-desc {
+  min-width: 12rem;
+  max-width: 16rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.instance-company-management-th-status,
+.instance-company-management-td-status {
+  min-width: 5rem;
+}
+
+.instance-company-management-th-prefix,
+.instance-company-management-td-prefix {
+  min-width: 4rem;
+}
+
+.instance-company-management-th-agents,
+.instance-company-management-td-agents,
+.instance-company-management-th-issues,
+.instance-company-management-td-issues {
+  min-width: 4rem;
+  text-align: right;
+}
+
+.instance-company-management-th-actions,
+.instance-company-management-td-actions {
+  min-width: 8rem;
+  text-align: right;
+}
+
+.instance-company-management-status {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.instance-company-management-status.active {
+  background: color-mix(in oklab, var(--success) 20%, transparent);
+  color: var(--success);
+}
+
+.instance-company-management-status.paused {
+  background: color-mix(in oklab, var(--muted-foreground) 20%, transparent);
+  color: var(--muted-foreground);
+}
+
+.instance-company-management-status.archived {
+  background: color-mix(in oklab, var(--muted-foreground) 15%, transparent);
+  color: var(--muted-foreground);
+}
+
+.instance-company-management-prefix-code {
+  font-size: 0.8125rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background: var(--muted);
+}
+
+.instance-company-management-action-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.25rem;
+  vertical-align: -0.125em;
+}

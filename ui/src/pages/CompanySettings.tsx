@@ -1,18 +1,32 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { companiesApi } from "../api/companies";
 import { accessApi } from "../api/access";
+import { meApi } from "../api/me";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import { Settings, Check } from "lucide-react";
+import { FolderOpen } from "lucide-react";
 import { CompanyPatternIcon } from "../components/CompanyPatternIcon";
+import { IconSettingDialog } from "../components/IconSettingDialog";
+import { ChoosePathButton } from "../components/PathInstructionsModal";
 import {
   Field,
   ToggleField,
   HintIcon
 } from "../components/agent-config-primitives";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import "./CompanySettings.css";
 
 type AgentSnippetInput = {
   onboardingTextUrl: string;
@@ -21,6 +35,7 @@ type AgentSnippetInput = {
 };
 
 export function CompanySettings() {
+  const { t } = useTranslation(["company", "common"]);
   const {
     companies,
     selectedCompany,
@@ -29,11 +44,14 @@ export function CompanySettings() {
   } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
+  const { data: meProfile } = useQuery({ queryKey: ["me"], queryFn: () => meApi.get(), retry: false });
+  const canSetWorkingDirectory = meProfile?.group === "admin";
 
   // General settings local state
   const [companyName, setCompanyName] = useState("");
   const [description, setDescription] = useState("");
   const [brandColor, setBrandColor] = useState("");
+  const [workingDirectory, setWorkingDirectory] = useState("");
 
   // Sync local state from selected company
   useEffect(() => {
@@ -41,6 +59,7 @@ export function CompanySettings() {
     setCompanyName(selectedCompany.name);
     setDescription(selectedCompany.description ?? "");
     setBrandColor(selectedCompany.brandColor ?? "");
+    setWorkingDirectory(selectedCompany.workingDirectory ?? "");
   }, [selectedCompany]);
 
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -52,17 +71,31 @@ export function CompanySettings() {
     !!selectedCompany &&
     (companyName !== selectedCompany.name ||
       description !== (selectedCompany.description ?? "") ||
-      brandColor !== (selectedCompany.brandColor ?? ""));
+      brandColor !== (selectedCompany.brandColor ?? "") ||
+      (canSetWorkingDirectory && workingDirectory !== (selectedCompany.workingDirectory ?? "")));
+
+  const [showMoveWorkingDirDialog, setShowMoveWorkingDirDialog] = useState(false);
+  const [showIconDialog, setShowIconDialog] = useState(false);
 
   const generalMutation = useMutation({
     mutationFn: (data: {
       name: string;
       description: string | null;
       brandColor: string | null;
+      workingDirectory: string | null;
+      moveWorkingDirectory?: boolean;
     }) => companiesApi.update(selectedCompanyId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
     }
+  });
+
+  const iconMutation = useMutation({
+    mutationFn: (iconAssetId: string | null) =>
+      companiesApi.update(selectedCompanyId!, { iconAssetId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
+    },
   });
 
   const settingsMutation = useMutation({
@@ -123,7 +156,7 @@ export function CompanySettings() {
     },
     onError: (err) => {
       setInviteError(
-        err instanceof Error ? err.message : "Failed to create invite"
+        err instanceof Error ? err.message : t("failedToCreateInvite")
       );
     }
   });
@@ -157,88 +190,164 @@ export function CompanySettings() {
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: selectedCompany?.name ?? "Company", href: "/dashboard" },
-      { label: "Settings" }
+      { label: selectedCompany?.name ?? t("company"), href: "/dashboard" },
+      { label: t("settings") }
     ]);
-  }, [setBreadcrumbs, selectedCompany?.name]);
+  }, [setBreadcrumbs, selectedCompany?.name, t]);
 
   if (!selectedCompany) {
     return (
-      <div className="text-sm text-muted-foreground">
-        No company selected. Select a company from the switcher above.
+      <div className="company-settings-no-company">
+        {t("noCompanySelected")}
       </div>
     );
   }
 
-  function handleSaveGeneral() {
-    generalMutation.mutate({
+  function getGeneralPayload(moveWorkingDirectory?: boolean) {
+    return {
       name: companyName.trim(),
       description: description.trim() || null,
-      brandColor: brandColor || null
-    });
+      brandColor: brandColor || null,
+      workingDirectory: canSetWorkingDirectory
+        ? workingDirectory.trim() || null
+        : (selectedCompany?.workingDirectory ?? null),
+      ...(moveWorkingDirectory !== undefined && { moveWorkingDirectory }),
+    };
+  }
+
+  function handleSaveGeneral() {
+    const newWd = workingDirectory.trim() || null;
+    const oldWd = selectedCompany?.workingDirectory?.trim() || null;
+    const workingDirChanged = newWd !== oldWd && (oldWd != null && oldWd !== "");
+    if (workingDirChanged) {
+      setShowMoveWorkingDirDialog(true);
+      return;
+    }
+    generalMutation.mutate(getGeneralPayload());
+  }
+
+  function handleConfirmMoveWorkingDir(move: boolean) {
+    setShowMoveWorkingDirDialog(false);
+    generalMutation.mutate(getGeneralPayload(move));
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div className="flex items-center gap-2">
-        <Settings className="h-5 w-5 text-muted-foreground" />
-        <h1 className="text-lg font-semibold">Company Settings</h1>
+    <div className="company-settings-page">
+      <div className="company-settings-header">
+        <Settings />
+        <h1 className="company-settings-title">{t("companySettings")}</h1>
       </div>
 
       {/* General */}
-      <div className="space-y-4">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          General
+      <div className="company-settings-section">
+        <div className="company-settings-section-label">
+          {t("sectionGeneral")}
         </div>
-        <div className="space-y-3 rounded-md border border-border px-4 py-4">
-          <Field label="Company name" hint="The display name for your company.">
+        <div className="company-settings-block">
+          <Field label={t("companyName")} hint={t("companyNameHint")}>
             <input
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="company-settings-input"
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
             />
           </Field>
-          <Field
-            label="Description"
-            hint="Optional description shown in the company profile."
-          >
+          <Field label={t("description")} hint={t("descriptionHint")}>
             <input
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="company-settings-input"
               type="text"
               value={description}
-              placeholder="Optional company description"
+              placeholder={t("descriptionPlaceholder")}
               onChange={(e) => setDescription(e.target.value)}
             />
           </Field>
+          {canSetWorkingDirectory ? (
+            <Field
+              label={t("agentWorkingDirectory")}
+              hint={t("agentWorkingDirectoryHint")}
+            >
+              <div className="company-settings-working-dir-row">
+                <FolderOpen />
+                <input
+                  className="company-settings-working-dir-input"
+                  type="text"
+                  value={workingDirectory}
+                  placeholder={t("workingDirectoryPlaceholder")}
+                  onChange={(e) => setWorkingDirectory(e.target.value)}
+                />
+                <ChoosePathButton />
+              </div>
+            </Field>
+          ) : (
+            selectedCompany?.effectiveWorkingDirectory
+              ? (
+                <Field label={t("agentWorkingDirectory")} hint={t("workingDirectoryAdminOnly")}>
+                  <div className="company-settings-working-dir-row company-settings-working-dir-readonly">
+                    <FolderOpen />
+                    <span className="company-settings-working-dir-value">
+                      {selectedCompany.effectiveWorkingDirectory}
+                    </span>
+                  </div>
+                </Field>
+                )
+              : null
+          )}
         </div>
       </div>
 
+      <Dialog open={showMoveWorkingDirDialog} onOpenChange={setShowMoveWorkingDirDialog}>
+        <DialogContent showCloseButton={true}>
+          <DialogHeader>
+            <DialogTitle>{t("agentWorkingDirectoryChanged")}</DialogTitle>
+            <DialogDescription>
+              {t("workingDirDialogDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter showCloseButton={false}>
+            <Button variant="outline" onClick={() => handleConfirmMoveWorkingDir(false)}>
+              {t("updatePathOnly")}
+            </Button>
+            <Button onClick={() => handleConfirmMoveWorkingDir(true)}>
+              {t("moveAndSave")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Appearance */}
-      <div className="space-y-4">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Appearance
+      <div className="company-settings-section">
+        <div className="company-settings-section-label">
+          {t("sectionAppearance")}
         </div>
-        <div className="space-y-3 rounded-md border border-border px-4 py-4">
-          <div className="flex items-start gap-4">
-            <div className="shrink-0">
-              <CompanyPatternIcon
-                companyName={companyName || selectedCompany.name}
-                brandColor={brandColor || null}
-                className="rounded-[14px]"
-              />
-            </div>
-            <div className="flex-1 space-y-2">
-              <Field
-                label="Brand color"
-                hint="Sets the hue for the company icon. Leave empty for auto-generated color."
-              >
-                <div className="flex items-center gap-2">
+        <div className="company-settings-block">
+          <div className="company-settings-appearance-row">
+            <button
+              type="button"
+              onClick={() => setShowIconDialog(true)}
+              className="company-settings-icon-btn"
+              aria-label={t("iconSettingTitle")}
+            >
+              {selectedCompany.iconContentPath ? (
+                <img
+                  src={selectedCompany.iconContentPath}
+                  alt=""
+                />
+              ) : (
+                <CompanyPatternIcon
+                  companyName={companyName || selectedCompany.name}
+                  brandColor={brandColor || null}
+                  className="company-settings-icon-pattern"
+                />
+              )}
+            </button>
+            <div className="company-settings-appearance-body">
+              <Field label={t("brandColor")} hint={t("brandColorHint")}>
+                <div className="company-settings-color-row">
                   <input
                     type="color"
                     value={brandColor || "#6366f1"}
                     onChange={(e) => setBrandColor(e.target.value)}
-                    className="h-8 w-8 cursor-pointer rounded border border-border bg-transparent p-0"
+                    className="company-settings-color-picker"
                   />
                   <input
                     type="text"
@@ -249,17 +358,17 @@ export function CompanySettings() {
                         setBrandColor(v);
                       }
                     }}
-                    placeholder="Auto"
-                    className="w-28 rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm font-mono outline-none"
+                    placeholder={t("auto")}
+                    className="company-settings-color-text"
                   />
                   {brandColor && (
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => setBrandColor("")}
-                      className="text-xs text-muted-foreground"
+                      className="company-settings-clear-btn"
                     >
-                      Clear
+                      {t("clear")}
                     </Button>
                   )}
                 </div>
@@ -271,36 +380,36 @@ export function CompanySettings() {
 
       {/* Save button for General + Appearance */}
       {generalDirty && (
-        <div className="flex items-center gap-2">
+        <div className="company-settings-save-row">
           <Button
             size="sm"
             onClick={handleSaveGeneral}
             disabled={generalMutation.isPending || !companyName.trim()}
           >
-            {generalMutation.isPending ? "Saving..." : "Save changes"}
+            {generalMutation.isPending ? t("saving") : t("saveChanges")}
           </Button>
           {generalMutation.isSuccess && (
-            <span className="text-xs text-muted-foreground">Saved</span>
+            <span className="company-settings-save-msg">{t("saved")}</span>
           )}
           {generalMutation.isError && (
-            <span className="text-xs text-destructive">
+            <span className="company-settings-save-error">
               {generalMutation.error instanceof Error
                 ? generalMutation.error.message
-                : "Failed to save"}
+                : t("saveFailed")}
             </span>
           )}
         </div>
       )}
 
       {/* Hiring */}
-      <div className="space-y-4">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Hiring
+      <div className="company-settings-section">
+        <div className="company-settings-section-label">
+          {t("sectionHiring")}
         </div>
-        <div className="rounded-md border border-border px-4 py-3">
+        <div className="company-settings-block">
           <ToggleField
-            label="Require board approval for new hires"
-            hint="New agent hires stay pending until approved by board."
+            label={t("requireApprovalForNewHires")}
+            hint={t("requireApprovalHint")}
             checked={!!selectedCompany.requireBoardApprovalForNewAgents}
             onChange={(v) => settingsMutation.mutate(v)}
           />
@@ -308,54 +417,51 @@ export function CompanySettings() {
       </div>
 
       {/* Invites */}
-      <div className="space-y-4">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Invites
+      <div className="company-settings-section">
+        <div className="company-settings-section-label">
+          {t("sectionInvites")}
         </div>
-        <div className="space-y-3 rounded-md border border-border px-4 py-4">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">
-              Generate an OpenClaw agent invite snippet.
+        <div className="company-settings-block">
+          <div className="company-settings-invite-desc-row">
+            <span className="company-settings-invite-desc">
+              {t("generateOpenClawInviteDesc")}
             </span>
-            <HintIcon text="Creates a short-lived OpenClaw agent invite and renders a copy-ready prompt." />
+            <HintIcon text={t("openClawInviteHintIcon")} />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="company-settings-invite-buttons">
             <Button
               size="sm"
               onClick={() => inviteMutation.mutate()}
               disabled={inviteMutation.isPending}
             >
               {inviteMutation.isPending
-                ? "Generating..."
-                : "Generate OpenClaw Invite Prompt"}
+                ? t("generating")
+                : t("generateOpenClawInvite")}
             </Button>
           </div>
           {inviteError && (
-            <p className="text-sm text-destructive">{inviteError}</p>
+            <p className="company-settings-invite-error">{inviteError}</p>
           )}
           {inviteSnippet && (
-            <div className="rounded-md border border-border bg-muted/30 p-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-xs text-muted-foreground">
-                  OpenClaw Invite Prompt
+            <div className="company-settings-snippet-box">
+              <div className="company-settings-snippet-header">
+                <div className="company-settings-snippet-title">
+                  {t("openClawInvitePromptTitle")}
                 </div>
                 {snippetCopied && (
-                  <span
-                    key={snippetCopyDelightId}
-                    className="flex items-center gap-1 text-xs text-green-600 animate-pulse"
-                  >
-                    <Check className="h-3 w-3" />
-                    Copied
+                  <span key={snippetCopyDelightId} className="company-settings-snippet-copied">
+                    <Check />
+                    {t("common:copied")}
                   </span>
                 )}
               </div>
-              <div className="mt-1 space-y-1.5">
+              <div className="company-settings-snippet-body">
                 <textarea
-                  className="h-[28rem] w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs outline-none"
+                  className="company-settings-snippet-textarea"
                   value={inviteSnippet}
                   readOnly
                 />
-                <div className="flex justify-end">
+                <div className="company-settings-snippet-actions">
                   <Button
                     size="sm"
                     variant="ghost"
@@ -370,7 +476,7 @@ export function CompanySettings() {
                       }
                     }}
                   >
-                    {snippetCopied ? "Copied snippet" : "Copy snippet"}
+                    {snippetCopied ? t("copiedSnippet") : t("copySnippet")}
                   </Button>
                 </div>
               </div>
@@ -379,17 +485,28 @@ export function CompanySettings() {
         </div>
       </div>
 
+      <IconSettingDialog
+        open={showIconDialog}
+        onOpenChange={setShowIconDialog}
+        mode="company"
+        companyId={selectedCompanyId!}
+        currentIconUrl={selectedCompany.iconContentPath ?? null}
+        onSaveIcon={async (assetId) => {
+          await iconMutation.mutateAsync(assetId);
+        }}
+        busy={iconMutation.isPending}
+      />
+
       {/* Danger Zone */}
-      <div className="space-y-4">
-        <div className="text-xs font-medium text-destructive uppercase tracking-wide">
-          Danger Zone
+      <div className="company-settings-section">
+        <div className="company-settings-section-label danger">
+          {t("sectionDangerZone")}
         </div>
-        <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-4">
-          <p className="text-sm text-muted-foreground">
-            Archive this company to hide it from the sidebar. This persists in
-            the database.
+        <div className="company-settings-block danger">
+          <p className="company-settings-danger-desc">
+            {t("archiveWarning")}
           </p>
-          <div className="flex items-center gap-2">
+          <div className="company-settings-danger-actions">
             <Button
               size="sm"
               variant="destructive"
@@ -400,7 +517,7 @@ export function CompanySettings() {
               onClick={() => {
                 if (!selectedCompanyId) return;
                 const confirmed = window.confirm(
-                  `Archive company "${selectedCompany.name}"? It will be hidden from the sidebar.`
+                  t("archiveConfirm", { name: selectedCompany.name })
                 );
                 if (!confirmed) return;
                 const nextCompanyId =
@@ -416,16 +533,16 @@ export function CompanySettings() {
               }}
             >
               {archiveMutation.isPending
-                ? "Archiving..."
+                ? t("archiving")
                 : selectedCompany.status === "archived"
-                ? "Already archived"
-                : "Archive company"}
+                ? t("alreadyArchived")
+                : t("archiveCompany")}
             </Button>
             {archiveMutation.isError && (
-              <span className="text-xs text-destructive">
+              <span className="company-settings-danger-error">
                 {archiveMutation.error instanceof Error
                   ? archiveMutation.error.message
-                  : "Failed to archive company"}
+                  : t("archiveFailed")}
               </span>
             )}
           </div>
@@ -446,35 +563,35 @@ function buildAgentSnippet(input: AgentSnippetInput) {
 
   const connectivityBlock =
     candidateUrls.length === 0
-      ? `No candidate URLs are available. Ask your user to configure a reachable hostname in Paperclip, then retry.
+      ? `No candidate URLs are available. Ask your user to configure a reachable hostname in VFactory, then retry.
 Suggested steps:
-- choose a hostname that resolves to the Paperclip host from your runtime
+- choose a hostname that resolves to the VFactory host from your runtime
 - run: pnpm paperclipai allowed-hostname <host>
-- restart Paperclip
+- restart VFactory
 - verify with: curl -fsS http://<host>:3100/api/health
 - regenerate this invite snippet`
-      : `If none are reachable, ask your user to add a reachable hostname in Paperclip, restart, and retry.
+      : `If none are reachable, ask your user to add a reachable hostname in VFactory, restart, and retry.
 Suggested command:
 - pnpm paperclipai allowed-hostname <host>
 Then verify with: curl -fsS <base-url>/api/health`;
 
   const resolutionLine = resolutionTestUrl
-    ? `\nYou MUST test Paperclip-to-gateway reachability, call: ${resolutionTestUrl}?url=<urlencoded-gateway-url> (using the hostname that worked above). Do not assume your 172.x is necessarily reachable from Paperclip. Test it. `
+    ? `\nYou MUST test VFactory-to-gateway reachability, call: ${resolutionTestUrl}?url=<urlencoded-gateway-url> (using the hostname that worked above). Do not assume your 172.x is necessarily reachable from VFactory. Test it. `
     : "";
 
-  return `You're invited to join a Paperclip organization.
+  return `You're invited to join a VFactory organization.
 
 The URLs you should try are:
 ${candidateList}
 
 Connectivity guidance:
-If you are running on a different machine than Paperclip, Paperclip must be reachable at one of the hostnames used above.
+If you are running on a different machine than VFactory, VFactory must be reachable at one of the hostnames used above.
 Verify the hostname works from your runtime with: GET <base-url>/api/health
 
 ${connectivityBlock}
 
 For your "agentName", just use your own agent name (OpenClaw or whatever your name is) and send it directly.
-You also need to send a gateway URL that Paperclip can access. Check your config and include that URL.${resolutionLine}
+You also need to send a gateway URL that VFactory can access. Check your config and include that URL.${resolutionLine}
 
 ---
 
@@ -484,14 +601,14 @@ When you submit the join request, use:
 - \`agentDefaultsPayload.url\` as your \`ws://\` or \`wss://\` gateway URL
 - \`agentDefaultsPayload.headers["x-openclaw-token"]\` with your gateway token
 - (legacy accepted) \`agentDefaultsPayload.headers["x-openclaw-auth"]\`
-- Keep device auth enabled (recommended). If \`devicePrivateKeyPem\` is omitted, Paperclip will generate and persist one during join so pairing approvals remain stable.
+- Keep device auth enabled (recommended). If \`devicePrivateKeyPem\` is omitted, VFactory will generate and persist one during join so pairing approvals remain stable.
 - Only use \`disableDeviceAuth=true\` for special environments where pairing cannot be completed.
 
 Do NOT use \`/v1/responses\` or \`/hooks/*\` in this join flow.
 
 Before you do anything, please respond to your user that you understand the instructions and you're going to work on them. Then do the step above in another session called "paperclip-onboarding" and then tell your user when you're done. Update your user in intermediate steps along the way so they know what's going on.
 
-Then after you've connected to Paperclip (exchanged keys etc.) you MUST review and follow the onboarding instructions in onboarding.txt they give you.
+Then after you've connected to VFactory (exchanged keys etc.) you MUST review and follow the onboarding instructions in onboarding.txt they give you.
 
 `;
 }

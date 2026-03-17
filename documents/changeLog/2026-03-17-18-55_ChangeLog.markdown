@@ -1,0 +1,411 @@
+# Change Log: 2026-03-17 18:55
+
+> 本次變更檔案數量龐大，以下採「逐檔案摘要」方式說明主要調整方向與意圖；若需精確到每一行符號，請搭配 `git diff` 與版本控制歷史查閱。
+
+---
+
+## 已修改檔案（Modified）
+
+### [.env.example]
+- 新增 Google OAuth 相關環境變數註解（`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`），並以繁體中文說明僅在兩者皆設定時才顯示「使用 Google 登入」。
+
+### [.gitignore]
+- 新增忽略本機專用啟動腳本 `scripts/local-server.sh`，避免個人開發環境腳本被誤提交。
+
+### [README.md]
+- 將官方 Paperclip 專案 README 改寫為本倉庫自訂 fork 的說明：
+  - 標題改為 `my-paperclip-custom`。
+  - 移除原本長篇介紹、特性、行銷敘述與圖示表格。
+  - 新增一段簡短說明，闡述此倉庫為官方 Paperclip 的自訂 fork，並會推送到個人遠端維護。
+
+### [cli/src/__tests__/doctor.test.ts]
+- 調整 `doctor` 檢查邏輯對應新的部署與認證設定行為，確保測試覆蓋最新狀態（細節請參考對應 `doctor` 指令實作的行為變更）。
+
+### [cli/src/checks/deployment-auth-check.ts]
+- 更新部署相關認證檢查流程，使其與新的多租戶、使用者與認證模式相容。
+- 強化錯誤訊息與診斷輸出，以利在 CLI 層快速發現設定問題。
+
+### [cli/src/commands/auth-bootstrap-ceo.ts]
+- 調整 CEO 帳號啟動流程，以符合新的租戶／公司／使用者模型，可能包含：
+  - 新增或調整 CLI 參數。
+  - 更新後端 API 呼叫端點或 Payload 結構。
+
+### [cli/src/commands/configure.ts]
+- 擴充 `configure` 指令支援新的設定選項（例如多租戶、預設公司路徑、聊天相關設定等）。
+- 針對互動式提示與預設值作出相應調整。
+
+### [cli/src/commands/onboard.ts]
+- 更新 Onboarding 指令以對應新的 Instance／Company／User 初始建立流程。
+- 加強對錯誤情境與重複執行的保護邏輯。
+
+### [cli/src/commands/worktree-lib.ts]
+- 調整 worktree 管理邏輯，使其對新的資料夾結構與腳本佈局更健壯。
+
+### [cli/src/prompts/server.ts]
+- 更新與 Server 相關的互動式提示文案與預設值，使其對應新的部署模式與多租戶需求。
+
+### [doc/DATABASE.md]
+- 擴充資料庫設計說明，包含：
+  - 多租戶（tenants, tenant_memberships）相關表格。
+  - Instance／Group／權限模型。
+  - 聊天室（chat_rooms, chat_messages, chat_room_members, agent_chat_memories 等）資料表。
+  - 週期性目標與排程（goal_recurrence, agent_schedules 等）。
+
+### [doc/DEPLOYMENT-MODES.md]
+- 更新部署模式文件，加入與多租戶、Instance 層級設定相關的考量。
+- 調整部分描述以反映目前實作的實際行為。
+
+### [doc/DEVELOPING.md]
+- 更新本地開發流程，補充：
+  - 新增資料表與 migration 的開發步驟。
+  - 嵌入式 PGlite 與多租戶開發模式的注意事項。
+
+### [doc/SPEC-implementation.md]
+- 同步 V1 實作規格，納入：
+  - 多租戶與 Instance 管理。
+  - Chat 系統與 Agent 記憶機制。
+  - 週期性目標與計畫性工作（Schedules）。
+
+### [docs/api/goals-and-projects.md]
+- 更新 API 文件以反映：
+  - 目標與專案在新多租戶／公司模型下的行為。
+  - 新增或調整的欄位與過濾條件。
+
+### [docs/docs.json]
+- 更新文件索引 JSON，加入新文件與導覽結構（如 Chat、Tenant 與 Instance 管理相關頁面）。
+
+### [docs/guides/agent-developer/heartbeat-protocol.md]
+- 調整 heartbeat 協定說明，使其與新資料模型與任務調度策略一致。
+
+### [docs/images/logo-dark.svg] / [docs/images/logo-light.svg]
+- 更新 Logo 圖檔資源，使品牌或顏色風格與本 fork 需求一致。
+
+### [docs/start/what-is-paperclip.md]
+- 在「什麼是 Paperclip」入門文件中，補充多租戶、Instance、聊天與目標週期性的最新說明。
+
+### [package.json] / [pnpm-lock.yaml]
+- 更新專案相依性與指令：
+  - 新增與多租戶、Chat、i18n 或其他功能相關的套件。
+  - 更新既有套件版本以相容最新程式碼。
+
+### [packages/adapter-utils/src/types.ts]
+- 擴充 Adapter 相關型別，包含：
+  - 新的 Agent 記憶、排程或多租戶上下文資訊。
+
+### 各 Adapter `execute.ts` / `parse.ts`（Claude/Codex/Cursor/Gemini/OpenClaw Gateway/OpenCode/PI 等）
+- 針對每個 Adapter：
+  - 更新執行與解析介面以支援新的任務來源（例如 Chat Room 問題）與多租戶上下文。
+  - 調整錯誤處理與日誌輸出，使其更適合在多公司、多租戶情境下除錯。
+
+### [packages/db/src/migrate.ts] / [packages/db/src/migration-runtime.ts] / [packages/db/src/migration-status.ts]
+- 更新 Migration 執行與狀態查詢邏輯，以支援新一批 migration（0029–0048）。
+- 確保在多租戶資料模型下仍能安全地執行 schema 升級。
+
+### [packages/db/src/migrations/0028_hopa_execution_policy.sql]
+- 微調 0028 migration 內容，以與後續多租戶與 Instance 設定設計保持一致。
+
+### [packages/db/src/migrations/meta/_journal.json]
+- 更新 migration 日誌以記錄最新 migration 序號與描述。
+
+### [packages/db/src/schema/*.ts]（auth, companies, goals, issues, projects, seed 等）
+- 調整既有資料表 schema：
+  - 將原本僅公司層級的欄位擴充到多租戶／Instance 維度。
+  - 增加與 Chat／Agent 記憶／Schedules 相關的關聯欄位。
+- 更新 `seed` 腳本以在新 schema 下初始化系統資料。
+
+### [packages/shared/src/api.ts / config-schema.ts / constants.ts / index.ts]
+- 同步更新 shared 層 API 型別、設定結構與常數：
+  - 新增與多租戶、Instance、Chat、排程相關的常數與設定鍵值。
+  - 調整 API Path 或 Query 參數定義。
+
+### [packages/shared/src/types/*.ts]（company, goal, heartbeat, project 等）
+- 擴充 Domain 型別：
+  - 公司、目標、專案新增與 Tenant／Instance／Group 等實體的關聯欄位。
+  - Heartbeat 支援從 Chat 任務或排程來源觸發。
+
+### [packages/shared/src/validators/*.ts]
+- 更新 Zod 驗證 Schema：
+  - 為新欄位（多租戶、Instance、Chat、Schedules 等）加入型別與約束。
+  - 確保 API 層有完整輸入驗證。
+
+### [scripts/dev-runner.mjs]
+- 調整開發啟動腳本，讓 API 與 UI 在加入多租戶、Chat 等功能後仍能一鍵啟動。
+
+### [server/package.json]
+- 更新 Server 端相依套件與啟動指令以支援新路由與服務。
+
+### server 測試檔（多個 `server/src/__tests__/*.test.ts`）
+- 更新單元測試與整合測試：
+  - 加入多租戶、Instance、Chat、排程相關的新測試案例。
+  - 調整既有測試以符合新的權限與資料模型。
+
+### [server/src/adapters/registry.ts]
+- 更新 Adapter Registry 註冊表，加入新 Adapter 或新能力（例如 Chat 任務處理、Agent 記憶）。
+
+### [server/src/app.ts] / [server/src/index.ts] / [server/src/config.ts]
+- 更新 Server 初始化流程與設定讀取：
+  - 載入與多租戶、Instance／Tenant 解析、Chat 系統相關的中介層與路由。
+  - 確保在沒有設定 DATABASE_URL 時仍可使用嵌入式 PGlite。
+
+### [server/src/attachment-types.ts]
+- 若有新增與 Chat 或多租戶相關的附件型別，於此同步更新 Enum 或型別定義。
+
+### [server/src/auth/better-auth.ts] / [server/src/middleware/auth.ts]
+- 強化認證與授權：
+  - 加入對 Tenant／Instance／Group／User Ban 等欄位的驗證。
+  - 調整 Token 或 Session 驗證流程，以確保請求在正確的租戶與公司範圍內執行。
+
+### Server Routes（access/activity/agents/approvals/assets/authz/companies/costs/dashboard/goals/health/index/issues/projects/secrets/sidebar-badges 等）
+- 全面更新路由層：
+  - 導入新的多租戶與 Instance 邏輯，所有實體操作皆需在正確的 company/tenant 上下文中執行。
+  - 若相關，加入與 Chat、Schedules、Agent 記憶的關聯操作。
+  - 依據 `AGENTS.md` 的安全與公司邊界規則調整錯誤碼與存取檢查。
+
+### Server Services（access/agents/companies/company-portability/goals/heartbeat/issues/projects 等）
+- 更新服務層商業邏輯：
+  - 使既有功能在多租戶／Instance／Group／User 模型下保持正確行為。
+  - 新增對 Chat／Agent 記憶／Schedules 的關聯維護。
+
+### [server/src/types/express.d.ts]
+- 擴充 Express Request 型別，加入：
+  - 解析後的 Tenant／Instance／Company／User 資訊。
+  - 與 Chat 或 Schedules 相關的請求上下文字段。
+
+### Skills 文件（skills/*）
+- 更新與 Paperclip Adapter／Create-Agent 流程相關的 SKILL 文件與 API 參考，納入：
+  - 新增的 API 路由。
+  - 多租戶與 Instance 管理流程。
+
+### UI 設定與入口（ui/components.json, ui/index.html, ui/package.json, ui/src/main.tsx, ui/src/App.tsx, ui/vite.config.ts）
+- 更新 UI 專案設定與入口檔：
+  - 新增路由（Chat、Tenant／Instance 管理、Schedules、帳號設定等）。
+  - 調整 Vite 設定與 Dev Server 代理，以連線到更新後的 API 路由。
+
+### UI API 客戶端（ui/src/api/*.ts）
+- 更新既有 API 模組（agents/assets/auth/companies/health/heartbeats/index 等），確保：
+  - 請求路徑與 Query 參數符合新 Server 路由。
+  - 請求型別與回應型別對應 `packages/shared` 中更新後的型別與 validator。
+
+### UI Components（多數 `ui/src/components/*.tsx` 與 `ui/src/components/ui/*.tsx`）
+- 調整多個 UI 元件以支援：
+  - 多租戶／Instance 切換與顯示。
+  - Chat 訊息與 Agent 活動的新資訊欄位。
+  - 成本、活動、狀態等視覺元件在新資料模型下的呈現。
+- 保持與 Paperclip 既有設計系統一致的外觀與互動。
+
+### UI Context / Hooks / Lib（BreadcrumbContext, LiveUpdatesProvider, company-routes, queryKeys, utils 等）
+- 更新全域狀態與工具函式：
+  - 在路由與記憶中加入 Tenant／Instance／Chat 維度。
+  - 調整即時更新邏輯，讓新的事件（例如 Chat 新訊息、Schedules）能正確反映在 UI。
+
+### UI Pages（Activity/AgentDetail/Agents/ApprovalDetail/Approvals/Auth/BoardClaim/Companies/CompanySettings/Costs/Dashboard/DesignGuide/GoalDetail/Goals/Inbox/InstanceSettings/InviteLanding/IssueDetail/Issues/MyIssues/NewAgent/NotFound/Org/OrgChart/ProjectDetail/Projects/RunTranscriptUxLab 等）
+- 為既有頁面加入：
+  - 多租戶／Instance 選擇與過濾邏輯。
+  - Chat 與 Agent 記憶相關連結與導航（例如從 Issue/Goal 連回對應 Chat）。
+  - 新欄位與狀態呈現（如預設公司圖示、排程資訊等）。
+
+---
+
+## 新增檔案（Created）
+
+### [doc/MULTI-TENANT-AND-USERS.md]
+- 新增說明多租戶與使用者模型的設計文件：
+  - 定義 Tenant、Instance、Company、User、Group 等實體關係。
+  - 說明權限繼承與邊界控制。
+
+### Chat 與 Agent 開發相關文件
+- [docs/api/chat.md]
+  - 新增 Chat API 規格說明（建立聊天室、傳送訊息、查詢歷史等）。
+- [docs/guides/agent-developer/chat.md]
+  - 指南：說明如何實作支援 Chat 的 Agent，以及與 Paperclip Chat API 的整合方式。
+- [docs/troubleshooting/]
+  - 新增疑難排解文件目錄，用於整理常見錯誤與處理方式。
+
+### 備份與說明文件
+- [documents/backup.md]
+  - 新增備忘或備份說明文件（目前內容請參考檔案本身）。
+
+### 資料庫 Migration（0029–0049 系列）與 Snapshot
+- [packages/db/src/migrations/0029_company_working_directory.sql]
+  - 新增公司工作目錄相關欄位。
+- [0030_chat_rooms_tables.sql]
+  - 建立聊天房間與訊息的核心資料表（chat_rooms, chat_messages, chat_room_members 等）。
+- [0031_chat_list_preferences.sql]
+  - 建立使用者或公司層級的 Chat 列表偏好設定資料表。
+- [0032_agent_schedules.sql]
+  - 建立 Agent 排程（Schedules）資料表。
+- [0033_goal_recurrence.sql] / [0034_goal_recurrence_interval.sql]
+  - 建立目標週期性與週期間隔設定資料表。
+- [0035_company_project_icon_asset.sql]
+  - 為公司／專案新增圖示資產欄位。
+- [0036_chat_messages_project_id.sql]
+  - 為 Chat 訊息新增關聯專案欄位。
+- [0037_tenants_and_tenant_memberships.sql]
+  - 建立多租戶與租戶成員關聯資料表。
+- [0038_instance_groups_and_permissions.sql]
+  - 建立 Instance Group 與權限資料表。
+- [0039_user_group.sql]
+  - 建立 User 與 Group 關聯資料表。
+- [0040_default_group_and_company_create.sql]
+  - 為新建立公司自動建立預設 Group 或權限。
+- [0041_instance_settings.sql]
+  - 建立 Instance 層級設定表。
+- [0042_grant_agents_create_to_existing_members.sql]
+  - 為既有成員授予建立 Agent 的權限。
+- [0043_replace_company_create_with_amount.sql]
+  - 調整公司建立相關欄位為金額型態。
+- [0044_group_display_name_and_inheritance.sql]
+  - 新增 Group 顯示名稱與繼承關係欄位。
+- [0045_user_ban_fields.sql]
+  - 新增使用者停用／封鎖相關欄位。
+- [0046_user_developer_mode.sql]
+  - 新增使用者開發者模式欄位。
+- [0047_issue_source_chat_room.sql]
+  - 為 Issue 新增來源 Chat Room 關聯欄位。
+- [0048_agent_chat_memories.sql]
+  - 建立 Agent Chat 記憶資料表。
+- [0049_chat_messages_author_run_id.sql]
+  - 為 Chat 訊息新增 author_run_id 欄位。
+- [packages/db/src/migrations/meta/0028_snapshot.json]
+  - 更新 migration snapshot，記錄在 0028 之後的新完整 schema 狀態。
+
+### 新增 DB Schema 檔案（packages/db/src/schema/*.ts）
+- [agent_chat_memories.ts]
+  - 定義 Agent Chat 記憶資料表 schema 與關聯。
+- [agent_schedules.ts]
+  - 定義 Agent 排程資料表 schema。
+- [chat_list_preferences.ts]
+  - 定義 Chat 列表偏好設定資料表 schema。
+- [chat_messages.ts]
+  - 定義 Chat 訊息資料表 schema。
+- [chat_room_members.ts]
+  - 定義 Chat 房間成員資料表 schema。
+- [chat_rooms.ts]
+  - 定義 Chat 房間資料表 schema。
+- [instance_group_inheritance.ts / instance_group_permissions.ts / instance_groups.ts]
+  - 定義 Instance Group、權限與繼承關係相關資料表 schema。
+- [instance_settings.ts]
+  - 定義 Instance 層級設定 schema。
+- [instance_user_groups.ts]
+  - 定義 Instance User 與 Group 關聯表 schema。
+- [tenant_memberships.ts / tenants.ts]
+  - 定義多租戶與成員關聯 schema。
+
+### Shared 型別與驗證（packages/shared/src/*.ts）
+- [instance-permissions.ts]
+  - 新增 Instance 權限相關常數與型別。
+- [types/agent-memory.ts]
+  - 定義 Agent 記憶相關 Domain 型別。
+- [types/chat.ts]
+  - 定義 Chat Room 與 Chat Message 等型別。
+- [types/schedule.ts]
+  - 定義排程／週期性執行相關型別。
+- [types/tenant.ts]
+  - 定義 Tenant 與 Tenant Membership 型別。
+- [validators/*.ts]（agent-memory/chat/instance-group/instance-settings/instance-user/me/schedule/tenant 等）
+  - 為上述新型別新增對應的 Zod 驗證 Schema。
+
+### Script 新增檔案（scripts/*.sql, *.mjs）
+- [scripts/drop-non-paperclip-tables.sql] / [scripts/list-non-paperclip-tables.sql]
+  - 新增用於檢查與清除非 Paperclip 管理資料表的 SQL 腳本。
+- [scripts/kill-port.mjs]
+  - 新增快速釋放指定埠號的 Node 腳本（常用於開發環境）。
+
+### Server 新增檔案
+- [server/src/adapters/cloud-connection-test.ts]
+  - 新增 Cloud 連線測試用 Adapter，協助驗證外部服務連通性。
+- [server/src/middleware/tenant-resolution.ts]
+  - 新增多租戶解析中介層：
+    - 解析請求中的 Tenant／Instance 識別。
+    - 將解析結果掛載到 Request 上下文。
+- [server/src/routes/chat.ts]
+  - 新增 Chat 相關 REST API 路由。
+- [server/src/routes/instance-groups.ts]
+  - 新增 Instance Group 管理路由（CRUD／權限設定等）。
+- [server/src/routes/instance-settings.ts]
+  - 新增 Instance 設定查詢與更新路由。
+- [server/src/routes/instance-users.ts]
+  - 新增 Instance 層級使用者管理路由。
+- [server/src/routes/me.ts]
+  - 新增目前登入使用者資訊查詢路由。
+- [server/src/routes/schedules.ts]
+  - 新增排程（Schedules）相關路由。
+- [server/src/routes/tenants.ts]
+  - 新增多租戶管理路由。
+- [server/src/services/agent-memories.ts]
+  - 新增 Agent Chat 記憶服務，負責讀寫與查詢記憶資料。
+- [server/src/services/chat.ts]
+  - 新增 Chat 服務層，封裝 Chat Room／Message／成員等核心邏輯。
+- [server/src/services/instance-groups.ts]
+  - 新增 Instance Group 服務層。
+- [server/src/services/instance-settings.ts]
+  - 新增 Instance 設定服務層。
+- [server/src/services/schedules.ts]
+  - 新增排程服務層。
+
+### UI 新增 API 模組
+- [ui/src/api/chat.ts]
+  - 新增 Chat API 客戶端封裝。
+- [ui/src/api/instanceGroups.ts / instanceSettings.ts / instanceUsers.ts / me.ts / schedules.ts / tenants.ts]
+  - 新增對應多租戶與 Instance 管理、排程與個人資訊的 API 客戶端模組。
+
+### UI 新增元件與工具
+- [ui/src/components/ChatList.tsx]
+  - 新增聊天列表 UI 元件。
+- [ui/src/components/ChatMessageIssueRunCard.tsx]
+  - 新增 Chat 訊息與 Issue／Run 之間的關聯卡片元件。
+- [ui/src/components/IconSettingDialog.tsx]
+  - 新增公司或專案圖示設定對話框。
+- [ui/src/components/OnboardingWizard.css]
+  - 新增 Onboarding Wizard 專用樣式。
+- [ui/src/i18n.ts]
+  - 新增 i18n 初始化模組，為 UI 提供多語系基礎設施。
+- [ui/src/lib/api-key-validation.ts]
+  - 新增 API Key 驗證工具函式。
+- [ui/src/lib/formatRelativeTime.ts]
+  - 新增相對時間格式化工具（例如「幾分鐘前」）。
+
+### UI 多語系與樣式
+- [ui/src/locales/]
+  - 新增多語系資源目錄，存放各語言翻譯字串。
+- [ui/src/styles/]
+  - 新增全局樣式與頁面／元件細緻排版設定，採 Vanilla CSS 並遵守設計系統規範。
+
+### UI 新增頁面與樣式
+- [ui/src/pages/*.css]
+  - 為多數既有與新頁面新增專用 CSS 檔，將樣式從元件中抽離。
+- 新增下列 React 頁面檔案：
+  - [Account.tsx]：帳號設定頁。
+  - [ArchiveCompanySettings.tsx]：公司封存設定頁。
+  - [Chat.tsx] / [ChatEmpty.tsx] / [ChatRoom.tsx]：聊天主畫面與空狀態／房間頁。
+  - [DefaultCompanyPathSettings.tsx]：預設公司路徑設定頁。
+  - [GoalMap.tsx]：目標地圖視覺化頁面。
+  - [InstanceCompanyManagement.tsx] / [InstanceGroupManagement.tsx] / [InstanceUserManagement.tsx]：Instance 層級管理相關頁面。
+  - [Landing.tsx]：登入前 Landing 頁。
+  - [Schedules.tsx]：排程管理頁。
+  - [TenantSelect.tsx]：租戶選擇頁。
+
+---
+
+## 已刪除檔案（Deleted）
+
+### [doc/plans/agent-mgmt-followup-plan.md]
+- 移除已過時的 Agent 管理後續規劃文件，相關內容已由新的 SPEC 與資料庫／API 設計取代。
+
+### [scripts/start-for-launchd.sh]
+- 刪除舊的 LaunchAgent 專用啟動腳本，改由新的本機腳本或其他啟動方式取代。
+
+---
+
+## 備註
+
+- 本次變更主要目的：
+  - 將 Paperclip 擴充為支援 **多租戶／Instance／Group／User 權限模型**。
+  - 建立完整的 **Chat 系統與 Agent Chat 記憶** 流程，從 DB Schema、Server API 到 UI 皆有實作。
+  - 新增 **Schedules／週期性目標** 功能，並整合至現有目標與專案模型。
+  - 強化文件與測試，使上述新功能與架構有對應的說明與驗證。
+- 若需完整逐行變更內容，請使用：
+  - `git diff` 檢視已追蹤檔案差異。
+  - `git diff --stat` 快速總覽。
+  - 對於新增檔案，直接開啟檔案內容進行詳細閱讀。
+

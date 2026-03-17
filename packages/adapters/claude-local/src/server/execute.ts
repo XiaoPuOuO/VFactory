@@ -103,8 +103,10 @@ function hasNonEmptyEnvValue(env: Record<string, string>, key: string): boolean 
   return typeof raw === "string" && raw.trim().length > 0;
 }
 
-function resolveClaudeBillingType(env: Record<string, string>): "api" | "subscription" {
-  // Claude uses API-key auth when ANTHROPIC_API_KEY is present; otherwise rely on local login/session auth.
+function resolveClaudeBillingType(adapterType: string, env: Record<string, string>): "api" | "subscription" {
+  // claude_remote = API only (key required); claude_local = CLI only (no key).
+  if (adapterType === "claude_remote") return "api";
+  if (adapterType === "claude_local") return "subscription";
   return hasNonEmptyEnvValue(env, "ANTHROPIC_API_KEY") ? "api" : "subscription";
 }
 
@@ -191,6 +193,35 @@ async function buildClaudeRuntimeConfig(input: ClaudeExecutionInput): Promise<Cl
   if (linkedIssueIds.length > 0) {
     env.PAPERCLIP_LINKED_ISSUE_IDS = linkedIssueIds.join(",");
   }
+  const chatRoomId =
+    typeof context.roomId === "string" && context.roomId.trim().length > 0 ? context.roomId.trim() : null;
+  const chatRoomType =
+    context.chatRoomType === "direct" || context.chatRoomType === "group" ? context.chatRoomType : null;
+  const chatMessageId =
+    typeof context.messageId === "string" && context.messageId.trim().length > 0 ? context.messageId.trim() : null;
+  const wakeReasonLabel =
+    typeof context.wakeReasonLabel === "string" && context.wakeReasonLabel.trim().length > 0
+      ? context.wakeReasonLabel.trim()
+      : null;
+  const chatMode =
+    typeof context.chatMode === "string" && context.chatMode.trim().length > 0
+      ? context.chatMode.trim()
+      : null;
+  if (chatRoomId) env.PAPERCLIP_CHAT_ROOM_ID = chatRoomId;
+  if (chatRoomType) env.PAPERCLIP_CHAT_ROOM_TYPE = chatRoomType;
+  if (chatMessageId) env.PAPERCLIP_CHAT_MESSAGE_ID = chatMessageId;
+  if (wakeReasonLabel) env.PAPERCLIP_WAKE_REASON_LABEL = wakeReasonLabel;
+  if (chatMode) env.PAPERCLIP_CHAT_MODE = chatMode;
+  const chatProjectId =
+    typeof context.chatProjectId === "string" && context.chatProjectId.trim().length > 0
+      ? context.chatProjectId.trim()
+      : null;
+  const chatProjectName =
+    typeof context.chatProjectName === "string" && context.chatProjectName.trim().length > 0
+      ? context.chatProjectName.trim()
+      : null;
+  if (chatProjectId) env.PAPERCLIP_CHAT_PROJECT_ID = chatProjectId;
+  if (chatProjectName) env.PAPERCLIP_CHAT_PROJECT_NAME = chatProjectName;
   if (effectiveWorkspaceCwd) {
     env.PAPERCLIP_WORKSPACE_CWD = effectiveWorkspaceCwd;
   }
@@ -302,7 +333,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
   const promptTemplate = asString(
     config.promptTemplate,
-    "You are agent {{agent.id}} ({{agent.name}}). Continue your Paperclip work.",
+    "You are agent {{agent.id}} ({{agent.name}}). Continue your VFactory work.",
   );
   const model = asString(config.model, "");
   const effort = asString(config.effort, "");
@@ -335,7 +366,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     graceSec,
     extraArgs,
   } = runtimeConfig;
-  const billingType = resolveClaudeBillingType(env);
+  const billingType = resolveClaudeBillingType(agent.adapterType ?? "", env);
   const skillsDir = await buildSkillsDir();
 
   // When instructionsFilePath is configured, create a combined temp file that

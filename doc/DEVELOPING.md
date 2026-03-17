@@ -8,7 +8,7 @@ For mode definitions and intended CLI behavior, see `doc/DEPLOYMENT-MODES.md`.
 
 Current implementation status:
 
-- canonical model: `local_trusted` and `authenticated` (with `private/public` exposure)
+- canonical model: `authenticated` only (with `private/public` exposure)
 
 ## Prerequisites
 
@@ -52,6 +52,24 @@ Allow additional private hostnames (for example custom Tailscale hostnames):
 ```sh
 pnpm paperclipai allowed-hostname dotta-macbook-pro
 ```
+
+### Port 3100 in use after crash
+
+若前次 server 異常結束（例如傳送聊天訊息後崩潰），可能出現：
+
+- 瀏覽器能開 `http://127.0.0.1:3100/...` 但頁面顯示 **NetworkError when attempting to fetch resource**
+- `lsof -i :3100` / `netstat` 查不到 LISTEN，但 `pnpm dev` 仍提示埠已被佔用
+
+原因是 process 崩潰時未關閉 HTTP server，埠可能處於 **TIME_WAIT** 或被殘留 process 佔用。解法：
+
+1. **釋放埠**（macOS/Linux）：
+   ```sh
+   pnpm run kill-port 3100
+   # 或
+   lsof -ti :3100 | xargs kill -9
+   ```
+2. 若 `lsof` 查不到卻仍顯示佔用，可等約 1–2 分鐘（TIME_WAIT 過期）後再執行 `pnpm dev`。
+3. 正常關閉請用 **Ctrl+C** 結束 dev，server 會先關閉 listen 再 exit，可避免埠殘留。
 
 ## One-Command Local Run
 

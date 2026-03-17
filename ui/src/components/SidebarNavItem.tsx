@@ -1,5 +1,5 @@
+import { useTranslation } from "react-i18next";
 import { NavLink } from "@/lib/router";
-import { cn } from "../lib/utils";
 import { useSidebar } from "../context/SidebarContext";
 import type { LucideIcon } from "lucide-react";
 
@@ -26,6 +26,7 @@ export function SidebarNavItem({
   alert = false,
   liveCount,
 }: SidebarNavItemProps) {
+  const { t } = useTranslation();
   const { isMobile, setSidebarOpen } = useSidebar();
 
   return (
@@ -34,40 +35,22 @@ export function SidebarNavItem({
       end={end}
       onClick={() => { if (isMobile) setSidebarOpen(false); }}
       className={({ isActive }) =>
-        cn(
-          "flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium transition-colors",
-          isActive
-            ? "bg-accent text-foreground"
-            : "text-foreground/80 hover:bg-accent/50 hover:text-foreground",
-          className,
-        )
+        ["board-nav-item", isActive && "active", className].filter(Boolean).join(" ")
       }
     >
-      <span className="relative shrink-0">
-        <Icon className="h-4 w-4" />
-        {alert && (
-          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_2px_hsl(var(--background))]" />
-        )}
+      <span className="board-nav-item-icon">
+        <Icon />
+        {alert && <span className="board-nav-item-alert-dot" aria-hidden />}
       </span>
-      <span className="flex-1 truncate">{label}</span>
+      <span className="board-nav-item-label">{label}</span>
       {liveCount != null && liveCount > 0 && (
-        <span className="ml-auto flex items-center gap-1.5">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
-          </span>
-          <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400">{liveCount} live</span>
+        <span className="board-nav-item-live">
+          <span className="board-nav-item-live-dot" />
+          <span className="board-nav-item-live-count">{t("nav.liveCount", { count: liveCount })}</span>
         </span>
       )}
       {badge != null && badge > 0 && (
-        <span
-          className={cn(
-            "ml-auto rounded-full px-1.5 py-0.5 text-xs leading-none",
-            badgeTone === "danger"
-              ? "bg-red-600/90 text-red-50"
-              : "bg-primary text-primary-foreground",
-          )}
-        >
+        <span className={`board-nav-item-badge ${badgeTone}`}>
           {badge}
         </span>
       )}

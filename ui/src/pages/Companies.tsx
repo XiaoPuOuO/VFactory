@@ -27,6 +27,7 @@ import {
   DollarSign,
   Calendar,
 } from "lucide-react";
+import "./Companies.css";
 
 export function Companies() {
   const {
@@ -88,20 +89,20 @@ export function Companies() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <Button size="sm" onClick={() => openOnboarding()}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
+    <div className="companies-page">
+      <div className="companies-toolbar">
+        <Button size="sm" onClick={() => openOnboarding()} className="companies-toolbar-btn">
+          <Plus />
           New Company
         </Button>
       </div>
 
-      <div className="h-6">
-        {loading && <p className="text-sm text-muted-foreground">Loading companies...</p>}
-        {error && <p className="text-sm text-destructive">{error.message}</p>}
+      <div className="companies-status">
+        {loading && <p className="companies-status-loading">Loading companies...</p>}
+        {error && <p className="companies-status-error">{error.message}</p>}
       </div>
 
-      <div className="grid gap-4">
+      <div className="companies-grid">
         {companies.map((company) => {
           const selected = company.id === selectedCompanyId;
           const isEditing = editingId === company.id;
@@ -115,6 +116,12 @@ export function Companies() {
                   (company.spentMonthlyCents / company.budgetMonthlyCents) * 100,
                 )
               : 0;
+          const statusClass =
+            company.status === "active"
+              ? "active"
+              : company.status === "paused"
+                ? "paused"
+                : "archived";
 
           return (
             <div
@@ -128,24 +135,18 @@ export function Companies() {
                   setSelectedCompanyId(company.id);
                 }
               }}
-              className={`group text-left bg-card border rounded-lg p-5 transition-colors cursor-pointer ${
-                selected
-                  ? "border-primary ring-1 ring-primary"
-                  : "border-border hover:border-muted-foreground/30"
-              }`}
+              className={`companies-card ${selected ? "selected" : ""}`}
             >
-              {/* Header row: name + menu */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
+              <div className="companies-card-header">
+                <div className="companies-card-body">
                   {isEditing ? (
                     <div
-                      className="flex items-center gap-2"
+                      className="companies-card-edit-row"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Input
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        className="h-7 text-sm"
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === "Enter") saveEdit();
@@ -157,57 +158,49 @@ export function Companies() {
                         size="icon-xs"
                         onClick={saveEdit}
                         disabled={editMutation.isPending}
+                        className="companies-edit-check"
                       >
-                        <Check className="h-3.5 w-3.5 text-green-500" />
+                        <Check />
                       </Button>
-                      <Button variant="ghost" size="icon-xs" onClick={cancelEdit}>
-                        <X className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Button variant="ghost" size="icon-xs" onClick={cancelEdit} className="companies-edit-x">
+                        <X />
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-base">{company.name}</h3>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          company.status === "active"
-                            ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                            : company.status === "paused"
-                              ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                              : "bg-muted text-muted-foreground"
-                        }`}
-                      >
+                    <div className="companies-card-name-row">
+                      <h3 className="companies-card-name">{company.name}</h3>
+                      <span className={`companies-card-status-badge ${statusClass}`}>
                         {company.status}
                       </span>
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        className="text-muted-foreground opacity-0 group-hover:opacity-100"
+                        className="companies-card-menu-btn"
                         onClick={(e) => {
                           e.stopPropagation();
                           startEdit(company.id, company.name);
                         }}
                       >
-                        <Pencil className="h-3 w-3" />
+                        <Pencil />
                       </Button>
                     </div>
                   )}
                   {company.description && !isEditing && (
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                    <p className="companies-card-desc">
                       {company.description}
                     </p>
                   )}
                 </div>
 
-                {/* Three-dot menu */}
                 <div onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        className="text-muted-foreground opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+                        className="companies-card-menu-btn"
                       >
-                        <MoreHorizontal className="h-4 w-4" />
+                        <MoreHorizontal />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -230,45 +223,43 @@ export function Companies() {
                 </div>
               </div>
 
-              {/* Stats row */}
-              <div className="flex items-center gap-3 sm:gap-5 mt-4 text-sm text-muted-foreground flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5" />
+              <div className="companies-card-stats">
+                <div className="companies-card-stats-item">
+                  <Users />
                   <span>
                     {agentCount} {agentCount === 1 ? "agent" : "agents"}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <CircleDot className="h-3.5 w-3.5" />
+                <div className="companies-card-stats-item">
+                  <CircleDot />
                   <span>
                     {issueCount} {issueCount === 1 ? "issue" : "issues"}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 tabular-nums">
-                  <DollarSign className="h-3.5 w-3.5" />
+                <div className="companies-card-stats-item tabular">
+                  <DollarSign />
                   <span>
                     {formatCents(company.spentMonthlyCents)}
                     {company.budgetMonthlyCents > 0
-                      ? <> / {formatCents(company.budgetMonthlyCents)} <span className="text-xs">({budgetPct}%)</span></>
-                      : <span className="text-xs ml-1">Unlimited budget</span>}
+                      ? <> / {formatCents(company.budgetMonthlyCents)} <span className="companies-budget-extra">({budgetPct}%)</span></>
+                      : <span className="companies-budget-extra ml-1">Unlimited budget</span>}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 ml-auto">
-                  <Calendar className="h-3.5 w-3.5" />
+                <div className="companies-card-stats-item ml-auto">
+                  <Calendar />
                   <span>Created {relativeTime(company.createdAt)}</span>
                 </div>
               </div>
 
-              {/* Delete confirmation */}
               {isConfirmingDelete && (
                 <div
-                  className="mt-4 flex items-center justify-between bg-destructive/5 border border-destructive/20 rounded-md px-4 py-3"
+                  className="companies-delete-confirm"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <p className="text-sm text-destructive font-medium">
+                  <p>
                     Delete this company and all its data? This cannot be undone.
                   </p>
-                  <div className="flex items-center gap-2 ml-4 shrink-0">
+                  <div className="companies-delete-confirm-actions">
                     <Button
                       variant="ghost"
                       size="sm"

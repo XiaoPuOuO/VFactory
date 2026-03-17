@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "../context/CompanyContext";
@@ -33,6 +34,7 @@ import { Identity } from "./Identity";
 import { agentUrl, projectUrl } from "../lib/utils";
 
 export function CommandPalette() {
+  const { t } = useTranslation("nav");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
@@ -116,9 +118,9 @@ export function CommandPalette() {
               openNewIssue();
             }}
           >
-            <SquarePen className="mr-2 h-4 w-4" />
+            <SquarePen className="ui-cmd-icon" />
             Create new issue
-            <span className="ml-auto text-xs text-muted-foreground">C</span>
+            <span className="ui-cmd-shortcut">C</span>
           </CommandItem>
           <CommandItem
             onSelect={() => {
@@ -126,11 +128,11 @@ export function CommandPalette() {
               openNewAgent();
             }}
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="ui-cmd-icon" />
             Create new agent
           </CommandItem>
           <CommandItem onSelect={() => go("/projects")}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="ui-cmd-icon" />
             Create new project
           </CommandItem>
         </CommandGroup>
@@ -139,43 +141,43 @@ export function CommandPalette() {
 
         <CommandGroup heading="Pages">
           <CommandItem onSelect={() => go("/dashboard")}>
-            <LayoutDashboard className="mr-2 h-4 w-4" />
-            Dashboard
+            <LayoutDashboard className="ui-cmd-icon" />
+            {t("dashboard")}
           </CommandItem>
           <CommandItem onSelect={() => go("/inbox")}>
-            <Inbox className="mr-2 h-4 w-4" />
-            Inbox
+            <Inbox className="ui-cmd-icon" />
+            {t("inbox")}
           </CommandItem>
           <CommandItem onSelect={() => go("/issues")}>
-            <CircleDot className="mr-2 h-4 w-4" />
-            Issues
+            <CircleDot className="ui-cmd-icon" />
+            {t("issues")}
           </CommandItem>
           <CommandItem onSelect={() => go("/projects")}>
-            <Hexagon className="mr-2 h-4 w-4" />
-            Projects
+            <Hexagon className="ui-cmd-icon" />
+            {t("projects")}
           </CommandItem>
           <CommandItem onSelect={() => go("/goals")}>
-            <Target className="mr-2 h-4 w-4" />
-            Goals
+            <Target className="ui-cmd-icon" />
+            {t("goals")}
           </CommandItem>
           <CommandItem onSelect={() => go("/agents")}>
-            <Bot className="mr-2 h-4 w-4" />
-            Agents
+            <Bot className="ui-cmd-icon" />
+            {t("agents")}
           </CommandItem>
           <CommandItem onSelect={() => go("/costs")}>
-            <DollarSign className="mr-2 h-4 w-4" />
-            Costs
+            <DollarSign className="ui-cmd-icon" />
+            {t("costs")}
           </CommandItem>
           <CommandItem onSelect={() => go("/activity")}>
-            <History className="mr-2 h-4 w-4" />
-            Activity
+            <History className="ui-cmd-icon" />
+            {t("activity")}
           </CommandItem>
         </CommandGroup>
 
         {visibleIssues.length > 0 && (
           <>
             <CommandSeparator />
-            <CommandGroup heading="Issues">
+            <CommandGroup heading={t("issues")}>
               {visibleIssues.slice(0, 10).map((issue) => (
                 <CommandItem
                   key={issue.id}
@@ -186,14 +188,14 @@ export function CommandPalette() {
                   }
                   onSelect={() => go(`/issues/${issue.identifier ?? issue.id}`)}
                 >
-                  <CircleDot className="mr-2 h-4 w-4" />
-                  <span className="text-muted-foreground mr-2 font-mono text-xs">
+                  <CircleDot className="ui-cmd-icon" />
+                  <span className="ui-cmd-issue-id">
                     {issue.identifier ?? issue.id.slice(0, 8)}
                   </span>
-                  <span className="flex-1 truncate">{issue.title}</span>
+                  <span className="ui-cmd-issue-title">{issue.title}</span>
                   {issue.assigneeAgentId && (() => {
                     const name = agentName(issue.assigneeAgentId);
-                    return name ? <Identity name={name} size="sm" className="ml-2 hidden sm:inline-flex" /> : null;
+                    return name ? <Identity name={name} size="sm" className="ui-cmd-assignee" /> : null;
                   })()}
                 </CommandItem>
               ))}
@@ -204,12 +206,12 @@ export function CommandPalette() {
         {agents.length > 0 && (
           <>
             <CommandSeparator />
-            <CommandGroup heading="Agents">
+            <CommandGroup heading={t("agents")}>
               {agents.slice(0, 10).map((agent) => (
                 <CommandItem key={agent.id} onSelect={() => go(agentUrl(agent))}>
-                  <Bot className="mr-2 h-4 w-4" />
+                  <Bot className="ui-cmd-icon" />
                   {agent.name}
-                  <span className="text-xs text-muted-foreground ml-2">{agent.role}</span>
+                  <span className="ui-cmd-agent-role">{agent.role}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -219,10 +221,10 @@ export function CommandPalette() {
         {projects.length > 0 && (
           <>
             <CommandSeparator />
-            <CommandGroup heading="Projects">
+            <CommandGroup heading={t("projects")}>
               {projects.slice(0, 10).map((project) => (
                 <CommandItem key={project.id} onSelect={() => go(projectUrl(project))}>
-                  <Hexagon className="mr-2 h-4 w-4" />
+                  <Hexagon className="ui-cmd-icon" />
                   {project.name}
                 </CommandItem>
               ))}

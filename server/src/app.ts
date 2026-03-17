@@ -6,15 +6,22 @@ import type { Db } from "@paperclipai/db";
 import type { DeploymentExposure, DeploymentMode } from "@paperclipai/shared";
 import type { StorageService } from "./storage/types.js";
 import { httpLogger, errorHandler } from "./middleware/index.js";
+import { tenantResolutionMiddleware } from "./middleware/tenant-resolution.js";
 import { actorMiddleware } from "./middleware/auth.js";
 import { boardMutationGuard } from "./middleware/board-mutation-guard.js";
 import { privateHostnameGuard, resolvePrivateHostnameAllowSet } from "./middleware/private-hostname-guard.js";
 import { healthRoutes } from "./routes/health.js";
+import { tenantCurrentRoutes, tenantsMeRoutes } from "./routes/tenants.js";
+import { meRoutes } from "./routes/me.js";
+import { chatRoutes } from "./routes/chat.js";
+import { chatService, type ChatHeartbeat } from "./services/chat.js";
+import { heartbeatService } from "./services/heartbeat.js";
 import { companyRoutes } from "./routes/companies.js";
 import { agentRoutes } from "./routes/agents.js";
 import { projectRoutes } from "./routes/projects.js";
 import { issueRoutes } from "./routes/issues.js";
 import { goalRoutes } from "./routes/goals.js";
+import { scheduleRoutes } from "./routes/schedules.js";
 import { approvalRoutes } from "./routes/approvals.js";
 import { secretRoutes } from "./routes/secrets.js";
 import { costRoutes } from "./routes/costs.js";
@@ -24,16 +31,24 @@ import { sidebarBadgeRoutes } from "./routes/sidebar-badges.js";
 import { llmRoutes } from "./routes/llms.js";
 import { assetRoutes } from "./routes/assets.js";
 import { accessRoutes } from "./routes/access.js";
+import { instanceGroupsRoutes } from "./routes/instance-groups.js";
+import { instanceUsersRoutes } from "./routes/instance-users.js";
+import { instanceSettingsRoutes } from "./routes/instance-settings.js";
 import { applyUiBranding } from "./ui-branding.js";
 import type { BetterAuthSessionResult } from "./auth/better-auth.js";
+import type { GetBanStatusFn } from "./middleware/auth.js";
 
 type UiMode = "none" | "static" | "vite-dev";
+
+export type HttpServer = import("node:http").Server;
 
 export async function createApp(
   db: Db,
   opts: {
     uiMode: UiMode;
     serverPort: number;
+    /** 若為 vite-dev 且提供此 server，HMR WebSocket 將走同一埠，不再另開 serverPort+10000 */
+    httpServer?: HttpServer | null;
     storageService: StorageService;
     deploymentMode: DeploymentMode;
     deploymentExposure: DeploymentExposure;
@@ -43,11 +58,14 @@ export async function createApp(
     companyDeletionEnabled: boolean;
     betterAuthHandler?: express.RequestHandler;
     resolveSession?: (req: ExpressRequest) => Promise<BetterAuthSessionResult | null>;
+    /** 查詢使用者封禁狀態（authenticated 模式下封禁者無法登入） */
+    getBanStatus?: GetBanStatusFn;
+    /** 可用登入方式（供 UI 顯示／隱藏對應按鈕） */
+    authProviders?: { emailPassword?: boolean; google?: boolean };
   },
 ) {
   const app = express();
 
-  app.use(express.json());
   app.use(httpLogger);
   const privateHostnameGateEnabled =
     opts.deploymentMode === "authenticated" && opts.deploymentExposure === "private";
@@ -62,13 +80,23 @@ export async function createApp(
       bindHost: opts.bindHost,
     }),
   );
+  app.use(tenantResolutionMiddleware(db, { defaultTenantSlug: "default" }));
   app.use(
     actorMiddleware(db, {
       deploymentMode: opts.deploymentMode,
       resolveSession: opts.resolveSession,
+      getBanStatus: opts.getBanStatus,
     }),
   );
   app.get("/api/auth/get-session", (req, res) => {
+    if (req.actor.type === "banned") {
+      res.status(403).json({
+        error: "Account banned",
+        reason: req.actor.reason ?? "Your account has been suspended.",
+        bannedUntil: req.actor.bannedUntil?.toISOString() ?? null,
+      });
+      return;
+    }
     if (req.actor.type !== "board" || !req.actor.userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
@@ -85,14 +113,26 @@ export async function createApp(
       },
     });
   });
+  app.get("/api/auth/providers", (_req, res) => {
+    const providers = opts.authProviders ?? {};
+    res.json({
+      emailPassword: providers.emailPassword !== false,
+      google: providers.google === true,
+    });
+  });
   if (opts.betterAuthHandler) {
-    app.all("/api/auth/*authPath", opts.betterAuthHandler);
+    app.all(/^\/api\/auth\/.+/, opts.betterAuthHandler);
   }
+
+  app.use(express.json());
   app.use(llmRoutes(db));
 
   // Mount API routes
   const api = Router();
   api.use(boardMutationGuard());
+  api.use("/tenant", tenantCurrentRoutes(db));
+  api.use("/tenants/me", tenantsMeRoutes(db));
+  api.use("/me", meRoutes(db));
   api.use(
     "/health",
     healthRoutes(db, {
@@ -102,12 +142,16 @@ export async function createApp(
       companyDeletionEnabled: opts.companyDeletionEnabled,
     }),
   );
+  const heartbeat = heartbeatService(db);
+  const chat = chatService(db, heartbeat as ChatHeartbeat);
+  api.use("/companies", chatRoutes(db, chat));
   api.use("/companies", companyRoutes(db));
   api.use(agentRoutes(db));
   api.use(assetRoutes(db, opts.storageService));
   api.use(projectRoutes(db));
-  api.use(issueRoutes(db, opts.storageService));
+  api.use(issueRoutes(db, opts.storageService, chat));
   api.use(goalRoutes(db));
+  api.use(scheduleRoutes(db));
   api.use(approvalRoutes(db));
   api.use(secretRoutes(db));
   api.use(costRoutes(db));
@@ -122,6 +166,9 @@ export async function createApp(
       allowedHostnames: opts.allowedHostnames,
     }),
   );
+  api.use("/instance/groups", instanceGroupsRoutes(db));
+  api.use("/instance/users", instanceUsersRoutes(db));
+  api.use("/instance/settings", instanceSettingsRoutes(db));
   app.use("/api", api);
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "API route not found" });
@@ -148,18 +195,21 @@ export async function createApp(
 
   if (opts.uiMode === "vite-dev") {
     const uiRoot = path.resolve(__dirname, "../../ui");
-    const hmrPort = opts.serverPort + 10000;
     const { createServer: createViteServer } = await import("vite");
+    /** HMR 使用同一 HTTP server，避免另開 13100 等埠導致連線失敗 */
+    const hmrOpts = opts.httpServer
+      ? { server: opts.httpServer }
+      : {
+          host: opts.bindHost,
+          port: opts.serverPort + 10000,
+          clientPort: opts.serverPort + 10000,
+        };
     const vite = await createViteServer({
       root: uiRoot,
       appType: "spa",
       server: {
         middlewareMode: true,
-        hmr: {
-          host: opts.bindHost,
-          port: hmrPort,
-          clientPort: hmrPort,
-        },
+        hmr: hmrOpts,
         allowedHosts: privateHostnameGateEnabled ? Array.from(privateHostnameAllowSet) : undefined,
       },
     });

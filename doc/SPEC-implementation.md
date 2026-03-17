@@ -30,19 +30,19 @@ These decisions close open questions from `SPEC.md` for V1.
 
 | Topic | V1 Decision |
 |---|---|
-| Tenancy | Single-tenant deployment, multi-company data model |
-| Company model | Company is first-order; all business entities are company-scoped |
-| Board | Single human board operator per deployment |
+| Tenancy | SaaS multi-tenant deployment; tenant is first-order; companies belong to a tenant; data and login are isolated per tenant |
+| Company model | Company is scoped to a tenant; all business entities are company-scoped (and thus tenant-scoped) |
+| Board | Board users are per-tenant (tenant_memberships); each tenant has its own set of board members (owner/admin/member) |
 | Org graph | Strict tree (`reports_to` nullable root); no multi-manager reporting |
 | Visibility | Full visibility to board and all agents in same company |
-| Communication | Tasks + comments only (no separate chat system) |
+| Communication | Tasks + comments + company-scoped chat (conversations are not issues; agents can create/execute issues from chat) |
 | Task ownership | Single assignee; atomic checkout required for `in_progress` transition |
 | Recovery | No automatic reassignment; work recovery stays manual/explicit |
 | Agent adapters | Built-in `process` and `http` adapters |
-| Auth | Mode-dependent human auth (`local_trusted` implicit board in current code; authenticated mode uses sessions), API keys for agents |
+| Auth | Human auth via Better Auth sessions (login required); API keys for agents |
 | Budget period | Monthly UTC calendar window |
 | Budget enforcement | Soft alerts + hard limit auto-pause |
-| Deployment modes | Canonical model is `local_trusted` + `authenticated` with `private/public` exposure policy (see `doc/DEPLOYMENT-MODES.md`) |
+| Deployment modes | `authenticated` only, with `private/public` exposure policy (see `doc/DEPLOYMENT-MODES.md`) |
 
 ## 4. Current Baseline (Repo Snapshot)
 
@@ -67,7 +67,7 @@ V1 implementation extends this baseline into a company-centric, governance-aware
 - Heartbeat invocation, status tracking, and cancellation
 - Cost event ingestion and rollups (agent/task/project/company)
 - Budget settings and hard-stop enforcement
-- Board web UI for dashboard, org chart, tasks, agents, approvals, costs
+- Board web UI for dashboard, org chart, tasks, agents, approvals, costs, chat (rooms and messages)
 - Agent-facing API contract (task read/write, heartbeat report, cost report)
 - Auditable activity log for all mutating actions
 
@@ -117,14 +117,39 @@ All core tables include `id`, `created_at`, `updated_at` unless noted.
 
 Human auth tables (`users`, `sessions`, and provider-specific auth artifacts) are managed by the selected auth library. This spec treats them as required dependencies and references `users.id` where user attribution is needed.
 
+## 7.0.1 `tenants` (SaaS multi-tenant)
+
+- `id` uuid pk
+- `slug` text unique not null — URL-safe identifier (subdomain or path), e.g. `acme`
+- `name` text not null
+- `status` enum: `active | suspended | archived`
+- `created_at`, `updated_at`
+
+Invariant: every company belongs to exactly one tenant. Tenant is resolved from request (header `X-Tenant-Slug` / `X-Tenant-ID`, or default slug when absent).
+
+## 7.0.2 `tenant_memberships`
+
+- `id` uuid pk
+- `tenant_id` uuid fk `tenants.id` not null
+- `user_id` text not null (auth user id)
+- `role` enum: `owner | admin | member`
+- `created_at`, `updated_at`
+- Unique `(tenant_id, user_id)`
+
+Board users see only companies in tenants where they have a membership. Tenant owner/admin may create companies in that tenant.
+
 ## 7.1 `companies`
 
 - `id` uuid pk
+- `tenant_id` uuid fk `tenants.id` not null
 - `name` text not null
 - `description` text null
 - `status` enum: `active | paused | archived`
+- `working_directory` text null — **Agent 設定目錄**：存放 Agent 設定用，非執行工作目錄；可重複（多公司可共用同路徑）。儲存後會同步為該公司底下所有 Agent 的 adapter 預設 cwd（供讀取設定用），實際執行任務時的工作目錄由專案工作區決定。
 
-Invariant: every business record belongs to exactly one company.
+- `issue_prefix` text not null; unique per tenant `(tenant_id, issue_prefix)`.
+
+Invariant: every business record belongs to exactly one company (and thus one tenant).
 
 ## 7.2 `agents`
 
@@ -171,6 +196,9 @@ Invariant: plaintext key shown once at creation; only hash stored.
 - `parent_id` uuid fk `goals.id` null
 - `owner_agent_id` uuid fk `agents.id` null
 - `status` enum: `planned | active | achieved | cancelled`
+- `recurrence` enum: `one_time | daily | weekly | monthly | custom` (default `one_time`). One-time: achieved when all linked issues done; recurring: set `recurrence_next_refresh_at` = now + interval when done, no auto-achieve.
+- `recurrence_interval_days` int 0–365, `recurrence_interval_hours` 0–23, `recurrence_interval_minutes` 0–59, `recurrence_interval_seconds` 0–59 (for `custom` only; at least one &gt; 0).
+- `recurrence_next_refresh_at` timestamp null (read-only; set by system for recurring goals).
 
 Invariant: at least one root `company` level goal per company.
 
@@ -184,6 +212,8 @@ Invariant: at least one root `company` level goal per company.
 - `status` enum: `backlog | planned | in_progress | completed | cancelled`
 - `lead_agent_id` uuid fk `agents.id` null
 - `target_date` date null
+
+專案透過 `project_workspaces` 擁有一個或多個**執行工作區**；每個工作區的 `cwd` 為 **專案工作目錄**（Agent 實際寫程式／執行任務的目錄）。同一公司內，不同專案工作區的 `cwd` 不可重複（一徑一路一專案）。
 
 ## 7.6 `issues` (core task entity)
 
@@ -309,6 +339,8 @@ Operational policy:
 - `issue_attachments(company_id, issue_id)`
 - `company_secrets(company_id, name)` unique
 - `company_secret_versions(secret_id, version)` unique
+- `agent_schedules(company_id, enabled, next_run_at)` — 排程 tick 查詢
+- `agent_schedules(agent_id)` — 依 agent 刪除時清理
 
 ## 7.14 `assets` + `issue_attachments`
 
@@ -329,6 +361,27 @@ Operational policy:
   - `issue_id` uuid fk not null
   - `asset_id` uuid fk not null
   - `issue_comment_id` uuid fk null
+
+## 7.15 `agent_schedules`（日曆排程）
+
+公司維度、單表多型；用於「到時觸發 agent wakeup」，與 Heartbeat Timer（固定間隔）並存。
+
+- `id` uuid pk
+- `company_id` uuid fk not null
+- `agent_id` uuid fk not null
+- `name` text not null
+- `schedule_kind` enum: `cron | once | ranges`
+- `timezone` text not null（IANA，如 `America/New_York`）
+- `payload` jsonb null — 傳給 run 的 context
+- `enabled` boolean not null default true
+- `next_run_at` timestamptz null — 下次執行時刻（UTC）
+- `last_triggered_at` timestamptz null
+- `cron_expression` text null — **cron** 時必填（5 欄）
+- `run_at` timestamptz null — **once** 時必填
+- `time_of_day` text null — **ranges** 時必填（HH:mm）
+- `windows` jsonb null — **ranges** 時必填，`[{ "start": "YYYY-MM-DD", "end": "YYYY-MM-DD" }, ...]`
+
+觸發時呼叫既有 `enqueueWakeup(agentId, { source: "automation", triggerDetail: "scheduled", payload, ... })`，不新增 queue。刪除 company 或 agent 時一併刪除其 `agent_schedules`。
 
 ## 8. State Machines
 
@@ -405,7 +458,12 @@ Side effects:
 
 ## 10. API Contract (REST)
 
-All endpoints are under `/api` and return JSON.
+All endpoints are under `/api` and return JSON. Requests may include `X-Tenant-Slug` or `X-Tenant-ID` to scope to a tenant; when omitted, the default tenant is used.
+
+## 10.0 Tenants (multi-tenant)
+
+- `GET /tenant` — Current request’s tenant (id, slug, name, status). 400 if tenant not resolved.
+- `GET /tenants/me` — List of tenants the current user belongs to (id, slug, name). For tenant-selection UI.
 
 ## 10.1 Companies
 
@@ -418,7 +476,7 @@ All endpoints are under `/api` and return JSON.
 ## 10.2 Goals
 
 - `GET /companies/:companyId/goals`
-- `POST /companies/:companyId/goals`
+- `POST /companies/:companyId/goals` — body: `title`, `description`, `level`, `parentId`, `status`, **recurrence** (`one_time` | `daily` | `weekly` | `monthly` | `custom`); for `custom` also `recurrenceIntervalDays/Hours/Minutes/Seconds` (at least one &gt; 0)
 - `GET /goals/:goalId`
 - `PATCH /goals/:goalId`
 - `DELETE /goals/:goalId` (soft delete optional, hard delete board-only)
@@ -466,6 +524,19 @@ Server behavior:
 1. single SQL update with `WHERE id = ? AND status IN (?) AND (assignee_agent_id IS NULL OR assignee_agent_id = :agentId)`
 2. if updated row count is 0, return `409` with current owner/status
 3. successful checkout sets `assignee_agent_id`, `status = in_progress`, and `started_at`
+
+## 10.4.2 Chat (company-scoped)
+
+Chat is independent of issues. Board and agents can participate in direct (1:1) or group rooms. @-mentions in messages wake mentioned agents (same semantics as issue comments). Woken agents can reply in chat and/or create/execute issues.
+
+- `GET /companies/:companyId/chat/rooms` — list rooms (board: rooms where user is member; agent: rooms where agent is member)
+- `POST /companies/:companyId/chat/rooms` — create room (board only): body `{ type: "direct", agentId }` or `{ type: "group", agentIds[], name? }`
+- `GET /companies/:companyId/chat/rooms/:roomId` — room + members
+- `GET /companies/:companyId/chat/rooms/:roomId/messages?limit=&before=` — list messages (newest first)
+- `POST /companies/:companyId/chat/rooms/:roomId/messages` — add message: body `{ body }` (supports @AgentName to mention)
+- `DELETE /companies/:companyId/chat/rooms/:roomId/messages` — clear all messages in a room (board only); keeps room and members
+
+When an agent is woken with reason `chat_message` (board sent a message to the room) or `chat_message_mentioned`, context includes `roomId`, `roomType`, `messageId`, `taskKey: "chat:<roomId>"`, and `wakeReasonLabel` (short instruction). Adapters inject `PAPERCLIP_CHAT_ROOM_ID`, `PAPERCLIP_CHAT_ROOM_TYPE`, `PAPERCLIP_CHAT_MESSAGE_ID`, and `PAPERCLIP_WAKE_REASON_LABEL`. The agent must: (1) call `GET /companies/:companyId/chat/rooms/:roomId/messages` to read the conversation, (2) branch by room type: for `group`, decide whether the triggering message is relevant to the agent's Role and description (e.g. @mentioned, or natural-language reference such as "那個執行長"), and do not reply if irrelevant; for `direct` (1:1), reply directly without applying group relevance filtering. Replies use `POST /companies/:companyId/chat/rooms/:roomId/messages` with `{ "body": "…" }`. In the same run, when the conversation calls for it, the agent may create goals (`GET/POST /companies/:companyId/goals`; goal body supports **recurrence**: `one_time` | `daily` | `weekly` | `monthly` | `custom`, and for `custom` the four interval fields) or issues (`POST /companies/:companyId/issues`). The same Chat, Goals, and Issues endpoints are available to agents (board or agent auth; agent only if member for chat).
 
 ## 10.5 Projects
 
@@ -574,7 +645,7 @@ Behavior:
 
 ## 11.5 Scheduler Rules
 
-Per-agent schedule fields in `adapter_config`:
+Per-agent schedule fields in `adapter_config` (Heartbeat Timer):
 
 - `enabled` boolean
 - `intervalSec` integer (minimum 30)
@@ -585,6 +656,14 @@ Scheduler must skip invocation when:
 - agent is paused/terminated
 - an existing run is active
 - hard budget limit has been hit
+
+### 11.5.1 日曆排程（Calendar Schedules）與觸發來源
+
+除上述 **Heartbeat Timer**（固定間隔、`source: "timer"`）外，V1 支援 **日曆排程**（`agent_schedules`）：
+
+- 排程類型：**cron**（重複）、**once**（單次指定時刻）、**ranges**（多段日期區間內每日）。
+- 到時由 Scheduler 迴圈呼叫 `enqueueWakeup(agentId, { source: "automation", triggerDetail: "scheduled", payload: schedule.payload, ... })`。
+- 觸發來源為 `invocation_source: "automation"`、`trigger_detail: "scheduled"`，與 Timer / 手動喚醒並列；執行路徑相同（`agent_wakeup_requests` → run → adapter），OpenClaw 等 adapter 無需改動。
 
 ## 12. Governance and Approval Flows
 

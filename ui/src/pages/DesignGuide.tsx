@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./DesignGuide.css";
 import {
   BookOpen,
   Bot,
@@ -130,10 +131,8 @@ import { Identity } from "@/components/Identity";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-4">
-      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-        {title}
-      </h3>
+    <section className="design-guide-section">
+      <h3>{title}</h3>
       <Separator />
       {children}
     </section>
@@ -142,8 +141,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-medium">{title}</h4>
+    <div className="design-guide-subsection">
+      <h4>{title}</h4>
       {children}
     </div>
   );
@@ -155,14 +154,15 @@ function SubSection({ title, children }: { title: string; children: React.ReactN
 
 function Swatch({ name, cssVar }: { name: string; cssVar: string }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="design-guide-swatch">
       <div
-        className="h-8 w-8 rounded-md border border-border shrink-0"
+        className="design-guide-swatch-color"
         style={{ backgroundColor: `var(${cssVar})` }}
+        aria-hidden
       />
       <div>
-        <p className="text-xs font-mono">{cssVar}</p>
-        <p className="text-xs text-muted-foreground">{name}</p>
+        <p className="design-guide-swatch-var">{cssVar}</p>
+        <p className="design-guide-swatch-name">{name}</p>
       </div>
     </div>
   );
@@ -189,44 +189,40 @@ export function DesignGuide() {
   ]);
 
   return (
-    <div className="space-y-10 max-w-4xl">
-      {/* Page header */}
-      <div>
-        <h2 className="text-xl font-bold">Design Guide</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Every component, style, and pattern used across Paperclip.
+    <div className="design-guide-root">
+      <div className="design-guide-header">
+        <h2>Design Guide</h2>
+        <p>
+          Every component, style, and pattern used across VFactory.
         </p>
       </div>
 
-      {/* ============================================================ */}
-      {/*  COVERAGE                                                     */}
-      {/* ============================================================ */}
       <Section title="Component Coverage">
-        <p className="text-sm text-muted-foreground">
+        <p className="design-guide-prose">
           This page should be updated when new UI primitives or app-level patterns ship.
         </p>
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="design-guide-grid-2">
           <SubSection title="UI primitives">
-            <div className="flex flex-wrap gap-2">
+            <div className="design-guide-flex-wrap">
               {[
                 "avatar", "badge", "breadcrumb", "button", "card", "checkbox", "collapsible",
                 "command", "dialog", "dropdown-menu", "input", "label", "popover", "scroll-area",
                 "select", "separator", "sheet", "skeleton", "tabs", "textarea", "tooltip",
               ].map((name) => (
-                <Badge key={name} variant="outline" className="font-mono text-[10px]">
+                <Badge key={name} variant="outline" className="design-guide-badge-mono">
                   {name}
                 </Badge>
               ))}
             </div>
           </SubSection>
           <SubSection title="App components">
-            <div className="flex flex-wrap gap-2">
+            <div className="design-guide-flex-wrap">
               {[
                 "StatusBadge", "StatusIcon", "PriorityIcon", "EntityRow", "EmptyState", "MetricCard",
                 "FilterBar", "InlineEditor", "PageSkeleton", "Identity", "CommentThread", "MarkdownEditor",
                 "PropertiesPanel", "Sidebar", "CommandPalette",
               ].map((name) => (
-                <Badge key={name} variant="ghost" className="font-mono text-[10px]">
+                <Badge key={name} variant="ghost" className="design-guide-badge-mono">
                   {name}
                 </Badge>
               ))}
@@ -240,7 +236,7 @@ export function DesignGuide() {
       {/* ============================================================ */}
       <Section title="Colors">
         <SubSection title="Core">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="design-guide-grid-swatches">
             <Swatch name="Background" cssVar="--background" />
             <Swatch name="Foreground" cssVar="--foreground" />
             <Swatch name="Card" cssVar="--card" />
@@ -257,14 +253,14 @@ export function DesignGuide() {
         </SubSection>
 
         <SubSection title="Sidebar">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="design-guide-grid-swatches">
             <Swatch name="Sidebar" cssVar="--sidebar" />
             <Swatch name="Sidebar border" cssVar="--sidebar-border" />
           </div>
         </SubSection>
 
         <SubSection title="Chart">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="design-guide-grid-swatches">
             <Swatch name="Chart 1" cssVar="--chart-1" />
             <Swatch name="Chart 2" cssVar="--chart-2" />
             <Swatch name="Chart 3" cssVar="--chart-3" />
@@ -278,26 +274,18 @@ export function DesignGuide() {
       {/*  TYPOGRAPHY                                                   */}
       {/* ============================================================ */}
       <Section title="Typography">
-        <div className="space-y-3">
-          <h2 className="text-xl font-bold">Page Title — text-xl font-bold</h2>
-          <h2 className="text-lg font-semibold">Section Title — text-lg font-semibold</h2>
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Section Heading — text-sm font-semibold uppercase tracking-wide
-          </h3>
-          <p className="text-sm font-medium">Card Title — text-sm font-medium</p>
-          <p className="text-sm font-semibold">Card Title Alt — text-sm font-semibold</p>
-          <p className="text-sm">Body text — text-sm</p>
-          <p className="text-sm text-muted-foreground">
-            Muted description — text-sm text-muted-foreground
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Tiny label — text-xs text-muted-foreground
-          </p>
-          <p className="text-sm font-mono text-muted-foreground">
-            Mono identifier — text-sm font-mono text-muted-foreground
-          </p>
-          <p className="text-2xl font-bold">Large stat — text-2xl font-bold</p>
-          <p className="font-mono text-xs">Log/code text — font-mono text-xs</p>
+        <div className="design-guide-vstack-3">
+          <h2 className="design-guide-typo-page-title" style={{ marginTop: 0 }}>Page Title — text-xl font-bold</h2>
+          <h2 style={{ fontSize: "1.125rem", fontWeight: 600 }}>Section Title — text-lg font-semibold</h2>
+          <h3 className="design-guide-typo-section">Section Heading — text-sm font-semibold uppercase tracking-wide</h3>
+          <p style={{ fontSize: "0.875rem", fontWeight: 500 }}>Card Title — text-sm font-medium</p>
+          <p style={{ fontSize: "0.875rem", fontWeight: 600 }}>Card Title Alt — text-sm font-semibold</p>
+          <p style={{ fontSize: "0.875rem" }}>Body text — text-sm</p>
+          <p className="design-guide-prose">Muted description — text-sm text-muted-foreground</p>
+          <p className="design-guide-caption">Tiny label — text-xs text-muted-foreground</p>
+          <p className="design-guide-prose" style={{ fontFamily: "ui-monospace, monospace" }}>Mono identifier — text-sm font-mono text-muted-foreground</p>
+          <p style={{ fontSize: "1.5rem", fontWeight: 700 }}>Large stat — text-2xl font-bold</p>
+          <p style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.75rem" }}>Log/code text — font-mono text-xs</p>
         </div>
       </Section>
 
@@ -305,7 +293,7 @@ export function DesignGuide() {
       {/*  SPACING & RADIUS                                             */}
       {/* ============================================================ */}
       <Section title="Radius">
-        <div className="flex items-end gap-4 flex-wrap">
+        <div className="design-guide-flex-wrap-end">
           {[
             ["sm", "var(--radius-sm)"],
             ["md", "var(--radius-md)"],
@@ -313,12 +301,9 @@ export function DesignGuide() {
             ["xl", "var(--radius-xl)"],
             ["full", "9999px"],
           ].map(([label, radius]) => (
-            <div key={label} className="flex flex-col items-center gap-1">
-              <div
-                className="h-12 w-12 bg-primary"
-                style={{ borderRadius: radius }}
-              />
-              <span className="text-xs text-muted-foreground">{label}</span>
+            <div key={String(label)} className="design-guide-flex-col-center">
+              <div className="design-guide-radius-swatch" style={{ borderRadius: radius }} aria-hidden />
+              <span className="design-guide-caption">{String(label)}</span>
             </div>
           ))}
         </div>
@@ -329,7 +314,7 @@ export function DesignGuide() {
       {/* ============================================================ */}
       <Section title="Buttons">
         <SubSection title="Variants">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="design-guide-flex-row">
             <Button variant="default">Default</Button>
             <Button variant="secondary">Secondary</Button>
             <Button variant="outline">Outline</Button>
@@ -340,7 +325,7 @@ export function DesignGuide() {
         </SubSection>
 
         <SubSection title="Sizes">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="design-guide-flex-row">
             <Button size="xs">Extra Small</Button>
             <Button size="sm">Small</Button>
             <Button size="default">Default</Button>
@@ -349,7 +334,7 @@ export function DesignGuide() {
         </SubSection>
 
         <SubSection title="Icon buttons">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="design-guide-flex-row">
             <Button variant="ghost" size="icon-xs"><Search /></Button>
             <Button variant="ghost" size="icon-sm"><Search /></Button>
             <Button variant="outline" size="icon"><Search /></Button>
@@ -358,7 +343,7 @@ export function DesignGuide() {
         </SubSection>
 
         <SubSection title="With icons">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="design-guide-flex-row">
             <Button><Plus /> New Issue</Button>
             <Button variant="outline"><Upload /> Upload</Button>
             <Button variant="destructive"><Trash2 /> Delete</Button>
@@ -367,7 +352,7 @@ export function DesignGuide() {
         </SubSection>
 
         <SubSection title="States">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="design-guide-flex-row">
             <Button disabled>Disabled</Button>
             <Button variant="outline" disabled>Disabled Outline</Button>
           </div>
@@ -379,7 +364,7 @@ export function DesignGuide() {
       {/* ============================================================ */}
       <Section title="Badges">
         <SubSection title="Variants">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="design-guide-flex-row">
             <Badge variant="default">Default</Badge>
             <Badge variant="secondary">Secondary</Badge>
             <Badge variant="outline">Outline</Badge>
@@ -394,7 +379,7 @@ export function DesignGuide() {
       {/* ============================================================ */}
       <Section title="Status System">
         <SubSection title="StatusBadge (all statuses)">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="design-guide-flex-row">
             {[
               "active", "running", "paused", "idle", "archived", "planned",
               "achieved", "completed", "failed", "timed_out", "succeeded", "error",
@@ -408,60 +393,55 @@ export function DesignGuide() {
         </SubSection>
 
         <SubSection title="StatusIcon (interactive)">
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="design-guide-flex-row-gap3">
             {["backlog", "todo", "in_progress", "in_review", "done", "cancelled", "blocked"].map(
               (s) => (
-                <div key={s} className="flex items-center gap-1.5">
+                <div key={s} className="design-guide-inline-item">
                   <StatusIcon status={s} />
-                  <span className="text-xs text-muted-foreground">{s}</span>
+                  <span className="design-guide-caption">{s}</span>
                 </div>
               )
             )}
           </div>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="design-guide-inline-row-mt">
             <StatusIcon status={status} onChange={setStatus} />
-            <span className="text-sm">Click the icon to change status (current: {status})</span>
+            <span className="design-guide-prose" style={{ color: "var(--foreground)" }}>Click the icon to change status (current: {status})</span>
           </div>
         </SubSection>
 
         <SubSection title="PriorityIcon (interactive)">
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="design-guide-flex-row-gap3">
             {["critical", "high", "medium", "low"].map((p) => (
-              <div key={p} className="flex items-center gap-1.5">
+              <div key={p} className="design-guide-inline-item">
                 <PriorityIcon priority={p} />
-                <span className="text-xs text-muted-foreground">{p}</span>
+                <span className="design-guide-caption">{p}</span>
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="design-guide-inline-row-mt">
             <PriorityIcon priority={priority} onChange={setPriority} />
-            <span className="text-sm">Click the icon to change (current: {priority})</span>
+            <span className="design-guide-prose" style={{ color: "var(--foreground)" }}>Click the icon to change (current: {priority})</span>
           </div>
         </SubSection>
 
         <SubSection title="Agent status dots">
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="design-guide-flex-row-gap4">
             {(["running", "active", "paused", "error", "archived"] as const).map((label) => (
-              <div key={label} className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className={`inline-flex h-full w-full rounded-full ${agentStatusDot[label] ?? agentStatusDotDefault}`} />
+              <div key={label} className="design-guide-inline-item">
+                <span className="design-guide-agent-dot">
+                  <span className={`design-guide-agent-dot-inner ${agentStatusDot[label] ?? agentStatusDotDefault}`} aria-hidden />
                 </span>
-                <span className="text-xs text-muted-foreground">{label}</span>
+                <span className="design-guide-caption">{label}</span>
               </div>
             ))}
           </div>
         </SubSection>
 
         <SubSection title="Run invocation badges">
-          <div className="flex items-center gap-2 flex-wrap">
-            {[
-              ["timer", "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"],
-              ["assignment", "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300"],
-              ["on_demand", "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300"],
-              ["automation", "bg-muted text-muted-foreground"],
-            ].map(([label, cls]) => (
-              <span key={label} className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>
-                {label}
+          <div className="design-guide-flex-row">
+            {(["timer", "assignment", "on_demand", "automation"] as const).map((inv) => (
+              <span key={inv} className="design-guide-badge-invocation" data-invocation={inv}>
+                {inv}
               </span>
             ))}
           </div>
@@ -472,10 +452,10 @@ export function DesignGuide() {
       {/*  FORM ELEMENTS                                                */}
       {/* ============================================================ */}
       <Section title="Form Elements">
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="design-guide-form-grid">
           <SubSection title="Input">
             <Input placeholder="Default input" />
-            <Input placeholder="Disabled input" disabled className="mt-2" />
+            <Input placeholder="Disabled input" disabled className="design-guide-mt-2" />
           </SubSection>
 
           <SubSection title="Textarea">
@@ -483,16 +463,16 @@ export function DesignGuide() {
           </SubSection>
 
           <SubSection title="Checkbox & Label">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
+            <div className="design-guide-vstack-3">
+              <div className="design-guide-checkbox-row">
                 <Checkbox id="check1" defaultChecked />
                 <Label htmlFor="check1">Checked item</Label>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="design-guide-checkbox-row">
                 <Checkbox id="check2" />
                 <Label htmlFor="check2">Unchecked item</Label>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="design-guide-checkbox-row">
                 <Checkbox id="check3" disabled />
                 <Label htmlFor="check3">Disabled item</Label>
               </div>
@@ -500,32 +480,32 @@ export function DesignGuide() {
           </SubSection>
 
           <SubSection title="Inline Editor">
-            <div className="space-y-4">
+            <div className="design-guide-vstack-4">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Title (single-line)</p>
+                <p className="design-guide-inline-label mb-1">Title (single-line)</p>
                 <InlineEditor
                   value={inlineTitle}
                   onSave={setInlineTitle}
                   as="h2"
-                  className="text-xl font-bold"
+                  className="design-guide-typo-page-title"
                 />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Body text (single-line)</p>
+                <p className="design-guide-inline-label mb-1">Body text (single-line)</p>
                 <InlineEditor
                   value={inlineText}
                   onSave={setInlineText}
                   as="p"
-                  className="text-sm"
+                  className="design-guide-comment-body"
                 />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Description (multiline, auto-sizing)</p>
+                <p className="design-guide-inline-label mb-1">Description (multiline, auto-sizing)</p>
                 <InlineEditor
                   value={inlineDesc}
                   onSave={setInlineDesc}
                   as="p"
-                  className="text-sm text-muted-foreground"
+                  className="design-guide-prose"
                   placeholder="Add a description..."
                   multiline
                 />
@@ -539,7 +519,7 @@ export function DesignGuide() {
       {/*  SELECT                                                       */}
       {/* ============================================================ */}
       <Section title="Select">
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="design-guide-form-grid">
           <SubSection title="Default size">
             <Select value={selectValue} onValueChange={setSelectValue}>
               <SelectTrigger className="w-full">
@@ -553,7 +533,7 @@ export function DesignGuide() {
                 <SelectItem value="done">Done</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">Current value: {selectValue}</p>
+            <p className="design-guide-caption">Current value: {selectValue}</p>
           </SubSection>
           <SubSection title="Small trigger">
             <Select defaultValue="high">
@@ -579,17 +559,17 @@ export function DesignGuide() {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
               Quick Actions
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown style={{ height: "1rem", width: "1rem" }} aria-hidden />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuContent align="start" className="design-guide-dropdown-content">
             <DropdownMenuItem>
-              <Check className="h-4 w-4" />
+              <Check className="design-guide-icon" aria-hidden />
               Mark as done
               <DropdownMenuShortcut>⌘D</DropdownMenuShortcut>
             </DropdownMenuItem>
             <DropdownMenuItem>
-              <BookOpen className="h-4 w-4" />
+              <BookOpen className="design-guide-icon" aria-hidden />
               Open docs
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -600,7 +580,7 @@ export function DesignGuide() {
               Watch issue
             </DropdownMenuCheckboxItem>
             <DropdownMenuItem variant="destructive">
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="design-guide-icon" aria-hidden />
               Delete issue
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -615,9 +595,9 @@ export function DesignGuide() {
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm">Open Popover</Button>
           </PopoverTrigger>
-          <PopoverContent className="space-y-2">
-            <p className="text-sm font-medium">Agent heartbeat</p>
-            <p className="text-xs text-muted-foreground">
+          <PopoverContent className="design-guide-popover-body">
+            <p style={{ fontSize: "0.875rem", fontWeight: 500 }}>Agent heartbeat</p>
+            <p className="design-guide-caption">
               Last run succeeded 24s ago. Next timer run in 9m.
             </p>
             <Button size="xs">Wake now</Button>
@@ -629,14 +609,14 @@ export function DesignGuide() {
       {/*  COLLAPSIBLE                                                  */}
       {/* ============================================================ */}
       <Section title="Collapsible">
-        <Collapsible open={collapsibleOpen} onOpenChange={setCollapsibleOpen} className="space-y-2">
+        <Collapsible open={collapsibleOpen} onOpenChange={setCollapsibleOpen} className="design-guide-collapsible-root">
           <CollapsibleTrigger asChild>
             <Button variant="outline" size="sm">
               {collapsibleOpen ? "Hide" : "Show"} advanced filters
             </Button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="rounded-md border border-border p-3">
-            <div className="space-y-2">
+          <CollapsibleContent className="design-guide-collapsible-content">
+            <div className="design-guide-vstack-2">
               <Label htmlFor="owner-filter">Owner</Label>
               <Input id="owner-filter" placeholder="Filter by agent name" />
             </div>
@@ -657,12 +637,12 @@ export function DesignGuide() {
               <SheetTitle>Issue Properties</SheetTitle>
               <SheetDescription>Edit metadata without leaving the current page.</SheetDescription>
             </SheetHeader>
-            <div className="space-y-4 px-4">
-              <div className="space-y-1">
+            <div className="design-guide-sheet-body">
+              <div className="design-guide-sheet-field">
                 <Label htmlFor="sheet-title">Title</Label>
                 <Input id="sheet-title" defaultValue="Improve onboarding docs" />
               </div>
-              <div className="space-y-1">
+              <div className="design-guide-sheet-field">
                 <Label htmlFor="sheet-description">Description</Label>
                 <Textarea id="sheet-description" defaultValue="Capture setup pitfalls and screenshots." />
               </div>
@@ -679,10 +659,10 @@ export function DesignGuide() {
       {/*  SCROLL AREA                                                  */}
       {/* ============================================================ */}
       <Section title="Scroll Area">
-        <ScrollArea className="h-36 rounded-md border border-border">
-          <div className="space-y-2 p-3">
+        <ScrollArea className="design-guide-scroll-area">
+          <div className="design-guide-scroll-inner">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="rounded-md border border-border p-2 text-sm">
+              <div key={i} className="design-guide-scroll-item">
                 Heartbeat run #{i + 1}: completed successfully
               </div>
             ))}
@@ -694,29 +674,29 @@ export function DesignGuide() {
       {/*  COMMAND                                                      */}
       {/* ============================================================ */}
       <Section title="Command (CMDK)">
-        <div className="rounded-md border border-border">
+        <div className="design-guide-card-border">
           <Command>
             <CommandInput placeholder="Type a command or search..." />
             <CommandList>
               <CommandEmpty>No results found.</CommandEmpty>
               <CommandGroup heading="Pages">
                 <CommandItem>
-                  <LayoutDashboard className="h-4 w-4" />
+                  <LayoutDashboard className="design-guide-icon" aria-hidden />
                   Dashboard
                 </CommandItem>
                 <CommandItem>
-                  <CircleDot className="h-4 w-4" />
+                  <CircleDot className="design-guide-icon" aria-hidden />
                   Issues
                 </CommandItem>
               </CommandGroup>
               <CommandSeparator />
               <CommandGroup heading="Actions">
                 <CommandItem>
-                  <CommandIcon className="h-4 w-4" />
+                  <CommandIcon className="design-guide-icon" aria-hidden />
                   Open command palette
                 </CommandItem>
                 <CommandItem>
-                  <Plus className="h-4 w-4" />
+                  <Plus className="design-guide-icon" aria-hidden />
                   Create new issue
                 </CommandItem>
               </CommandGroup>
@@ -736,7 +716,7 @@ export function DesignGuide() {
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbLink href="#">Paperclip App</BreadcrumbLink>
+              <BreadcrumbLink href="#">VFactory App</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
@@ -757,9 +737,9 @@ export function DesignGuide() {
               <CardDescription>Card description with supporting text.</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm">Card content goes here. This is the main body area.</p>
+              <p style={{ fontSize: "0.875rem" }}>Card content goes here. This is the main body area.</p>
             </CardContent>
-            <CardFooter className="gap-2">
+            <CardFooter className="design-guide-card-footer-buttons">
               <Button size="sm">Action</Button>
               <Button variant="outline" size="sm">Cancel</Button>
             </CardFooter>
@@ -767,7 +747,7 @@ export function DesignGuide() {
         </SubSection>
 
         <SubSection title="Metric Cards">
-          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="design-guide-metric-grid">
             <MetricCard icon={Bot} value={12} label="Active Agents" description="+3 this week" />
             <MetricCard icon={CircleDot} value={48} label="Open Issues" />
             <MetricCard icon={DollarSign} value="$1,234" label="Monthly Cost" description="Under budget" />
@@ -789,16 +769,16 @@ export function DesignGuide() {
               <TabsTrigger value="costs">Costs</TabsTrigger>
             </TabsList>
             <TabsContent value="overview">
-              <p className="text-sm text-muted-foreground py-4">Overview tab content.</p>
+              <p className="design-guide-tab-content">Overview tab content.</p>
             </TabsContent>
             <TabsContent value="runs">
-              <p className="text-sm text-muted-foreground py-4">Runs tab content.</p>
+              <p className="design-guide-tab-content">Runs tab content.</p>
             </TabsContent>
             <TabsContent value="config">
-              <p className="text-sm text-muted-foreground py-4">Config tab content.</p>
+              <p className="design-guide-tab-content">Config tab content.</p>
             </TabsContent>
             <TabsContent value="costs">
-              <p className="text-sm text-muted-foreground py-4">Costs tab content.</p>
+              <p className="design-guide-tab-content">Costs tab content.</p>
             </TabsContent>
           </Tabs>
         </SubSection>
@@ -811,13 +791,13 @@ export function DesignGuide() {
               <TabsTrigger value="comments">Comments</TabsTrigger>
             </TabsList>
             <TabsContent value="summary">
-              <p className="text-sm text-muted-foreground py-4">Summary content with underline tabs.</p>
+              <p className="design-guide-tab-content">Summary content with underline tabs.</p>
             </TabsContent>
             <TabsContent value="details">
-              <p className="text-sm text-muted-foreground py-4">Details content.</p>
+              <p className="design-guide-tab-content">Details content.</p>
             </TabsContent>
             <TabsContent value="comments">
-              <p className="text-sm text-muted-foreground py-4">Comments content.</p>
+              <p className="design-guide-tab-content">Comments content.</p>
             </TabsContent>
           </Tabs>
         </SubSection>
@@ -827,7 +807,7 @@ export function DesignGuide() {
       {/*  ENTITY ROWS                                                  */}
       {/* ============================================================ */}
       <Section title="Entity Rows">
-        <div className="border border-border rounded-md">
+        <div className="design-guide-entity-wrap">
           <EntityRow
             leading={
               <>
@@ -912,7 +892,7 @@ export function DesignGuide() {
       {/* ============================================================ */}
       <Section title="Avatars">
         <SubSection title="Sizes">
-          <div className="flex items-center gap-3">
+          <div className="design-guide-avatar-row">
             <Avatar size="sm"><AvatarFallback>SM</AvatarFallback></Avatar>
             <Avatar><AvatarFallback>DF</AvatarFallback></Avatar>
             <Avatar size="lg"><AvatarFallback>LG</AvatarFallback></Avatar>
@@ -934,7 +914,7 @@ export function DesignGuide() {
       {/* ============================================================ */}
       <Section title="Identity">
         <SubSection title="Sizes">
-          <div className="flex items-center gap-6">
+          <div className="design-guide-avatar-row-wide">
             <Identity name="Agent Alpha" size="sm" />
             <Identity name="Agent Alpha" />
             <Identity name="Agent Alpha" size="lg" />
@@ -942,7 +922,7 @@ export function DesignGuide() {
         </SubSection>
 
         <SubSection title="Initials derivation">
-          <div className="flex flex-col gap-2">
+          <div className="design-guide-identity-col">
             <Identity name="CEO Agent" size="sm" />
             <Identity name="Alpha" size="sm" />
             <Identity name="Quality Assurance Lead" size="sm" />
@@ -958,7 +938,7 @@ export function DesignGuide() {
       {/*  TOOLTIPS                                                     */}
       {/* ============================================================ */}
       <Section title="Tooltips">
-        <div className="flex items-center gap-4">
+        <div className="design-guide-tooltip-row">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="outline" size="sm">Hover me</Button>
@@ -989,14 +969,14 @@ export function DesignGuide() {
                 This is a sample dialog showing the standard layout with header, content, and footer.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3">
+            <div className="design-guide-dialog-form">
               <div>
                 <Label>Name</Label>
-                <Input placeholder="Enter a name" className="mt-1.5" />
+                <Input placeholder="Enter a name" className="design-guide-dialog-field" />
               </div>
               <div>
                 <Label>Description</Label>
-                <Textarea placeholder="Describe..." className="mt-1.5" />
+                <Textarea placeholder="Describe..." className="design-guide-dialog-field" />
               </div>
             </div>
             <DialogFooter>
@@ -1011,7 +991,7 @@ export function DesignGuide() {
       {/*  EMPTY STATE                                                  */}
       {/* ============================================================ */}
       <Section title="Empty State">
-        <div className="border border-border rounded-md">
+        <div className="design-guide-entity-wrap">
           <EmptyState
             icon={Inbox}
             message="No items to show. Create your first one to get started."
@@ -1025,21 +1005,23 @@ export function DesignGuide() {
       {/*  PROGRESS BARS                                                */}
       {/* ============================================================ */}
       <Section title="Progress Bars (Budget)">
-        <div className="space-y-3">
+        <div className="design-guide-progress-list">
           {[
-            { label: "Under budget (40%)", pct: 40, color: "bg-green-400" },
-            { label: "Warning (75%)", pct: 75, color: "bg-yellow-400" },
-            { label: "Over budget (95%)", pct: 95, color: "bg-red-400" },
-          ].map(({ label, pct, color }) => (
-            <div key={label} className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{label}</span>
-                <span className="text-xs font-mono">{pct}%</span>
+            { label: "Under budget (40%)", pct: 40, state: "ok" as const },
+            { label: "Warning (75%)", pct: 75, state: "warn" as const },
+            { label: "Over budget (95%)", pct: 95, state: "over" as const },
+          ].map(({ label, pct, state }) => (
+            <div key={label} className="design-guide-progress-item">
+              <div className="design-guide-progress-header">
+                <span className="design-guide-caption">{label}</span>
+                <span className="design-guide-caption" style={{ fontFamily: "ui-monospace, monospace" }}>{pct}%</span>
               </div>
-              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+              <div className="design-guide-progress-track">
                 <div
-                  className={`h-full rounded-full transition-[width,background-color] duration-150 ${color}`}
+                  className="design-guide-progress-bar"
+                  data-state={state}
                   style={{ width: `${pct}%` }}
+                  aria-hidden
                 />
               </div>
             </div>
@@ -1051,20 +1033,19 @@ export function DesignGuide() {
       {/*  LOG VIEWER                                                   */}
       {/* ============================================================ */}
       <Section title="Log Viewer">
-        <div className="bg-neutral-950 rounded-lg p-3 font-mono text-xs max-h-80 overflow-y-auto">
-          <div className="text-foreground">[12:00:01] INFO  Agent started successfully</div>
-          <div className="text-foreground">[12:00:02] INFO  Processing task PAP-001</div>
-          <div className="text-yellow-400">[12:00:05] WARN  Rate limit approaching (80%)</div>
-          <div className="text-foreground">[12:00:08] INFO  Task PAP-001 completed</div>
-          <div className="text-red-400">[12:00:12] ERROR Connection timeout to upstream service</div>
-          <div className="text-blue-300">[12:00:12] SYS   Retrying connection in 5s...</div>
-          <div className="text-foreground">[12:00:17] INFO  Reconnected successfully</div>
-          <div className="flex items-center gap-1.5">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-cyan-400 animate-pulse" />
-              <span className="inline-flex h-full w-full rounded-full bg-cyan-400" />
+        <div className="design-guide-log-viewer">
+          <div className="design-guide-log-line">[12:00:01] INFO  Agent started successfully</div>
+          <div className="design-guide-log-line">[12:00:02] INFO  Processing task PAP-001</div>
+          <div className="design-guide-log-warn">[12:00:05] WARN  Rate limit approaching (80%)</div>
+          <div className="design-guide-log-line">[12:00:08] INFO  Task PAP-001 completed</div>
+          <div className="design-guide-log-error">[12:00:12] ERROR Connection timeout to upstream service</div>
+          <div className="design-guide-log-sys">[12:00:12] SYS   Retrying connection in 5s...</div>
+          <div className="design-guide-log-line">[12:00:17] INFO  Reconnected successfully</div>
+          <div className="design-guide-log-live">
+            <span className="design-guide-log-live-dot">
+              <span className="design-guide-log-live-dot-inner" aria-hidden />
             </span>
-            <span className="text-cyan-400">Live</span>
+            <span className="design-guide-log-live-text">Live</span>
           </div>
         </div>
       </Section>
@@ -1073,25 +1054,25 @@ export function DesignGuide() {
       {/*  PROPERTY ROW PATTERN                                         */}
       {/* ============================================================ */}
       <Section title="Property Row Pattern">
-        <div className="border border-border rounded-md p-4 space-y-1 max-w-sm">
-          <div className="flex items-center justify-between py-1.5">
-            <span className="text-xs text-muted-foreground">Status</span>
+        <div className="design-guide-property-box">
+          <div className="design-guide-property-row">
+            <span className="design-guide-caption">Status</span>
             <StatusBadge status="active" />
           </div>
-          <div className="flex items-center justify-between py-1.5">
-            <span className="text-xs text-muted-foreground">Priority</span>
+          <div className="design-guide-property-row">
+            <span className="design-guide-caption">Priority</span>
             <PriorityIcon priority="high" />
           </div>
-          <div className="flex items-center justify-between py-1.5">
-            <span className="text-xs text-muted-foreground">Assignee</span>
-            <div className="flex items-center gap-1.5">
+          <div className="design-guide-property-row">
+            <span className="design-guide-caption">Assignee</span>
+            <div className="design-guide-property-row-inner">
               <Avatar size="sm"><AvatarFallback>A</AvatarFallback></Avatar>
-              <span className="text-xs">Agent Alpha</span>
+              <span className="design-guide-caption" style={{ color: "var(--foreground)" }}>Agent Alpha</span>
             </div>
           </div>
-          <div className="flex items-center justify-between py-1.5">
-            <span className="text-xs text-muted-foreground">Created</span>
-            <span className="text-xs">Jan 15, 2025</span>
+          <div className="design-guide-property-row">
+            <span className="design-guide-caption">Created</span>
+            <span className="design-guide-caption" style={{ color: "var(--foreground)" }}>Jan 15, 2025</span>
           </div>
         </div>
       </Section>
@@ -1101,37 +1082,35 @@ export function DesignGuide() {
       {/* ============================================================ */}
       <Section title="Navigation Patterns">
         <SubSection title="Sidebar nav items">
-          <div className="w-60 border border-border rounded-md p-3 space-y-0.5 bg-card">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium bg-accent text-accent-foreground">
-              <LayoutDashboard className="h-4 w-4" />
+          <div className="design-guide-sidebar-demo">
+            <div className="design-guide-sidebar-item design-guide-sidebar-item-active">
+              <LayoutDashboard className="design-guide-icon" aria-hidden />
               Dashboard
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground cursor-pointer">
-              <CircleDot className="h-4 w-4" />
+            <div className="design-guide-sidebar-item design-guide-sidebar-item-inactive">
+              <CircleDot className="design-guide-icon" aria-hidden />
               Issues
-              <span className="ml-auto text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5">
-                12
-              </span>
+              <span className="design-guide-sidebar-badge">12</span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground cursor-pointer">
-              <Bot className="h-4 w-4" />
+            <div className="design-guide-sidebar-item design-guide-sidebar-item-inactive">
+              <Bot className="design-guide-icon" aria-hidden />
               Agents
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground cursor-pointer">
-              <Hexagon className="h-4 w-4" />
+            <div className="design-guide-sidebar-item design-guide-sidebar-item-inactive">
+              <Hexagon className="design-guide-icon" aria-hidden />
               Projects
             </div>
           </div>
         </SubSection>
 
         <SubSection title="View toggle">
-          <div className="flex items-center border border-border rounded-md w-fit">
-            <button className="px-3 py-1.5 text-xs font-medium bg-accent text-foreground rounded-l-md">
-              <ListTodo className="h-3.5 w-3.5 inline mr-1" />
+          <div className="design-guide-view-toggle">
+            <button type="button" className="design-guide-view-toggle-btn design-guide-view-toggle-btn-active">
+              <ListTodo style={{ height: "0.875rem", width: "0.875rem", display: "inline", marginRight: "0.25rem" }} aria-hidden />
               List
             </button>
-            <button className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent/50 rounded-r-md">
-              <Target className="h-3.5 w-3.5 inline mr-1" />
+            <button type="button" className="design-guide-view-toggle-btn design-guide-view-toggle-btn-inactive">
+              <Target style={{ height: "0.875rem", width: "0.875rem", display: "inline", marginRight: "0.25rem" }} aria-hidden />
               Org
             </button>
           </div>
@@ -1143,12 +1122,12 @@ export function DesignGuide() {
       {/* ============================================================ */}
       <Section title="Grouped List (Issues pattern)">
         <div>
-          <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-t-md">
+          <div className="design-guide-group-header">
             <StatusIcon status="in_progress" />
-            <span className="text-sm font-medium">In Progress</span>
-            <span className="text-xs text-muted-foreground ml-1">2</span>
+            <span className="design-guide-group-header-title">In Progress</span>
+            <span className="design-guide-caption" style={{ marginLeft: "0.25rem" }}>2</span>
           </div>
-          <div className="border border-border rounded-b-md">
+          <div className="design-guide-group-body">
             <EntityRow
               leading={<PriorityIcon priority="high" />}
               identifier="PAP-101"
@@ -1169,25 +1148,25 @@ export function DesignGuide() {
       {/*  COMMENT THREAD PATTERN                                       */}
       {/* ============================================================ */}
       <Section title="Comment Thread Pattern">
-        <div className="space-y-3 max-w-2xl">
-          <h3 className="text-sm font-semibold">Comments (2)</h3>
-          <div className="space-y-3">
-            <div className="rounded-md border border-border p-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-muted-foreground">Agent</span>
-                <span className="text-xs text-muted-foreground">Jan 15, 2025</span>
+        <div className="design-guide-comments-section">
+          <h3 className="design-guide-comments-title">Comments (2)</h3>
+          <div className="design-guide-comments-list">
+            <div className="design-guide-comment-card">
+              <div className="design-guide-comment-head">
+                <span className="design-guide-caption" style={{ fontWeight: 500 }}>Agent</span>
+                <span className="design-guide-caption">Jan 15, 2025</span>
               </div>
-              <p className="text-sm">Started working on the authentication module. Will need API keys configured.</p>
+              <p className="design-guide-comment-body">Started working on the authentication module. Will need API keys configured.</p>
             </div>
-            <div className="rounded-md border border-border p-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-muted-foreground">Human</span>
-                <span className="text-xs text-muted-foreground">Jan 16, 2025</span>
+            <div className="design-guide-comment-card">
+              <div className="design-guide-comment-head">
+                <span className="design-guide-caption" style={{ fontWeight: 500 }}>Human</span>
+                <span className="design-guide-caption">Jan 16, 2025</span>
               </div>
-              <p className="text-sm">API keys have been added to the vault. Please proceed.</p>
+              <p className="design-guide-comment-body">API keys have been added to the vault. Please proceed.</p>
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="design-guide-vstack-2">
             <Textarea placeholder="Leave a comment..." rows={3} />
             <Button size="sm">Comment</Button>
           </div>
@@ -1198,30 +1177,30 @@ export function DesignGuide() {
       {/*  COST TABLE PATTERN                                           */}
       {/* ============================================================ */}
       <Section title="Cost Table Pattern">
-        <div className="border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
-            <thead className="border-b border-border bg-accent/20">
+        <div className="design-guide-table-wrap">
+          <table className="design-guide-table">
+            <thead style={{ borderBottom: "1px solid var(--border)", background: "color-mix(in oklch, var(--accent) 20%, transparent)" }}>
               <tr>
-                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Model</th>
-                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Tokens</th>
-                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Cost</th>
+                <th>Model</th>
+                <th>Tokens</th>
+                <th>Cost</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-border">
-                <td className="px-3 py-2">claude-sonnet-4-20250514</td>
-                <td className="px-3 py-2 font-mono">1.2M</td>
-                <td className="px-3 py-2 font-mono">$18.00</td>
+              <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                <td>claude-sonnet-4-20250514</td>
+                <td className="mono">1.2M</td>
+                <td className="mono">$18.00</td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="px-3 py-2">claude-haiku-4-20250506</td>
-                <td className="px-3 py-2 font-mono">500k</td>
-                <td className="px-3 py-2 font-mono">$1.25</td>
+              <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                <td>claude-haiku-4-20250506</td>
+                <td className="mono">500k</td>
+                <td className="mono">$1.25</td>
               </tr>
               <tr>
-                <td className="px-3 py-2 font-medium">Total</td>
-                <td className="px-3 py-2 font-mono">1.7M</td>
-                <td className="px-3 py-2 font-mono font-medium">$19.25</td>
+                <td className="fw">Total</td>
+                <td className="mono">1.7M</td>
+                <td className="mono fw">$19.25</td>
               </tr>
             </tbody>
           </table>
@@ -1233,21 +1212,21 @@ export function DesignGuide() {
       {/* ============================================================ */}
       <Section title="Skeletons">
         <SubSection title="Individual">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-48" />
-            <Skeleton className="h-8 w-full max-w-sm" />
-            <Skeleton className="h-20 w-full" />
+          <div className="design-guide-skeleton-list">
+            <Skeleton className="design-guide-skeleton-item-sm" />
+            <Skeleton className="design-guide-skeleton-item-md" />
+            <Skeleton className="design-guide-skeleton-item-lg" />
           </div>
         </SubSection>
 
         <SubSection title="Page Skeleton (list)">
-          <div className="border border-border rounded-md p-4">
+          <div className="design-guide-skeleton-box">
             <PageSkeleton variant="list" />
           </div>
         </SubSection>
 
         <SubSection title="Page Skeleton (detail)">
-          <div className="border border-border rounded-md p-4">
+          <div className="design-guide-skeleton-box">
             <PageSkeleton variant="detail" />
           </div>
         </SubSection>
@@ -1257,13 +1236,13 @@ export function DesignGuide() {
       {/*  SEPARATOR                                                    */}
       {/* ============================================================ */}
       <Section title="Separator">
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Horizontal</p>
+        <div className="design-guide-divider-section">
+          <p className="design-guide-prose">Horizontal</p>
           <Separator />
-          <div className="flex items-center gap-4 h-8">
-            <span className="text-sm">Left</span>
+          <div className="design-guide-divider-row">
+            <span style={{ fontSize: "0.875rem" }}>Left</span>
             <Separator orientation="vertical" />
-            <span className="text-sm">Right</span>
+            <span style={{ fontSize: "0.875rem" }}>Right</span>
           </div>
         </div>
       </Section>
@@ -1272,7 +1251,7 @@ export function DesignGuide() {
       {/*  ICON REFERENCE                                               */}
       {/* ============================================================ */}
       <Section title="Common Icons (Lucide)">
-        <div className="grid grid-cols-4 md:grid-cols-6 gap-4">
+        <div className="design-guide-icon-grid">
           {[
             ["Inbox", Inbox],
             ["ListTodo", ListTodo],
@@ -1294,9 +1273,9 @@ export function DesignGuide() {
           ].map(([name, Icon]) => {
             const LucideIcon = Icon as React.FC<{ className?: string }>;
             return (
-              <div key={name as string} className="flex flex-col items-center gap-1.5 p-2">
-                <LucideIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground font-mono">{name as string}</span>
+              <div key={name as string} className="design-guide-icon-cell">
+                <LucideIcon className="design-guide-icon design-guide-icon-muted" aria-hidden />
+                <span>{name as string}</span>
               </div>
             );
           })}
@@ -1307,20 +1286,17 @@ export function DesignGuide() {
       {/*  KEYBOARD SHORTCUTS                                           */}
       {/* ============================================================ */}
       <Section title="Keyboard Shortcuts">
-        <div className="border border-border rounded-md divide-y divide-border text-sm">
+        <div className="design-guide-shortcuts-list">
           {[
             ["Cmd+K / Ctrl+K", "Open Command Palette"],
             ["C", "New Issue (outside inputs)"],
             ["[", "Toggle Sidebar"],
             ["]", "Toggle Properties Panel"],
-
             ["Cmd+Enter / Ctrl+Enter", "Submit markdown comment"],
           ].map(([key, desc]) => (
-            <div key={key} className="flex items-center justify-between px-4 py-2">
-              <span className="text-muted-foreground">{desc}</span>
-              <kbd className="px-2 py-0.5 text-xs font-mono bg-muted rounded border border-border">
-                {key}
-              </kbd>
+            <div key={String(key)}>
+              <span className="design-guide-prose">{desc}</span>
+              <kbd className="design-guide-kbd">{key}</kbd>
             </div>
           ))}
         </div>

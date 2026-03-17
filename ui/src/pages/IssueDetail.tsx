@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { issuesApi } from "../api/issues";
 import { activityApi } from "../api/activity";
 import { heartbeatsApi } from "../api/heartbeats";
 import { agentsApi } from "../api/agents";
-import { authApi } from "../api/auth";
+import { authApi, isAuthSession } from "../api/auth";
 import { projectsApi } from "../api/projects";
 import { useCompany } from "../context/CompanyContext";
 import { usePanel } from "../context/PanelContext";
@@ -13,7 +14,8 @@ import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
 import { readIssueDetailBreadcrumb } from "../lib/issueDetailBreadcrumb";
 import { useProjectOrder } from "../hooks/useProjectOrder";
-import { relativeTime, cn, formatTokens } from "../lib/utils";
+import { relativeTime, formatTokens } from "../lib/utils";
+import "./IssueDetail.css";
 import { InlineEditor } from "../components/InlineEditor";
 import { CommentThread } from "../components/CommentThread";
 import { IssueProperties } from "../components/IssueProperties";
@@ -145,6 +147,7 @@ function ActorIdentity({ evt, agentMap }: { evt: ActivityEvent; agentMap: Map<st
 }
 
 export function IssueDetail() {
+  const { t } = useTranslation();
   const { issueId } = useParams<{ issueId: string }>();
   const { selectedCompanyId } = useCompany();
   const { openPanel, closePanel, panelVisible, setPanelVisible } = usePanel();
@@ -251,7 +254,7 @@ export function IssueDetail() {
     queryFn: () => projectsApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId,
   });
-  const currentUserId = session?.user?.id ?? session?.session?.userId ?? null;
+  const currentUserId = isAuthSession(session) ? session.user?.id ?? session.session?.userId ?? null : null;
   const { orderedProjects } = useProjectOrder({
     projects: projects ?? [],
     companyId: selectedCompanyId,
@@ -502,8 +505,8 @@ export function IssueDetail() {
     return () => closePanel();
   }, [issue]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading...</p>;
-  if (error) return <p className="text-sm text-destructive">{error.message}</p>;
+  if (isLoading) return <p className="issue-detail-loading">Loading...</p>;
+  if (error) return <p className="issue-detail-error">{error.message}</p>;
   if (!issue) return null;
 
   // Ancestors are returned oldest-first from the server (root at end, immediate parent at start)
@@ -521,37 +524,37 @@ export function IssueDetail() {
   const isImageAttachment = (attachment: IssueAttachment) => attachment.contentType.startsWith("image/");
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="issue-detail-page">
       {/* Parent chain breadcrumb */}
       {ancestors.length > 0 && (
-        <nav className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
+        <nav className="issue-detail-ancestors">
           {[...ancestors].reverse().map((ancestor, i) => (
-            <span key={ancestor.id} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight className="h-3 w-3 shrink-0" />}
+            <span key={ancestor.id} className="issue-detail-ancestors-segment">
+              {i > 0 && <ChevronRight className="issue-detail-ancestors-chevron" />}
               <Link
                 to={`/issues/${ancestor.identifier ?? ancestor.id}`}
                 state={location.state}
-                className="hover:text-foreground transition-colors truncate max-w-[200px]"
+                className="issue-detail-ancestors-link"
                 title={ancestor.title}
               >
                 {ancestor.title}
               </Link>
             </span>
           ))}
-          <ChevronRight className="h-3 w-3 shrink-0" />
-          <span className="text-foreground/60 truncate max-w-[200px]">{issue.title}</span>
+          <ChevronRight className="issue-detail-ancestors-chevron" />
+          <span className="issue-detail-ancestors-current">{issue.title}</span>
         </nav>
       )}
 
       {issue.hiddenAt && (
-        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          <EyeOff className="h-4 w-4 shrink-0" />
+        <div className="issue-detail-hidden-banner">
+          <EyeOff className="issue-detail-hidden-banner-icon" />
           This issue is hidden
         </div>
       )}
 
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+      <div className="issue-detail-section">
+        <div className="issue-detail-toolbar">
           <StatusIcon
             status={issue.status}
             onChange={(status) => updateIssue.mutate({ status })}
@@ -560,13 +563,13 @@ export function IssueDetail() {
             priority={issue.priority}
             onChange={(priority) => updateIssue.mutate({ priority })}
           />
-          <span className="text-sm font-mono text-muted-foreground shrink-0">{issue.identifier ?? issue.id.slice(0, 8)}</span>
+          <span className="issue-detail-identifier">{issue.identifier ?? issue.id.slice(0, 8)}</span>
 
           {hasLiveRuns && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-medium text-cyan-600 dark:text-cyan-400 shrink-0">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400" />
+            <span className="issue-detail-live-badge">
+              <span className="issue-detail-live-dot">
+                <span className="issue-detail-live-dot-pulse" />
+                <span className="issue-detail-live-dot-inner" />
               </span>
               Live
             </span>
@@ -575,24 +578,24 @@ export function IssueDetail() {
           {issue.projectId ? (
             <Link
               to={`/projects/${issue.projectId}`}
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1 -mx-1 py-0.5 min-w-0"
+              className="issue-detail-project-link"
             >
-              <Hexagon className="h-3 w-3 shrink-0" />
-              <span className="truncate">{(projects ?? []).find((p) => p.id === issue.projectId)?.name ?? issue.projectId.slice(0, 8)}</span>
+              <Hexagon className="issue-detail-project-link-icon" />
+              <span>{(projects ?? []).find((p) => p.id === issue.projectId)?.name ?? issue.projectId.slice(0, 8)}</span>
             </Link>
           ) : (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground opacity-50 px-1 -mx-1 py-0.5">
-              <Hexagon className="h-3 w-3 shrink-0" />
+            <span className="issue-detail-no-project">
+              <Hexagon className="issue-detail-project-link-icon" />
               No project
             </span>
           )}
 
           {(issue.labels ?? []).length > 0 && (
-            <div className="hidden sm:flex items-center gap-1">
+            <div className="issue-detail-labels">
               {(issue.labels ?? []).slice(0, 4).map((label) => (
                 <span
                   key={label.id}
-                  className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                  className="issue-detail-label-chip"
                   style={{
                     borderColor: label.color,
                     color: label.color,
@@ -603,7 +606,7 @@ export function IssueDetail() {
                 </span>
               ))}
               {(issue.labels ?? []).length > 4 && (
-                <span className="text-[10px] text-muted-foreground">+{(issue.labels ?? []).length - 4}</span>
+                <span className="issue-detail-label-more">+{(issue.labels ?? []).length - 4}</span>
               )}
             </div>
           )}
@@ -611,36 +614,33 @@ export function IssueDetail() {
           <Button
             variant="ghost"
             size="icon-xs"
-            className="ml-auto md:hidden shrink-0"
+            className="issue-detail-panel-toggle-mobile"
             onClick={() => setMobilePropsOpen(true)}
-            title="Properties"
+            title={t("properties.properties")}
           >
-            <SlidersHorizontal className="h-4 w-4" />
+            <SlidersHorizontal className="issue-detail-toolbar-icon" />
           </Button>
 
-          <div className="hidden md:flex items-center md:ml-auto shrink-0">
+          <div className={["issue-detail-panel-toggle-desktop", panelVisible ? "issue-detail-panel-toggle-hidden" : ""].filter(Boolean).join(" ")}>
             <Button
               variant="ghost"
               size="icon-xs"
-              className={cn(
-                "shrink-0 transition-opacity duration-200",
-                panelVisible ? "opacity-0 pointer-events-none w-0 overflow-hidden" : "opacity-100",
-              )}
+              className="issue-detail-more-trigger"
               onClick={() => setPanelVisible(true)}
-              title="Show properties"
+              title={t("properties.properties")}
             >
-              <SlidersHorizontal className="h-4 w-4" />
+              <SlidersHorizontal className="issue-detail-toolbar-icon" />
             </Button>
 
             <Popover open={moreOpen} onOpenChange={setMoreOpen}>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon-xs" className="shrink-0">
-                  <MoreHorizontal className="h-4 w-4" />
+                <Button variant="ghost" size="icon-xs" className="issue-detail-more-trigger">
+                  <MoreHorizontal className="issue-detail-toolbar-icon" />
                 </Button>
               </PopoverTrigger>
-            <PopoverContent className="w-44 p-1" align="end">
+            <PopoverContent className="issue-detail-popover-content" align="end">
               <button
-                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-destructive"
+                className="issue-detail-delete-btn"
                 onClick={() => {
                   updateIssue.mutate(
                     { hiddenAt: new Date().toISOString() },
@@ -649,7 +649,7 @@ export function IssueDetail() {
                   setMoreOpen(false);
                 }}
               >
-                <EyeOff className="h-3 w-3" />
+                <EyeOff className="issue-detail-toolbar-icon" />
                 Hide this Issue
               </button>
             </PopoverContent>
@@ -661,14 +661,14 @@ export function IssueDetail() {
           value={issue.title}
           onSave={(title) => updateIssue.mutate({ title })}
           as="h2"
-          className="text-xl font-bold"
+          className="issue-detail-title-row"
         />
 
         <InlineEditor
           value={issue.description ?? ""}
           onSave={(description) => updateIssue.mutate({ description })}
           as="p"
-          className="text-[15px] leading-7 text-foreground"
+          className="issue-detail-description"
           placeholder="Add a description..."
           multiline
           mentions={mentionOptions}
@@ -679,15 +679,15 @@ export function IssueDetail() {
         />
       </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-medium text-muted-foreground">Attachments</h3>
-          <div className="flex items-center gap-2">
+      <div className="issue-detail-section">
+        <div className="issue-detail-attachments-header">
+          <h3 className="issue-detail-collapsible-label">Attachments</h3>
+          <div className="issue-detail-attachments-actions">
             <input
               ref={fileInputRef}
               type="file"
               accept="image/png,image/jpeg,image/webp,image/gif"
-              className="hidden"
+              className="issue-detail-file-input"
               onChange={handleFilePicked}
             />
             <Button
@@ -696,43 +696,43 @@ export function IssueDetail() {
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadAttachment.isPending}
             >
-              <Paperclip className="h-3.5 w-3.5 mr-1.5" />
+              <Paperclip className="issue-detail-toolbar-icon" />
               {uploadAttachment.isPending ? "Uploading..." : "Upload image"}
             </Button>
           </div>
         </div>
 
         {attachmentError && (
-          <p className="text-xs text-destructive">{attachmentError}</p>
+          <p className="issue-detail-attachment-error">{attachmentError}</p>
         )}
 
         {(!attachments || attachments.length === 0) ? (
-          <p className="text-xs text-muted-foreground">No attachments yet.</p>
+          <p className="issue-detail-attachment-empty">No attachments yet.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="issue-detail-attachments-list">
             {attachments.map((attachment) => (
-              <div key={attachment.id} className="border border-border rounded-md p-2">
-                <div className="flex items-center justify-between gap-2">
+              <div key={attachment.id} className="issue-detail-attachment-card">
+                <div className="issue-detail-attachment-card-header">
                   <a
                     href={attachment.contentPath}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs hover:underline truncate"
+                    className="issue-detail-attachment-link"
                     title={attachment.originalFilename ?? attachment.id}
                   >
                     {attachment.originalFilename ?? attachment.id}
                   </a>
                   <button
                     type="button"
-                    className="text-muted-foreground hover:text-destructive"
+                    className="issue-detail-attachment-delete"
                     onClick={() => deleteAttachment.mutate(attachment.id)}
                     disabled={deleteAttachment.isPending}
                     title="Delete attachment"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="issue-detail-toolbar-icon" />
                   </button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="issue-detail-attachment-meta">
                   {attachment.contentType} · {(attachment.byteSize / 1024).toFixed(1)} KB
                 </p>
                 {isImageAttachment(attachment) && (
@@ -740,7 +740,7 @@ export function IssueDetail() {
                     <img
                       src={attachment.contentPath}
                       alt={attachment.originalFilename ?? "attachment"}
-                      className="mt-2 max-h-56 rounded border border-border object-contain bg-accent/10"
+                      className="issue-detail-attachment-img"
                       loading="lazy"
                     />
                   </a>
@@ -753,18 +753,18 @@ export function IssueDetail() {
 
       <Separator />
 
-      <Tabs value={detailTab} onValueChange={setDetailTab} className="space-y-3">
-        <TabsList variant="line" className="w-full justify-start gap-1">
-          <TabsTrigger value="comments" className="gap-1.5">
-            <MessageSquare className="h-3.5 w-3.5" />
+      <Tabs value={detailTab} onValueChange={setDetailTab} className="issue-detail-tabs-wrap">
+        <TabsList variant="line" className="issue-detail-tabs-list">
+          <TabsTrigger value="comments" className="issue-detail-tab-trigger">
+            <MessageSquare className="issue-detail-toolbar-icon" />
             Comments
           </TabsTrigger>
-          <TabsTrigger value="subissues" className="gap-1.5">
-            <ListTree className="h-3.5 w-3.5" />
+          <TabsTrigger value="subissues" className="issue-detail-tab-trigger">
+            <ListTree className="issue-detail-toolbar-icon" />
             Sub-issues
           </TabsTrigger>
-          <TabsTrigger value="activity" className="gap-1.5">
-            <ActivityIcon className="h-3.5 w-3.5" />
+          <TabsTrigger value="activity" className="issue-detail-tab-trigger">
+            <ActivityIcon className="issue-detail-toolbar-icon" />
             Activity
           </TabsTrigger>
         </TabsList>
@@ -800,29 +800,29 @@ export function IssueDetail() {
 
         <TabsContent value="subissues">
           {childIssues.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No sub-issues.</p>
+            <p className="issue-detail-tab-empty">No sub-issues.</p>
           ) : (
-            <div className="border border-border rounded-lg divide-y divide-border">
+            <div className="issue-detail-subissues-list">
               {childIssues.map((child) => (
                 <Link
                   key={child.id}
                   to={`/issues/${child.identifier ?? child.id}`}
                   state={location.state}
-                  className="flex items-center justify-between px-3 py-2 text-sm hover:bg-accent/20 transition-colors"
+                  className="issue-detail-subissue-row"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="issue-detail-subissue-left">
                     <StatusIcon status={child.status} />
                     <PriorityIcon priority={child.priority} />
-                    <span className="font-mono text-muted-foreground shrink-0">
+                    <span className="issue-detail-subissue-id">
                       {child.identifier ?? child.id.slice(0, 8)}
                     </span>
-                    <span className="truncate">{child.title}</span>
+                    <span className="issue-detail-subissue-title">{child.title}</span>
                   </div>
                   {child.assigneeAgentId && (() => {
                     const name = agentMap.get(child.assigneeAgentId)?.name;
                     return name
                       ? <Identity name={name} size="sm" />
-                      : <span className="text-muted-foreground font-mono">{child.assigneeAgentId.slice(0, 8)}</span>;
+                      : <span className="issue-detail-subissue-assignee">{child.assigneeAgentId.slice(0, 8)}</span>;
                   })()}
                 </Link>
               ))}
@@ -832,14 +832,14 @@ export function IssueDetail() {
 
         <TabsContent value="activity">
           {!activity || activity.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No activity yet.</p>
+            <p className="issue-detail-tab-empty">No activity yet.</p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="issue-detail-activity-list">
               {activity.slice(0, 20).map((evt) => (
-                <div key={evt.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <div key={evt.id} className="issue-detail-activity-row">
                   <ActorIdentity evt={evt} agentMap={agentMap} />
                   <span>{formatAction(evt.action, evt.details)}</span>
-                  <span className="ml-auto shrink-0">{relativeTime(evt.createdAt)}</span>
+                  <span className="issue-detail-activity-time">{relativeTime(evt.createdAt)}</span>
                 </div>
               ))}
             </div>
@@ -851,32 +851,32 @@ export function IssueDetail() {
         <Collapsible
           open={secondaryOpen.approvals}
           onOpenChange={(open) => setSecondaryOpen((prev) => ({ ...prev, approvals: open }))}
-          className="rounded-lg border border-border"
+          className="issue-detail-collapsible"
         >
-          <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-left">
-            <span className="text-sm font-medium text-muted-foreground">
+          <CollapsibleTrigger className="issue-detail-collapsible-trigger">
+            <span className="issue-detail-collapsible-label">
               Linked Approvals ({linkedApprovals.length})
             </span>
             <ChevronDown
-              className={cn("h-4 w-4 text-muted-foreground transition-transform", secondaryOpen.approvals && "rotate-180")}
+              className={["issue-detail-collapsible-chevron", secondaryOpen.approvals ? "open" : ""].filter(Boolean).join(" ")}
             />
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="border-t border-border divide-y divide-border">
+            <div className="issue-detail-collapsible-body divide">
               {linkedApprovals.map((approval) => (
                 <Link
                   key={approval.id}
                   to={`/approvals/${approval.id}`}
-                  className="flex items-center justify-between px-3 py-2 text-xs hover:bg-accent/20 transition-colors"
+                  className="issue-detail-approval-row"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="issue-detail-approval-left">
                     <StatusBadge status={approval.status} />
-                    <span className="font-medium">
+                    <span className="issue-detail-approval-type">
                       {approval.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                     </span>
-                    <span className="font-mono text-muted-foreground">{approval.id.slice(0, 8)}</span>
+                    <span className="issue-detail-approval-id">{approval.id.slice(0, 8)}</span>
                   </div>
-                  <span className="text-muted-foreground">{relativeTime(approval.createdAt)}</span>
+                  <span className="issue-detail-approval-time">{relativeTime(approval.createdAt)}</span>
                 </Link>
               ))}
             </div>
@@ -888,22 +888,22 @@ export function IssueDetail() {
         <Collapsible
           open={secondaryOpen.cost}
           onOpenChange={(open) => setSecondaryOpen((prev) => ({ ...prev, cost: open }))}
-          className="rounded-lg border border-border"
+          className="issue-detail-collapsible"
         >
-          <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-left">
-            <span className="text-sm font-medium text-muted-foreground">Cost Summary</span>
+          <CollapsibleTrigger className="issue-detail-collapsible-trigger">
+            <span className="issue-detail-collapsible-label">Cost Summary</span>
             <ChevronDown
-              className={cn("h-4 w-4 text-muted-foreground transition-transform", secondaryOpen.cost && "rotate-180")}
+              className={["issue-detail-collapsible-chevron", secondaryOpen.cost ? "open" : ""].filter(Boolean).join(" ")}
             />
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="border-t border-border px-3 py-2">
+            <div className="issue-detail-cost-body">
               {!issueCostSummary.hasCost && !issueCostSummary.hasTokens ? (
-                <div className="text-xs text-muted-foreground">No cost data yet.</div>
+                <div className="issue-detail-cost-empty">No cost data yet.</div>
               ) : (
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground tabular-nums">
+                <div className="issue-detail-cost-row">
                   {issueCostSummary.hasCost && (
-                    <span className="font-medium text-foreground">
+                    <span className="issue-detail-cost-total">
                       ${issueCostSummary.cost.toFixed(4)}
                     </span>
                   )}
@@ -924,12 +924,12 @@ export function IssueDetail() {
 
       {/* Mobile properties drawer */}
       <Sheet open={mobilePropsOpen} onOpenChange={setMobilePropsOpen}>
-        <SheetContent side="bottom" className="max-h-[85dvh] pb-[env(safe-area-inset-bottom)]">
+        <SheetContent side="bottom" className="issue-detail-sheet-content">
           <SheetHeader>
-            <SheetTitle className="text-sm">Properties</SheetTitle>
+            <SheetTitle className="issue-detail-sheet-title">{t("properties.properties")}</SheetTitle>
           </SheetHeader>
-          <ScrollArea className="flex-1 overflow-y-auto">
-            <div className="px-4 pb-4">
+          <ScrollArea className="issue-detail-sheet-scroll">
+            <div className="issue-detail-sheet-body">
               <IssueProperties issue={issue} onUpdate={(data) => updateIssue.mutate(data)} inline />
             </div>
           </ScrollArea>

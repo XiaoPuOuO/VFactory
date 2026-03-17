@@ -60,7 +60,10 @@ function accumulateUsage(
 
   target.inputTokens += asNumber(
     source.input_tokens,
-    asNumber(source.inputTokens, asNumber(source.promptTokenCount, 0)),
+    asNumber(
+      source.inputTokens,
+      asNumber(source.promptTokenCount, asNumber(source.prompt_tokens, 0)),
+    ),
   );
   target.cachedInputTokens += asNumber(
     source.cached_input_tokens,
@@ -68,7 +71,10 @@ function accumulateUsage(
   );
   target.outputTokens += asNumber(
     source.output_tokens,
-    asNumber(source.outputTokens, asNumber(source.candidatesTokenCount, 0)),
+    asNumber(
+      source.outputTokens,
+      asNumber(source.candidatesTokenCount, asNumber(source.completion_tokens, 0)),
+    ),
   );
 }
 

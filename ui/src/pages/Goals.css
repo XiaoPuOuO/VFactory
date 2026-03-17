@@ -1,0 +1,21 @@
+/**
+ * Goals 頁面 — 原生 CSS（無 Tailwind）
+ */
+
+.goals-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.goals-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.goals-btn-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.375rem;
+}

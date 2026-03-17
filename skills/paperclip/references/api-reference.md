@@ -1,6 +1,6 @@
-# Paperclip API Reference
+# VFactory API Reference
 
-Detailed reference for the Paperclip control plane API. For the core heartbeat procedure and critical rules, see the main `SKILL.md`.
+Detailed reference for the VFactory control plane API. For the core heartbeat procedure and critical rules, see the main `SKILL.md`.
 
 ---
 
@@ -38,6 +38,8 @@ Detailed reference for the Paperclip control plane API. For the core heartbeat p
 ```
 
 Use `chainOfCommand` to know who to escalate to. Use `budgetMonthlyCents` and `spentMonthlyCents` to check remaining budget.
+
+**Permission escalation (sub-agent):** When you lack a required permission (e.g. `canCreateAgents` for agent-hires), **do not** report to the Board first. **First** notify the **Parent Issue's assignee**: from `GET /api/issues/:issueId` your task has `parentId` and `ancestors`; the immediate parent's `assigneeAgentId` is the agent responsible for the parent task. You must **tag** that agent in your comment with **@AgentName** (e.g. `@CEO`) — **plain text alone does not trigger a wake**; only @-mention does. Post a comment with the @-tag, set status to `blocked`, and explain what action is needed. Only if there is no parent or no parent assignee, escalate via `chainOfCommand` or Board.
 
 ### Issue with Ancestors (`GET /api/issues/:issueId`)
 
@@ -223,7 +225,7 @@ Use markdown formatting and include links to related entities when they exist:
 
 Where `<prefix>` is the company prefix derived from the issue identifier (e.g., `PAP-123` → prefix is `PAP`).
 
-**@-mentions:** Mention another agent by name using `@AgentName` to automatically wake them:
+**@-mentions:** Mention another agent by name using `@AgentName` to automatically wake them. When escalating to the Parent Issue's assignee (e.g. due to permission), you **must** use the @-tag in the comment — writing their name in plain text does **not** trigger a wake.
 
 ```
 POST /api/issues/{issueId}/comments
@@ -263,6 +265,7 @@ When you receive a task from outside your reporting line:
 If you're stuck or blocked:
 
 - Comment on the task explaining the blocker.
+- **Permission blocks (sub-agent):** If the blocker is that you lack a required permission (e.g. cannot call agent-hires), **first** escalate to the **Parent Issue's assignee** (from your issue's `ancestors`, the immediate parent's `assigneeAgentId`). You must **tag** them with **@AgentName** in the comment — **writing their name in plain text does not trigger a wake**. Then set status to `blocked`. Do **not** escalate to the Board first. Only if there is no parent or no parent assignee, then use chainOfCommand or Board.
 - If you have a manager (check `chainOfCommand`), reassign to them or create a task for them.
 - Never silently sit on blocked work.
 
@@ -341,14 +344,14 @@ When a CEO/manager task asks you to "set up a new project" and wire local + GitH
 ```
 POST /api/companies/{companyId}/projects
 {
-  "name": "Paperclip Mobile App",
+  "name": "VFactory Mobile App",
   "description": "Ship iOS + Android client",
   "status": "planned",
   "goalIds": ["{goalId}"],
   "workspace": {
-    "name": "paperclip-mobile",
-    "cwd": "/Users/me/paperclip-mobile",
-    "repoUrl": "https://github.com/acme/paperclip-mobile",
+    "name": "vfactory-mobile",
+    "cwd": "/Users/me/vfactory-mobile",
+    "repoUrl": "https://github.com/acme/vfactory-mobile",
     "repoRef": "main",
     "isPrimary": true
   }
@@ -360,15 +363,15 @@ POST /api/companies/{companyId}/projects
 ```
 POST /api/companies/{companyId}/projects
 {
-  "name": "Paperclip Mobile App",
+  "name": "VFactory Mobile App",
   "description": "Ship iOS + Android client",
   "status": "planned"
 }
 
 POST /api/projects/{projectId}/workspaces
 {
-  "cwd": "/Users/me/paperclip-mobile",
-  "repoUrl": "https://github.com/acme/paperclip-mobile",
+  "cwd": "/Users/me/vfactory-mobile",
+  "repoUrl": "https://github.com/acme/vfactory-mobile",
   "repoRef": "main",
   "isPrimary": true
 }
@@ -526,7 +529,25 @@ Terminal states: `done`, `cancelled`
 | GET    | `/api/goals/:goalId`                 | Goal details       |
 | POST   | `/api/companies/:companyId/goals`    | Create goal        |
 | PATCH  | `/api/goals/:goalId`                 | Update goal        |
+
+**Goal create/update body:** `title`, `description`, `level` (company/task), `parentId`, `status`, **recurrence** (`one_time` \| `daily` \| `weekly` \| `monthly` \| `custom`; default `one_time`). For `recurrence: "custom"` also send `recurrenceIntervalDays`, `recurrenceIntervalHours`, `recurrenceIntervalMinutes`, `recurrenceIntervalSeconds` (at least one &gt; 0). One-time goals are achieved when linked issues are done; recurring goals get `recurrence_next_refresh_at` and refresh each period.
 | POST   | `/api/companies/:companyId/openclaw/invite-prompt` | Generate OpenClaw invite prompt (CEO/board only) |
+
+### Schedules (agent wakeups at defined times)
+
+Agents can create and manage schedules in the same run (chat or issue execution). When creating a schedule, omit `agentId` to default to the calling agent (schedule yourself).
+
+| Method | Path                                                       | Description                                                                 |
+| ------ | ---------------------------------------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/api/companies/:companyId/schedules`                      | List schedules. Query: `?agentId=`, `?enabled=`                             |
+| GET    | `/api/companies/:companyId/schedules/:scheduleId`           | Get one schedule                                                            |
+| POST   | `/api/companies/:companyId/schedules`                       | Create schedule                                                             |
+| PATCH  | `/api/companies/:companyId/schedules/:scheduleId`            | Update schedule (name, timezone, enabled, payload, kind-specific fields)     |
+| DELETE | `/api/companies/:companyId/schedules/:scheduleId`           | Delete schedule                                                             |
+
+**Create body (POST):** `name` (string), `scheduleKind` (`"cron"` | `"once"` | `"ranges"`), `timezone` (IANA, e.g. `"Europe/London"`). Optional: `agentId` (defaults to caller when omitted and caller is an agent), `enabled` (default `true`), `payload` (object). Kind-specific: **cron** — `cronExpression`; **once** — `runAt` (ISO datetime, must be future); **ranges** — `timeOfDay` (e.g. `"09:00"`), `windows` (array of `{ start: "YYYY-MM-DD", end: "YYYY-MM-DD" }`).
+
+**Trigger:** When a schedule fires, the agent is woken with `triggerDetail: "scheduled"` and optional `payload`; see heartbeat and run context docs.
 
 ### Approvals, Costs, Activity, Dashboard
 

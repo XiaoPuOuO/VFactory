@@ -12,8 +12,11 @@ import { httpUIAdapter } from "./http";
 const adaptersByType = new Map<string, UIAdapterModule>(
   [
     claudeLocalUIAdapter,
+    { ...claudeLocalUIAdapter, type: "claude_remote" },
     codexLocalUIAdapter,
+    { ...codexLocalUIAdapter, type: "codex_remote" },
     geminiLocalUIAdapter,
+    { ...geminiLocalUIAdapter, type: "gemini_remote" },
     openCodeLocalUIAdapter,
     piLocalUIAdapter,
     cursorLocalUIAdapter,

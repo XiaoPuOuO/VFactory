@@ -131,6 +131,16 @@ The database mode is controlled by `DATABASE_URL`:
 
 Your Drizzle schema (`packages/db/src/schema/`) stays the same regardless of mode.
 
+## Multi-tenant (SaaS) tables
+
+For SaaS multi-tenant deployments, the schema includes:
+
+- **`tenants`** — One row per tenant (customer/workspace). `slug` is unique and used for resolution (e.g. header `X-Tenant-Slug`).
+- **`tenant_memberships`** — Which users belong to which tenant and their role (`owner`, `admin`, `member`). Board users only see companies in tenants where they have a membership.
+- **`companies.tenant_id`** — Every company belongs to one tenant. Unique `(tenant_id, issue_prefix)` per tenant.
+
+Migration `0037_tenants_and_tenant_memberships.sql` creates the default tenant and backfills existing data. See `doc/SPEC-implementation.md` for the full tenant model.
+
 ## Secret storage
 
 Paperclip stores secret metadata and versions in:

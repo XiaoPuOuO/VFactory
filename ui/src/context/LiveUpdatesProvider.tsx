@@ -1,7 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { Agent, Issue, LiveEvent } from "@paperclipai/shared";
-import { authApi } from "../api/auth";
+import type { Agent, ChatMessage, Issue, LiveEvent } from "@paperclipai/shared";
+import type { ChatActiveRun } from "../api/chat";
+import { authApi, isAuthSession } from "../api/auth";
 import { useCompany } from "./CompanyContext";
 import type { ToastInput } from "./ToastContext";
 import { useToast } from "./ToastContext";
@@ -128,6 +129,12 @@ function resolveIssueToastContext(
 const ISSUE_TOAST_ACTIONS = new Set(["issue.created", "issue.updated", "issue.comment_added"]);
 const AGENT_TOAST_STATUSES = new Set(["running", "error"]);
 const TERMINAL_RUN_STATUSES = new Set(["succeeded", "failed", "timed_out", "cancelled"]);
+
+/** 聊天觸發的 run 不顯示「工作中」與 start/success/failed 提示。 */
+function isChatTriggeredRun(payload: Record<string, unknown>): boolean {
+  const taskKey = payload.taskKey;
+  return typeof taskKey === "string" && taskKey.startsWith("chat:");
+}
 
 function describeIssueUpdate(details: Record<string, unknown> | null): string | null {
   if (!details) return null;
@@ -267,6 +274,7 @@ function buildAgentStatusToast(
   queryClient: QueryClient,
   companyId: string,
 ): ToastInput | null {
+  if (isChatTriggeredRun(payload)) return null;
   const agentId = readString(payload.agentId);
   const status = readString(payload.status);
   if (!agentId || !status || !AGENT_TOAST_STATUSES.has(status)) return null;
@@ -295,6 +303,7 @@ function buildRunStatusToast(
   payload: Record<string, unknown>,
   nameOf: (id: string) => string | null,
 ): ToastInput | null {
+  if (isChatTriggeredRun(payload)) return null;
   const runId = readString(payload.runId);
   const agentId = readString(payload.agentId);
   const status = readString(payload.status);
@@ -418,6 +427,72 @@ function invalidateActivityQueries(
   }
 }
 
+function handleChatEvent(
+  queryClient: QueryClient,
+  companyId: string,
+  event: LiveEvent,
+) {
+  const payload = event.payload ?? {};
+  const roomId = readString(payload.roomId);
+  if (!roomId) return;
+
+  // Update messages cache for this room (prepend newest; API returns newest-first).
+  const messagesKey = queryKeys.chat.messages(companyId, roomId);
+  const prevMessages = queryClient.getQueryData<ChatMessage[]>(messagesKey) ?? [];
+  const messageObj = readRecord(payload.message);
+  if (messageObj) {
+    const message = { ...messageObj } as unknown as ChatMessage;
+    const next: ChatMessage[] = [message, ...prevMessages];
+    queryClient.setQueryData(messagesKey, next);
+    // 新訊息已送達，清除該房間的 typing（activeRuns），動畫立即消失。
+    queryClient.setQueryData(queryKeys.chat.activeRuns(companyId, roomId), []);
+  }
+
+  // Invalidate rooms list so lastMessage / ordering stay in sync.
+  queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms(companyId) });
+}
+
+function handleChatRunStatus(
+  queryClient: QueryClient,
+  companyId: string,
+  eventType: string,
+  payload: Record<string, unknown>,
+) {
+  const taskKey = readString(payload.taskKey);
+  if (!taskKey || !taskKey.startsWith("chat:")) return;
+  const roomId = taskKey.slice("chat:".length);
+  if (!roomId) return;
+
+  const status = readString(payload.status) ?? (eventType === "heartbeat.run.queued" ? "queued" : null);
+  const runId = readString(payload.runId);
+  const agentId = readString(payload.agentId) ?? "";
+  if (!runId || !status) return;
+
+  const key = queryKeys.chat.activeRuns(companyId, roomId);
+  const prev = queryClient.getQueryData<ChatActiveRun[]>(key) ?? [];
+
+  const ACTIVE_STATUSES = new Set(["queued", "running"]);
+  const TERMINAL_STATUSES = TERMINAL_RUN_STATUSES;
+
+  if (TERMINAL_STATUSES.has(status as string)) {
+    const next = prev.filter((r) => r.id !== runId);
+    queryClient.setQueryData(key, next);
+    return;
+  }
+
+  if (!ACTIVE_STATUSES.has(status)) return;
+
+  const existing = prev.find((r) => r.id === runId);
+  const updated: ChatActiveRun = {
+    id: runId,
+    status,
+    agentId,
+    agentName: existing?.agentName ?? null,
+  };
+  const next = [updated, ...prev.filter((r) => r.id !== runId)];
+  queryClient.setQueryData(key, next);
+}
+
 interface ToastGate {
   cooldownHits: Map<string, number[]>;
   suppressUntil: number;
@@ -469,7 +544,15 @@ function handleLiveEvent(
     return;
   }
 
+  if (event.type === "chat.message.created") {
+    handleChatEvent(queryClient, expectedCompanyId, event);
+    return;
+  }
+
   if (event.type === "heartbeat.run.queued" || event.type === "heartbeat.run.status") {
+    if (isChatTriggeredRun(payload)) {
+      handleChatRunStatus(queryClient, expectedCompanyId, event.type, payload);
+    }
     invalidateHeartbeatQueries(queryClient, expectedCompanyId, payload);
     if (event.type === "heartbeat.run.status") {
       const toast = buildRunStatusToast(payload, nameOf);
@@ -513,7 +596,9 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
     queryFn: () => authApi.getSession(),
     retry: false,
   });
-  const currentUserId = session?.user?.id ?? session?.session?.userId ?? null;
+  const currentUserId = isAuthSession(session) ? session.user?.id ?? session.session?.userId ?? null : null;
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
 
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -560,7 +645,7 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
         try {
           const parsed = JSON.parse(raw) as LiveEvent;
           handleLiveEvent(queryClient, selectedCompanyId, parsed, pushToast, gateRef.current, {
-            userId: currentUserId,
+            userId: currentUserIdRef.current,
             agentId: null,
           });
         } catch {
@@ -578,10 +663,14 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
       };
     };
 
-    connect();
+    // 延遲初次連線，避開 React Strict Mode 的 mount→unmount→remount，避免「先連上再被 cleanup 關閉」導致瀏覽器顯示連線中斷
+    const startTimer = window.setTimeout(() => {
+      if (!closed) connect();
+    }, 100);
 
     return () => {
       closed = true;
+      window.clearTimeout(startTimer);
       clearReconnect();
       if (socket) {
         socket.onopen = null;
@@ -591,7 +680,8 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
         socket.close(1000, "provider_unmount");
       }
     };
-  }, [queryClient, selectedCompanyId, pushToast, currentUserId]);
+    // 僅依賴 selectedCompanyId 建立/斷開連線，避免 session 載入時重跑 effect 造成「載入時連線中斷」
+  }, [queryClient, selectedCompanyId, pushToast]);
 
   return <>{children}</>;
 }

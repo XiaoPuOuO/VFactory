@@ -31,7 +31,7 @@ export function activityRoutes(db: Db) {
 
   router.get("/companies/:companyId/activity", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
 
     const filters = {
       companyId,
@@ -61,7 +61,7 @@ export function activityRoutes(db: Db) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
     const result = await svc.forIssue(issue.id);
     res.json(result);
   });
@@ -73,7 +73,7 @@ export function activityRoutes(db: Db) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
     const result = await svc.runsForIssue(issue.companyId, issue.id);
     res.json(result);
   });

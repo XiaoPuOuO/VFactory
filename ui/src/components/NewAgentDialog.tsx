@@ -4,6 +4,7 @@ import { useNavigate } from "@/lib/router";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
 import { agentsApi } from "../api/agents";
+import { companiesApi } from "../api/companies";
 import { queryKeys } from "../lib/queryKeys";
 import {
   Dialog,
@@ -24,8 +25,11 @@ import { OpenCodeLogoIcon } from "./OpenCodeLogoIcon";
 
 type AdvancedAdapterType =
   | "claude_local"
+  | "claude_remote"
   | "codex_local"
+  | "codex_remote"
   | "gemini_local"
+  | "gemini_remote"
   | "opencode_local"
   | "pi_local"
   | "cursor"
@@ -38,26 +42,12 @@ const ADVANCED_ADAPTER_OPTIONS: Array<{
   icon: ComponentType<{ className?: string }>;
   recommended?: boolean;
 }> = [
-  {
-    value: "claude_local",
-    label: "Claude Code",
-    icon: Sparkles,
-    desc: "Local Claude agent",
-    recommended: true,
-  },
-  {
-    value: "codex_local",
-    label: "Codex",
-    icon: Code,
-    desc: "Local Codex agent",
-    recommended: true,
-  },
-  {
-    value: "gemini_local",
-    label: "Gemini CLI",
-    icon: Gem,
-    desc: "Local Gemini agent",
-  },
+  { value: "claude_local", label: "Claude (local)", icon: Sparkles, desc: "Local Claude CLI", recommended: true },
+  { value: "claude_remote", label: "Claude (remote)", icon: Sparkles, desc: "Cloud Claude API (API Key required)", recommended: true },
+  { value: "codex_local", label: "Codex (local)", icon: Code, desc: "Local Codex CLI", recommended: true },
+  { value: "codex_remote", label: "Codex (remote)", icon: Code, desc: "Cloud Codex API (API Key required)", recommended: true },
+  { value: "gemini_local", label: "Gemini CLI (local)", icon: Gem, desc: "Local Gemini CLI" },
+  { value: "gemini_remote", label: "Gemini (remote)", icon: Gem, desc: "Cloud Gemini API (API Key required)" },
   {
     value: "opencode_local",
     label: "OpenCode",
@@ -89,6 +79,17 @@ export function NewAgentDialog() {
   const { selectedCompanyId } = useCompany();
   const navigate = useNavigate();
   const [showAdvancedCards, setShowAdvancedCards] = useState(false);
+
+  const { data: allowedAdapterData } = useQuery({
+    queryKey: selectedCompanyId ? queryKeys.companies.allowedAdapterTypes(selectedCompanyId) : ["companies", "none", "allowed-adapter-types"],
+    queryFn: () => companiesApi.allowedAdapterTypes(selectedCompanyId!),
+    enabled: Boolean(selectedCompanyId) && newAgentOpen,
+  });
+  const allowedAdapterTypes = allowedAdapterData?.adapterTypes;
+  const adapterOptions =
+    allowedAdapterTypes !== undefined
+      ? ADVANCED_ADAPTER_OPTIONS.filter((opt) => allowedAdapterTypes.includes(opt.value))
+      : ADVANCED_ADAPTER_OPTIONS;
 
   const { data: agents } = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId!),
@@ -193,7 +194,7 @@ export function NewAgentDialog() {
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                {ADVANCED_ADAPTER_OPTIONS.map((opt) => (
+                {adapterOptions.map((opt) => (
                   <button
                     key={opt.value}
                     className={cn(

@@ -14,6 +14,7 @@ import { projects } from "./projects.js";
 import { goals } from "./goals.js";
 import { companies } from "./companies.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
+import { chatRooms } from "./chat_rooms.js";
 
 export const issues = pgTable(
   "issues",
@@ -23,6 +24,8 @@ export const issues = pgTable(
     projectId: uuid("project_id").references(() => projects.id),
     goalId: uuid("goal_id").references(() => goals.id),
     parentId: uuid("parent_id").references((): AnyPgColumn => issues.id),
+    /** 若此 issue 由聊天室對話建立，完成時會主動回報至該聊天室。 */
+    sourceChatRoomId: uuid("source_chat_room_id").references(() => chatRooms.id, { onDelete: "set null" }),
     title: text("title").notNull(),
     description: text("description"),
     status: text("status").notNull().default("backlog"),

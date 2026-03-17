@@ -24,11 +24,12 @@ import {
 } from "../services/index.js";
 import { logger } from "../middleware/logger.js";
 import { forbidden, HttpError, unauthorized } from "../errors.js";
-import { assertCompanyAccess, getActorInfo } from "./authz.js";
+import { assertCompanyAccess, getActorInfo, hasCompanyViewAll } from "./authz.js";
 import { shouldWakeAssigneeOnCheckout } from "./issues-checkout-wakeup.js";
 import { isAllowedContentType, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
+import type { ChatServiceInstance } from "./chat.js";
 
-export function issueRoutes(db: Db, storage: StorageService) {
+export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServiceInstance) {
   const router = Router();
   const svc = issueService(db);
   const access = accessService(db);
@@ -59,7 +60,11 @@ export function issueRoutes(db: Db, storage: StorageService) {
   }
 
   async function assertCanManageIssueApprovalLinks(req: Request, res: Response, companyId: string) {
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "banned") {
+      res.status(403).json({ error: "Account banned" });
+      return false;
+    }
     if (req.actor.type === "board") return true;
     if (!req.actor.agentId) {
       res.status(403).json({ error: "Agent authentication required" });
@@ -82,9 +87,9 @@ export function issueRoutes(db: Db, storage: StorageService) {
   }
 
   async function assertCanAssignTasks(req: Request, companyId: string) {
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     if (req.actor.type === "board") {
-      if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) return;
+      if (hasCompanyViewAll(req)) return;
       const allowed = await access.canUser(companyId, req.actor.userId, "tasks:assign");
       if (!allowed) throw forbidden("Missing permission: tasks:assign");
       return;
@@ -185,7 +190,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
 
   router.get("/companies/:companyId/issues", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const assigneeUserFilterRaw = req.query.assigneeUserId as string | undefined;
     const touchedByUserFilterRaw = req.query.touchedByUserId as string | undefined;
     const unreadForUserFilterRaw = req.query.unreadForUserId as string | undefined;
@@ -231,14 +236,14 @@ export function issueRoutes(db: Db, storage: StorageService) {
 
   router.get("/companies/:companyId/labels", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const result = await svc.listLabels(companyId);
     res.json(result);
   });
 
   router.post("/companies/:companyId/labels", validate(createIssueLabelSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const label = await svc.createLabel(companyId, req.body);
     const actor = getActorInfo(req);
     await logActivity(db, {
@@ -262,7 +267,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Label not found" });
       return;
     }
-    assertCompanyAccess(req, existing.companyId);
+    await assertCompanyAccess(req, existing.companyId, db);
     const removed = await svc.deleteLabel(labelId);
     if (!removed) {
       res.status(404).json({ error: "Label not found" });
@@ -290,7 +295,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
     const [ancestors, project, goal, mentionedProjectIds] = await Promise.all([
       svc.getAncestors(issue.id),
       issue.projectId ? projectsSvc.getById(issue.projectId) : null,
@@ -321,7 +326,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
     if (req.actor.type !== "board") {
       res.status(403).json({ error: "Board authentication required" });
       return;
@@ -353,7 +358,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
     const approvals = await issueApprovalsSvc.listApprovalsForIssue(id);
     res.json(approvals);
   });
@@ -419,7 +424,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
 
   router.post("/companies/:companyId/issues", validate(createIssueSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     if (req.body.assigneeAgentId || req.body.assigneeUserId) {
       await assertCanAssignTasks(req, companyId);
     }
@@ -467,7 +472,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, existing.companyId);
+    await assertCompanyAccess(req, existing.companyId, db);
     const assigneeWillChange =
       (req.body.assigneeAgentId !== undefined && req.body.assigneeAgentId !== existing.assigneeAgentId) ||
       (req.body.assigneeUserId !== undefined && req.body.assigneeUserId !== existing.assigneeUserId);
@@ -578,6 +583,27 @@ export function issueRoutes(db: Db, storage: StorageService) {
 
     }
 
+    // Issue 完成時，若有關聯的來源聊天室，主動在該聊天室以負責 agent 名義回報完成。
+    if (
+      issue.status === "done" &&
+      (issue as { sourceChatRoomId?: string | null }).sourceChatRoomId &&
+      chatSvc
+    ) {
+      const roomId = (issue as { sourceChatRoomId?: string | null }).sourceChatRoomId!;
+      const reportAgentId = issue.assigneeAgentId ?? issue.createdByAgentId;
+      if (reportAgentId) {
+        const reportBody = `Issue ${issue.identifier ?? issue.id} 已完成。`;
+        void chatSvc
+          .addMessage(issue.companyId, roomId, reportBody, { type: "agent", agentId: reportAgentId })
+          .catch((err) =>
+            logger.warn(
+              { err, issueId: issue.id, roomId },
+              "failed to post issue completion to source chat room",
+            ),
+          );
+      }
+    }
+
     const assigneeChanged = assigneeWillChange;
     const statusChangedFromBacklog =
       existing.status === "backlog" &&
@@ -598,7 +624,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       // 二、Issue 被修改時：若有該 issue 的 active run 先 cancel，再於下方加入 issue_updated* wake
       let issueUpdatedReason: "issue_updated_while_running" | "issue_updated" | null = null;
       if (hasContentChange && issue.assigneeAgentId) {
-        let activeRun: Awaited<ReturnType<typeof heartbeat.getRun>> = null;
+        let activeRun: Awaited<ReturnType<typeof heartbeat.getRun>> | null = null;
         if (issue.executionRunId) {
           const run = await heartbeat.getRun(issue.executionRunId);
           if (run && (run.status === "running" || run.status === "queued")) activeRun = run;
@@ -611,12 +637,17 @@ export function issueRoutes(db: Db, storage: StorageService) {
               : undefined;
           if (run && run.status === "running" && snapshotIssueId === issue.id) activeRun = run;
         }
-        if (activeRun) {
+
+        // 若目前這次 PATCH 來自相同的 active run（actor.runId === activeRun.id），
+        // 表示是 agent 在自己的 heartbeat 中更新 Issue；不應觸發 issue_updated_while_running 迴圈。
+        const isSelfRunUpdate = activeRun && actor.runId && activeRun.id === actor.runId;
+
+        if (activeRun && !isSelfRunUpdate) {
           await heartbeat.cancelRun(activeRun.id).catch((err) =>
             logger.warn({ err, issueId: issue.id, runId: activeRun!.id }, "failed to cancel run on issue update"),
           );
           issueUpdatedReason = "issue_updated_while_running";
-        } else {
+        } else if (!activeRun) {
           issueUpdatedReason = "issue_updated";
         }
       }
@@ -728,7 +759,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, existing.companyId);
+    await assertCompanyAccess(req, existing.companyId, db);
     const attachments = await svc.listAttachments(id);
 
     const issue = await svc.remove(id);
@@ -767,7 +798,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
 
     if (req.actor.type === "agent" && req.actor.agentId !== req.body.agentId) {
       res.status(403).json({ error: "Agent can only checkout as itself" });
@@ -793,7 +824,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
 
     if (
       shouldWakeAssigneeOnCheckout({
-        actorType: req.actor.type,
+        actorType: req.actor.type === "banned" ? "none" : req.actor.type,
         actorAgentId: req.actor.type === "agent" ? req.actor.agentId ?? null : null,
         checkoutAgentId: req.body.agentId,
         checkoutRunId,
@@ -822,7 +853,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, existing.companyId);
+    await assertCompanyAccess(req, existing.companyId, db);
     if (!(await assertAgentRunCheckoutOwnership(req, res, existing))) return;
     const actorRunId = requireAgentRunId(req, res);
     if (req.actor.type === "agent" && !actorRunId) return;
@@ -859,7 +890,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
     const comments = await svc.listComments(id);
     res.json(comments);
   });
@@ -872,7 +903,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
     const comment = await svc.getComment(commentId);
     if (!comment || comment.issueId !== id) {
       res.status(404).json({ error: "Comment not found" });
@@ -888,7 +919,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
     if (!(await assertAgentRunCheckoutOwnership(req, res, issue))) return;
 
     const actor = getActorInfo(req);
@@ -1101,7 +1132,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
     const attachments = await svc.listAttachments(issueId);
     res.json(attachments.map(withContentPath));
   });
@@ -1109,7 +1140,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
   router.post("/companies/:companyId/issues/:issueId/attachments", async (req, res) => {
     const companyId = req.params.companyId as string;
     const issueId = req.params.issueId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const issue = await svc.getById(issueId);
     if (!issue) {
       res.status(404).json({ error: "Issue not found" });
@@ -1204,7 +1235,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Attachment not found" });
       return;
     }
-    assertCompanyAccess(req, attachment.companyId);
+    await assertCompanyAccess(req, attachment.companyId, db);
 
     const object = await storage.getObject(attachment.companyId, attachment.objectKey);
     res.setHeader("Content-Type", attachment.contentType || object.contentType || "application/octet-stream");
@@ -1226,7 +1257,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Attachment not found" });
       return;
     }
-    assertCompanyAccess(req, attachment.companyId);
+    await assertCompanyAccess(req, attachment.companyId, db);
 
     try {
       await storage.deleteObject(attachment.companyId, attachment.objectKey);

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
@@ -28,23 +29,24 @@ import {
   GitBranch,
 } from "lucide-react";
 import { PROJECT_COLORS } from "@paperclipai/shared";
-import { cn } from "../lib/utils";
 import { MarkdownEditor, type MarkdownEditorRef } from "./MarkdownEditor";
 import { StatusBadge } from "./StatusBadge";
 import { ChoosePathButton } from "./PathInstructionsModal";
 
-const projectStatuses = [
-  { value: "backlog", label: "Backlog" },
-  { value: "planned", label: "Planned" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
-];
+const PROJECT_STATUS_KEYS: Record<string, string> = {
+  backlog: "newProject.statusBacklog",
+  planned: "newProject.statusPlanned",
+  in_progress: "newProject.statusInProgress",
+  completed: "newProject.statusCompleted",
+  cancelled: "newProject.statusCancelled",
+};
+const projectStatusValues = ["backlog", "planned", "in_progress", "completed", "cancelled"] as const;
 
 type WorkspaceSetup = "none" | "local" | "repo" | "both";
 const REPO_ONLY_CWD_SENTINEL = "/__paperclip_repo_only__";
 
 export function NewProjectDialog() {
+  const { t } = useTranslation();
   const { newProjectOpen, closeNewProject } = useDialog();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const queryClient = useQueryClient();
@@ -111,7 +113,7 @@ export function NewProjectDialog() {
   const deriveWorkspaceNameFromPath = (value: string) => {
     const normalized = value.trim().replace(/[\\/]+$/, "");
     const segments = normalized.split(/[\\/]/).filter(Boolean);
-    return segments[segments.length - 1] ?? "Local folder";
+    return segments[segments.length - 1] ?? t("newProject.localFolderFallback");
   };
 
   const deriveWorkspaceNameFromRepo = (value: string) => {
@@ -119,9 +121,9 @@ export function NewProjectDialog() {
       const parsed = new URL(value);
       const segments = parsed.pathname.split("/").filter(Boolean);
       const repo = segments[segments.length - 1]?.replace(/\.git$/i, "") ?? "";
-      return repo || "GitHub repo";
+      return repo || t("newProject.githubRepoFallback");
     } catch {
-      return "GitHub repo";
+      return t("newProject.githubRepoFallback");
     }
   };
 
@@ -138,11 +140,11 @@ export function NewProjectDialog() {
     const repoUrl = workspaceRepoUrl.trim();
 
     if (localRequired && !isAbsolutePath(localPath)) {
-      setWorkspaceError("Local folder must be a full absolute path.");
+      setWorkspaceError(t("newProject.localPathError"));
       return;
     }
     if (repoRequired && !isGitHubRepoUrl(repoUrl)) {
-      setWorkspaceError("Repo workspace must use a valid GitHub repo URL.");
+      setWorkspaceError(t("newProject.repoUrlError"));
       return;
     }
 
@@ -214,45 +216,35 @@ export function NewProjectDialog() {
     >
       <DialogContent
         showCloseButton={false}
-        className={cn("p-0 gap-0", expanded ? "sm:max-w-2xl" : "sm:max-w-lg")}
+        className={["ui-form-dialog-content", expanded ? "expanded" : ""].filter(Boolean).join(" ")}
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="ui-form-dialog-header">
+          <div className="ui-form-dialog-header-left">
             {selectedCompany && (
-              <span className="bg-muted px-1.5 py-0.5 rounded text-xs font-medium">
+              <span className="ui-form-dialog-header-company">
                 {selectedCompany.name.slice(0, 3).toUpperCase()}
               </span>
             )}
-            <span className="text-muted-foreground/60">&rsaquo;</span>
-            <span>New project</span>
+            <span className="ui-form-dialog-header-sep">&rsaquo;</span>
+            <span>{t("newProject.title")}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground"
-              onClick={() => setExpanded(!expanded)}
-            >
-              {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          <div className="ui-form-dialog-header-actions">
+            <Button variant="ghost" size="icon-xs" onClick={() => setExpanded(!expanded)}>
+              {expanded ? <Minimize2 /> : <Maximize2 />}
             </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground"
-              onClick={() => { reset(); closeNewProject(); }}
-            >
-              <span className="text-lg leading-none">&times;</span>
+            <Button variant="ghost" size="icon-xs" onClick={() => { reset(); closeNewProject(); }}>
+              <span className="ui-form-dialog-close-char">&times;</span>
             </Button>
           </div>
         </div>
 
         {/* Name */}
-        <div className="px-4 pt-4 pb-2 shrink-0">
+        <div className="ui-form-dialog-title-wrap">
           <input
-            className="w-full text-lg font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
-            placeholder="Project name"
+            className="ui-form-dialog-title-input"
+            placeholder={t("newProject.projectNamePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
@@ -266,14 +258,14 @@ export function NewProjectDialog() {
         </div>
 
         {/* Description */}
-        <div className="px-4 pb-2">
+        <div className="ui-form-dialog-body">
           <MarkdownEditor
             ref={descriptionEditorRef}
             value={description}
             onChange={setDescription}
-            placeholder="Add description..."
+            placeholder={t("newProject.addDescriptionPlaceholder")}
             bordered={false}
-            contentClassName={cn("text-sm text-muted-foreground", expanded ? "min-h-[220px]" : "min-h-[120px]")}
+            contentClassName={["ui-form-dialog-content-editor", expanded ? "expanded" : ""].filter(Boolean).join(" ")}
             imageUploadHandler={async (file) => {
               const asset = await uploadDescriptionImage.mutateAsync(file);
               return asset.contentPath;
@@ -281,125 +273,109 @@ export function NewProjectDialog() {
           />
         </div>
 
-        <div className="px-4 pb-3 space-y-3 border-t border-border">
-          <div className="pt-3">
-            <p className="text-sm font-medium">Where will work be done on this project?</p>
-            <p className="text-xs text-muted-foreground">Add local folder and/or GitHub repo workspace hints.</p>
+        <div className="ui-form-dialog-workspace-section">
+          <div className="ui-form-dialog-workspace-heading">
+            <p className="ui-form-dialog-workspace-title">{t("newProject.whereWorkDone")}</p>
+            <p className="ui-form-dialog-workspace-hint">{t("newProject.whereWorkDoneHint")}</p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="ui-form-dialog-workspace-grid">
             <button
               type="button"
-              className={cn(
-                "rounded-lg border px-3 py-3 text-left transition-colors",
-                workspaceSetup === "local" ? "border-foreground bg-accent/40" : "border-border hover:bg-accent/30",
-              )}
+              className={["ui-form-dialog-workspace-card", workspaceSetup === "local" ? "selected" : ""].filter(Boolean).join(" ")}
               onClick={() => toggleWorkspaceSetup("local")}
             >
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <FolderOpen className="h-4 w-4" />
-                A local folder
+              <div className="ui-form-dialog-workspace-card-inner">
+                <FolderOpen />
+                {t("newProject.localFolder")}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Use a full path on this machine.</p>
+              <p className="ui-form-dialog-workspace-card-desc">{t("newProject.localFolderHint")}</p>
             </button>
             <button
               type="button"
-              className={cn(
-                "rounded-lg border px-3 py-3 text-left transition-colors",
-                workspaceSetup === "repo" ? "border-foreground bg-accent/40" : "border-border hover:bg-accent/30",
-              )}
+              className={["ui-form-dialog-workspace-card", workspaceSetup === "repo" ? "selected" : ""].filter(Boolean).join(" ")}
               onClick={() => toggleWorkspaceSetup("repo")}
             >
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Github className="h-4 w-4" />
-                A github repo
+              <div className="ui-form-dialog-workspace-card-inner">
+                <Github />
+                {t("newProject.githubRepo")}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Paste a GitHub URL.</p>
+              <p className="ui-form-dialog-workspace-card-desc">{t("newProject.githubRepoHint")}</p>
             </button>
             <button
               type="button"
-              className={cn(
-                "rounded-lg border px-3 py-3 text-left transition-colors",
-                workspaceSetup === "both" ? "border-foreground bg-accent/40" : "border-border hover:bg-accent/30",
-              )}
+              className={["ui-form-dialog-workspace-card", workspaceSetup === "both" ? "selected" : ""].filter(Boolean).join(" ")}
               onClick={() => toggleWorkspaceSetup("both")}
             >
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <GitBranch className="h-4 w-4" />
-                Both
+              <div className="ui-form-dialog-workspace-card-inner">
+                <GitBranch />
+                {t("newProject.both")}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Configure local + repo hints.</p>
+              <p className="ui-form-dialog-workspace-card-desc">{t("newProject.bothHint")}</p>
             </button>
           </div>
 
           {(workspaceSetup === "local" || workspaceSetup === "both") && (
-            <div className="rounded-md border border-border p-2">
-              <label className="mb-1 block text-xs text-muted-foreground">Local folder (full path)</label>
-              <div className="flex items-center gap-2">
+            <div className="ui-form-dialog-workspace-field">
+              <label>{t("newProject.localFolderLabel")}</label>
+              <div className="ui-form-dialog-workspace-field-row">
                 <input
-                  className="w-full rounded border border-border bg-transparent px-2 py-1 text-xs font-mono outline-none"
                   value={workspaceLocalPath}
                   onChange={(e) => setWorkspaceLocalPath(e.target.value)}
-                  placeholder="/absolute/path/to/workspace"
+                  placeholder={t("newProject.localFolderPlaceholder")}
                 />
                 <ChoosePathButton />
               </div>
             </div>
           )}
           {(workspaceSetup === "repo" || workspaceSetup === "both") && (
-            <div className="rounded-md border border-border p-2">
-              <label className="mb-1 block text-xs text-muted-foreground">GitHub repo URL</label>
+            <div className="ui-form-dialog-workspace-field">
+              <label>{t("newProject.githubRepoUrlLabel")}</label>
               <input
-                className="w-full rounded border border-border bg-transparent px-2 py-1 text-xs outline-none"
                 value={workspaceRepoUrl}
                 onChange={(e) => setWorkspaceRepoUrl(e.target.value)}
-                placeholder="https://github.com/org/repo"
+                placeholder={t("newProject.githubRepoUrlPlaceholder")}
               />
             </div>
           )}
           {workspaceError && (
-            <p className="text-xs text-destructive">{workspaceError}</p>
+            <p className="ui-form-dialog-workspace-error">{workspaceError}</p>
           )}
         </div>
 
         {/* Property chips */}
-        <div className="flex items-center gap-1.5 px-4 py-2 border-t border-border flex-wrap">
+        <div className="ui-form-dialog-chips">
           {/* Status */}
           <Popover open={statusOpen} onOpenChange={setStatusOpen}>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
+              <button type="button" className="ui-form-dialog-chip">
                 <StatusBadge status={status} />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-40 p-1" align="start">
-              {projectStatuses.map((s) => (
+            <PopoverContent className="ui-form-dialog-popover-content w-40" align="start">
+              {projectStatusValues.map((s) => (
                 <button
-                  key={s.value}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-                    s.value === status && "bg-accent"
-                  )}
-                  onClick={() => { setStatus(s.value); setStatusOpen(false); }}
+                  key={s}
+                  type="button"
+                  className={["ui-form-dialog-popover-item", s === status ? "active" : ""].filter(Boolean).join(" ")}
+                  onClick={() => { setStatus(s); setStatusOpen(false); }}
                 >
-                  {s.label}
+                  {t(PROJECT_STATUS_KEYS[s])}
                 </button>
               ))}
             </PopoverContent>
           </Popover>
 
           {selectedGoals.map((goal) => (
-            <span
-              key={goal.id}
-              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
-            >
-              <Target className="h-3 w-3 text-muted-foreground" />
-              <span className="max-w-[160px] truncate">{goal.title}</span>
+            <span key={goal.id} className="ui-form-dialog-goal-chip">
+              <Target className="ui-form-dialog-chip-icon" />
+              <span>{goal.title}</span>
               <button
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => setGoalIds((prev) => prev.filter((id) => id !== goal.id))}
-                aria-label={`Remove goal ${goal.title}`}
                 type="button"
+                className="ui-form-dialog-goal-chip-remove"
+                onClick={() => setGoalIds((prev) => prev.filter((id) => id !== goal.id))}
+                aria-label={t("newProject.removeGoalAria", { title: goal.title })}
               >
-                <X className="h-3 w-3" />
+                <X />
               </button>
             </span>
           ))}
@@ -407,26 +383,29 @@ export function NewProjectDialog() {
           <Popover open={goalOpen} onOpenChange={setGoalOpen}>
             <PopoverTrigger asChild>
               <button
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors disabled:opacity-60"
+                type="button"
+                className="ui-form-dialog-chip"
                 disabled={selectedGoals.length > 0 && availableGoals.length === 0}
               >
-                {selectedGoals.length > 0 ? <Plus className="h-3 w-3 text-muted-foreground" /> : <Target className="h-3 w-3 text-muted-foreground" />}
-                {selectedGoals.length > 0 ? "+ Goal" : "Goal"}
+                {selectedGoals.length > 0 ? <Plus className="ui-form-dialog-chip-icon" /> : <Target className="ui-form-dialog-chip-icon" />}
+                {selectedGoals.length > 0 ? t("newProject.addGoal") : t("newProject.goal")}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-56 p-1" align="start">
+            <PopoverContent className="ui-form-dialog-popover-content w-56" align="start">
               {selectedGoals.length === 0 && (
                 <button
-                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground"
+                  type="button"
+                  className="ui-form-dialog-popover-item ui-form-dialog-popover-item-muted"
                   onClick={() => setGoalOpen(false)}
                 >
-                  No goal
+                  {t("newProject.noGoal")}
                 </button>
               )}
               {availableGoals.map((g) => (
                 <button
                   key={g.id}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 truncate"
+                  type="button"
+                  className="ui-form-dialog-popover-item truncate"
                   onClick={() => {
                     setGoalIds((prev) => [...prev, g.id]);
                     setGoalOpen(false);
@@ -436,30 +415,30 @@ export function NewProjectDialog() {
                 </button>
               ))}
               {selectedGoals.length > 0 && availableGoals.length === 0 && (
-                <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                  All goals already selected.
+                <div className="ui-form-dialog-popover-hint">
+                  {t("newProject.allGoalsSelected")}
                 </div>
               )}
             </PopoverContent>
           </Popover>
 
           {/* Target date */}
-          <div className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs">
-            <Calendar className="h-3 w-3 text-muted-foreground" />
+          <div className="ui-form-dialog-chip">
+            <Calendar className="ui-form-dialog-chip-icon" />
             <input
               type="date"
-              className="bg-transparent outline-none text-xs w-24"
+              className="ui-form-dialog-date-input"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
-              placeholder="Target date"
+              placeholder={t("newProject.targetDatePlaceholder")}
             />
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border">
+        <div className="ui-form-dialog-footer ui-form-dialog-footer-between">
           {createProject.isError ? (
-            <p className="text-xs text-destructive">Failed to create project.</p>
+            <p className="ui-form-dialog-footer-error">{t("newProject.createFailed")}</p>
           ) : (
             <span />
           )}
@@ -468,7 +447,7 @@ export function NewProjectDialog() {
             disabled={!name.trim() || createProject.isPending}
             onClick={handleSubmit}
           >
-            {createProject.isPending ? "Creating…" : "Create project"}
+            {createProject.isPending ? t("newProject.creating") : t("newProject.createProject")}
           </Button>
         </div>
       </DialogContent>

@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import type { Issue } from "@paperclipai/shared";
 import { Link } from "@/lib/router";
-import { cn } from "../lib/utils";
 import { PriorityIcon } from "./PriorityIcon";
 import { StatusIcon } from "./StatusIcon";
 
@@ -43,63 +42,55 @@ export function IssueRow({
     <Link
       to={`/issues/${issuePathId}`}
       state={issueLinkState}
-      className={cn(
-        "flex items-start gap-2 border-b border-border py-2.5 pl-2 pr-3 text-sm no-underline text-inherit transition-colors hover:bg-accent/50 last:border-b-0 sm:items-center sm:py-2 sm:pl-1",
-        className,
-      )}
+      className={["issues-row", className].filter(Boolean).join(" ")}
     >
-      <span className="shrink-0 pt-px sm:hidden">
+      <span className="issues-row-mobile-lead">
         {mobileLeading ?? <StatusIcon status={issue.status} />}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1 sm:contents">
-        <span className="line-clamp-2 text-sm sm:order-2 sm:min-w-0 sm:flex-1 sm:truncate sm:line-clamp-none">
+      <span className="issues-row-content">
+        <span className="issues-row-title">
           {issue.title}
           {issue.executionLabel && (
-            <span className="ml-1.5 text-[11px] font-mono text-muted-foreground">
-              [{issue.executionLabel}]
-            </span>
+            <span className="issues-row-title-tag">[{issue.executionLabel}]</span>
           )}
         </span>
-        <span className="flex items-center gap-2 sm:order-1 sm:shrink-0">
+        <span className="issues-row-meta">
           {desktopLeadingSpacer ? (
-            <span className="hidden w-3.5 shrink-0 sm:block" />
+            <span className="issues-row-meta-icon" style={{ width: 14, visibility: "hidden" }} aria-hidden />
           ) : null}
           {desktopMetaLeading ?? (
             <>
-              <span className="hidden sm:inline-flex">
+              <span className="issues-row-meta-icon">
                 <PriorityIcon priority={issue.priority} />
               </span>
-              <span className="hidden shrink-0 sm:inline-flex">
+              <span className="issues-row-meta-icon">
                 <StatusIcon status={issue.status} />
               </span>
-              <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                {identifier}
-              </span>
+              <span className="issues-row-id">{identifier}</span>
             </>
           )}
           {mobileMeta ? (
             <>
-              <span className="text-xs text-muted-foreground sm:hidden" aria-hidden="true">
-                &middot;
-              </span>
-              <span className="text-xs text-muted-foreground sm:hidden">{mobileMeta}</span>
+              <span className="issues-row-dot" aria-hidden="true">&middot;</span>
+              <span className="issues-row-meta-mobile">{mobileMeta}</span>
             </>
           ) : null}
         </span>
       </span>
       {(desktopTrailing || trailingMeta) ? (
-        <span className="ml-auto hidden shrink-0 items-center gap-2 sm:order-3 sm:flex sm:gap-3">
+        <span className="issues-row-trailing">
           {desktopTrailing}
           {trailingMeta ? (
-            <span className="text-xs text-muted-foreground">{trailingMeta}</span>
+            <span className="issues-row-trailing-meta">{trailingMeta}</span>
           ) : null}
         </span>
       ) : null}
       {showUnreadSlot ? (
-        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center self-center">
+        <span className="issues-row-unread-slot">
           {showUnreadDot ? (
             <button
               type="button"
+              className="issues-row-unread-btn"
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -112,18 +103,14 @@ export function IssueRow({
                   onMarkRead?.();
                 }
               }}
-              className="inline-flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-blue-500/20"
               aria-label="Mark as read"
             >
               <span
-                className={cn(
-                  "block h-2 w-2 rounded-full bg-blue-600 transition-opacity duration-300 dark:bg-blue-400",
-                  unreadState === "fading" ? "opacity-0" : "opacity-100",
-                )}
+                className={["issues-row-unread-dot", unreadState === "fading" && "fading"].filter(Boolean).join(" ")}
               />
             </button>
           ) : (
-            <span className="inline-flex h-4 w-4" aria-hidden="true" />
+            <span aria-hidden="true" />
           )}
         </span>
       ) : null}

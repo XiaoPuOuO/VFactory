@@ -1,4 +1,20 @@
 const BASE = "/api";
+const TENANT_SLUG_KEY = "paperclip.tenantSlug";
+
+let currentTenantSlug: string | null =
+  (typeof localStorage !== "undefined" && localStorage.getItem(TENANT_SLUG_KEY)) || null;
+
+export function getTenantSlug(): string | null {
+  return currentTenantSlug;
+}
+
+export function setTenantSlug(slug: string | null): void {
+  currentTenantSlug = slug;
+  if (typeof localStorage !== "undefined") {
+    if (slug) localStorage.setItem(TENANT_SLUG_KEY, slug);
+    else localStorage.removeItem(TENANT_SLUG_KEY);
+  }
+}
 
 export class ApiError extends Error {
   status: number;
@@ -18,6 +34,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!(body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  if (currentTenantSlug && !headers.has("X-Tenant-Slug")) {
+    headers.set("X-Tenant-Slug", currentTenantSlug);
+  }
 
   const res = await fetch(`${BASE}${path}`, {
     headers,
@@ -32,6 +51,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       errorBody,
     );
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -43,5 +63,7 @@ export const api = {
     request<T>(path, { method: "POST", body }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };

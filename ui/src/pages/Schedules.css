@@ -1,0 +1,235 @@
+/**
+ * Schedules 頁面 — 原生 CSS（無 Tailwind）
+ */
+.schedules-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.schedules-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.schedules-empty-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.schedules-empty-card {
+  width: 100%;
+  max-width: 28rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.schedules-empty-icon-wrap {
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.schedules-empty-icon-wrap svg {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--primary);
+}
+
+.schedules-empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 0.375rem;
+}
+
+.schedules-empty-desc {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  margin-bottom: 1.5rem;
+  max-width: 24rem;
+}
+
+.schedules-empty-btn svg {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+.schedules-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.schedules-toolbar-btn svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.375rem;
+  vertical-align: middle;
+}
+
+.schedules-table-wrap {
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.schedules-table {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.schedules-table thead {
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
+}
+
+.schedules-table th {
+  text-align: left;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+}
+
+.schedules-table th.actions {
+  width: 5rem;
+}
+
+.schedules-table tbody tr {
+  border-top: 1px solid var(--border);
+}
+
+.schedules-table td {
+  padding: 0.5rem 0.75rem;
+}
+
+.schedules-table td.name {
+  font-weight: 500;
+}
+
+.schedules-table td.muted {
+  color: var(--muted-foreground);
+}
+
+.schedules-table .schedules-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.schedules-table .schedules-actions button svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.schedules-enabled-badge {
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+}
+
+.schedules-enabled-badge.enabled {
+  background: color-mix(in oklab, #22c55e 15%, transparent);
+  color: #16a34a;
+}
+
+:root.dark .schedules-enabled-badge.enabled {
+  color: #4ade80;
+}
+
+.schedules-enabled-badge.disabled {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+/* Schedule form dialog (within page) */
+.schedules-dialog-content {
+  max-width: 32rem;
+}
+
+.schedules-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.schedules-form-group label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.schedules-form-group input,
+.schedules-form-group select {
+  margin-top: 0.25rem;
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid var(--input);
+  background: var(--background);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.schedules-form-group input.font-mono {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+}
+
+.schedules-form-hint {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.schedules-form-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.schedules-form-row input {
+  flex: 1 1 0%;
+  margin-top: 0;
+}
+
+.schedules-add-window-btn {
+  margin-top: 0.5rem;
+}
+
+.schedules-form-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.schedules-form-checkbox-row label {
+  font-size: 0.875rem;
+}
+
+.schedules-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.schedules-table th.actions {
+  width: 5rem;
+}

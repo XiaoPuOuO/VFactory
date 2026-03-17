@@ -1,0 +1,201 @@
+/**
+ * Costs 頁面 — 原生 CSS（無 Tailwind）
+ */
+
+.costs-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.costs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.costs-custom-range {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+.costs-custom-range input {
+  height: 2rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--input);
+  background: var(--background);
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--foreground);
+}
+
+.costs-custom-range span {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.costs-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.costs-summary-card {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.costs-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.costs-summary-label {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.costs-summary-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.costs-summary-budget {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
+.costs-summary-bar-wrap {
+  width: 100%;
+  height: 0.5rem;
+  background: var(--muted);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.costs-summary-bar {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.15s, background-color 0.15s;
+}
+
+.costs-summary-bar._green {
+  background: #4ade80;
+}
+
+.costs-summary-bar._yellow {
+  background: #facc15;
+}
+
+.costs-summary-bar._red {
+  background: #f87171;
+}
+
+.costs-charts-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .costs-charts-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.costs-panels-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .costs-panels-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.costs-panel {
+  padding: 1rem;
+}
+
+.costs-panel-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.costs-panel-empty {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.costs-by-agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.costs-by-agent-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  font-size: 0.875rem;
+}
+
+.costs-by-agent-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.costs-by-agent-right {
+  text-align: right;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.costs-by-agent-amount {
+  font-weight: 500;
+  display: block;
+}
+
+.costs-by-agent-tokens {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  display: block;
+}
+
+.costs-by-agent-runs {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  display: block;
+}
+
+.costs-by-project-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.875rem;
+}
+
+.costs-by-project-row span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.costs-by-project-row .costs-by-agent-amount {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}

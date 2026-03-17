@@ -1,4 +1,3 @@
-import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type IdentitySize = "xs" | "sm" | "default" | "lg";
@@ -17,23 +16,18 @@ function deriveInitials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-const textSize: Record<IdentitySize, string> = {
-  xs: "text-sm",
-  sm: "text-xs",
-  default: "text-sm",
-  lg: "text-sm",
-};
-
 export function Identity({ name, avatarUrl, initials, size = "default", className }: IdentityProps) {
   const displayInitials = initials ?? deriveInitials(name);
 
   return (
-    <span className={cn("inline-flex gap-1.5", size === "xs" ? "items-baseline gap-1" : "items-center", size === "lg" && "gap-2", className)}>
-      <Avatar size={size} className={size === "xs" ? "relative -top-px" : undefined}>
+    <span
+      className={["ui-identity", size === "xs" && "size-xs", size === "sm" && "size-sm", size === "lg" && "size-lg", className].filter(Boolean).join(" ")}
+    >
+      <Avatar size={size} className={size === "xs" ? "ui-identity-avatar-offset" : undefined}>
         {avatarUrl && <AvatarImage src={avatarUrl} alt={name} />}
         <AvatarFallback>{displayInitials}</AvatarFallback>
       </Avatar>
-      <span className={cn("truncate", textSize[size])}>{name}</span>
+      <span className="ui-identity-name">{name}</span>
     </span>
-  );
+  )
 }

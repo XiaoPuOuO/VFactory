@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Paperclip, Plus } from "lucide-react";
-import { useQueries } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import {
   DndContext,
   closestCenter,
@@ -18,11 +18,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useCompany } from "../context/CompanyContext";
 import { useDialog } from "../context/DialogContext";
-import { cn } from "../lib/utils";
 import { queryKeys } from "../lib/queryKeys";
+import { meApi } from "../api/me";
 import { sidebarBadgesApi } from "../api/sidebarBadges";
 import { heartbeatsApi } from "../api/heartbeats";
-import { useLocation, useNavigate } from "@/lib/router";
+import { Link, useLocation, useNavigate } from "@/lib/router";
 import {
   Tooltip,
   TooltipContent,
@@ -97,7 +97,7 @@ function SortableCompanyItem({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="overflow-visible">
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="board-rail-item-wrap">
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <a
@@ -106,41 +106,26 @@ function SortableCompanyItem({
               e.preventDefault();
               onSelect();
             }}
-            className="relative flex items-center justify-center group overflow-visible"
+            className="board-rail-item-link"
           >
-            {/* Selection indicator pill */}
             <div
-              className={cn(
-                "absolute left-[-14px] w-1 rounded-r-full bg-foreground transition-[height] duration-150",
-                isSelected
-                  ? "h-5"
-                  : "h-0 group-hover:h-2"
-              )}
+              className={["board-rail-item-pill", isSelected && "selected"].filter(Boolean).join(" ")}
+              aria-hidden
             />
             <div
-              className={cn("relative overflow-visible transition-transform duration-150", isDragging && "scale-105")}
+              className={["board-rail-item-icon-wrap", isDragging && "dragging", isDragging && "shadow", isSelected ? "rounded-sm" : "rounded-lg"].filter(Boolean).join(" ")}
             >
               <CompanyPatternIcon
                 companyName={company.name}
                 brandColor={company.brandColor}
-                className={cn(
-                  isSelected
-                    ? "rounded-[14px]"
-                    : "rounded-[22px] group-hover:rounded-[14px]",
-                  isDragging && "shadow-lg",
-                )}
+                className={isSelected ? "rounded-sm" : "rounded-lg"}
               />
               {hasLiveAgents && (
-                <span className="pointer-events-none absolute -right-0.5 -top-0.5 z-10">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-blue-400 opacity-80" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500 ring-2 ring-background" />
-                  </span>
+                <span className="board-rail-live-dot">
+                  <span className="board-rail-live-dot-ping" />
                 </span>
               )}
-              {hasUnreadInbox && (
-                <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 z-10 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-background" />
-              )}
+              {hasUnreadInbox && <span className="board-rail-inbox-dot" aria-hidden />}
             </div>
           </a>
         </TooltipTrigger>
@@ -223,6 +208,13 @@ export function CompanyRail() {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
+  const { data: meProfile } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => meApi.get(),
+    retry: false,
+  });
+  const showAddCompanyButton = Boolean(meProfile?.canCreateCompany);
+
   // Re-derive when companies change (new company added/removed)
   const orderedCompanies = useMemo(() => {
     const byId = new Map(sidebarCompanies.map((c) => [c.id, c]));
@@ -266,14 +258,25 @@ export function CompanyRail() {
   );
 
   return (
-    <div className="flex flex-col items-center w-[72px] shrink-0 h-full bg-background border-r border-border">
-      {/* Paperclip icon - aligned with top sections (implied line, no visible border) */}
-      <div className="flex items-center justify-center h-12 w-full shrink-0">
-        <Paperclip className="h-5 w-5 text-foreground" />
+    <div className="board-rail">
+      <div className="board-rail-logo-wrap">
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Link
+              to="/landing"
+              className="board-rail-logo-link"
+              aria-label="VFactory Home"
+            >
+              <Paperclip className="board-rail-logo-icon" />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>
+            <p>VFactory Home</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
-      {/* Company list */}
-      <div className="flex-1 flex flex-col items-center gap-2 py-3 w-full overflow-y-auto overflow-x-hidden scrollbar-none">
+      <div className="board-rail-list">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -302,26 +305,27 @@ export function CompanyRail() {
         </DndContext>
       </div>
 
-      {/* Separator before add button */}
-      <div className="w-8 h-px bg-border mx-auto shrink-0" />
+      <div className="board-rail-sep" />
 
-      {/* Add company button */}
-      <div className="flex items-center justify-center py-2 shrink-0">
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => openOnboarding()}
-              className="flex items-center justify-center w-11 h-11 rounded-[22px] hover:rounded-[14px] border-2 border-dashed border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-[border-color,color,border-radius] duration-150"
-              aria-label="Add company"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8}>
-            <p>Add company</p>
-          </TooltipContent>
-        </Tooltip>
-      </div>
+      {showAddCompanyButton && (
+        <div className="board-rail-add-wrap">
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => openOnboarding()}
+                className="board-rail-add-btn"
+                aria-label="Add company"
+              >
+                <Plus className="board-rail-add-btn-icon" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              <p>Add company</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 }

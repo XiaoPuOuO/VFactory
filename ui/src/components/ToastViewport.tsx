@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "@/lib/router";
 import { X } from "lucide-react";
 import { useToast, type ToastItem, type ToastTone } from "../context/ToastContext";
 import { cn } from "../lib/utils";
 
 const toneClasses: Record<ToastTone, string> = {
-  info: "border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-500/25 dark:bg-sky-950/60 dark:text-sky-100",
-  success: "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/25 dark:bg-emerald-950/60 dark:text-emerald-100",
-  warn: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/25 dark:bg-amber-950/60 dark:text-amber-100",
-  error: "border-red-300 bg-red-50 text-red-900 dark:border-red-500/30 dark:bg-red-950/60 dark:text-red-100",
+  info: "border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-500/25 dark:bg-sky-950 dark:text-sky-100",
+  success: "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/25 dark:bg-emerald-950 dark:text-emerald-100",
+  warn: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/25 dark:bg-amber-950 dark:text-amber-100",
+  error: "border-red-300 bg-red-50 text-red-900 dark:border-red-500/30 dark:bg-red-950 dark:text-red-100",
 };
 
 const toneDotClasses: Record<ToastTone, string> = {
@@ -74,26 +75,33 @@ function AnimatedToast({
   );
 }
 
+/** 以 Portal 掛到 body，並用 data-toast-viewport 讓 index.css 套用最高 z-index 層，避免被側欄或 modal 遮擋。 */
 export function ToastViewport() {
   const { toasts, dismissToast } = useToast();
 
   if (toasts.length === 0) return null;
 
-  return (
-    <aside
-      aria-live="polite"
-      aria-atomic="false"
-      className="pointer-events-none fixed bottom-3 left-3 z-[120] w-full max-w-sm px-1"
-    >
-      <ol className="flex w-full flex-col-reverse gap-2">
-        {toasts.map((toast) => (
-          <AnimatedToast
-            key={toast.id}
-            toast={toast}
-            onDismiss={dismissToast}
-          />
-        ))}
-      </ol>
-    </aside>
+  const content = (
+    <div data-toast-viewport>
+      <aside
+        aria-live="polite"
+        aria-atomic="false"
+        className="pointer-events-none fixed bottom-3 left-3 w-full max-w-sm px-1"
+      >
+        <ol className="flex w-full flex-col-reverse gap-2">
+          {toasts.map((toast) => (
+            <AnimatedToast
+              key={toast.id}
+              toast={toast}
+              onDismiss={dismissToast}
+            />
+          ))}
+        </ol>
+      </aside>
+    </div>
   );
+
+  return typeof document !== "undefined"
+    ? createPortal(content, document.body)
+    : content;
 }

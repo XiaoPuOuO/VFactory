@@ -15,24 +15,24 @@ interface PageSkeletonProps {
 export function PageSkeleton({ variant = "list" }: PageSkeletonProps) {
   if (variant === "dashboard") {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-32 w-full border border-border" />
+      <div className="dashboard-skeleton-page">
+        <Skeleton className="dashboard-skeleton-banner" />
 
-        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        <div className="dashboard-skeleton-metrics">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full" />
+            <Skeleton key={i} className="dashboard-skeleton-metric" />
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="dashboard-skeleton-charts">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-44 w-full" />
+            <Skeleton key={i} className="dashboard-skeleton-chart" />
           ))}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Skeleton className="h-72 w-full" />
-          <Skeleton className="h-72 w-full" />
+        <div className="dashboard-skeleton-two-col">
+          <Skeleton className="dashboard-skeleton-block" />
+          <Skeleton className="dashboard-skeleton-block" />
         </div>
       </div>
     );
@@ -40,13 +40,13 @@ export function PageSkeleton({ variant = "list" }: PageSkeletonProps) {
 
   if (variant === "approvals") {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-9 w-44" />
+      <div className="approvals-skeleton">
+        <div className="approvals-skeleton-header">
+          <Skeleton className="approvals-skeleton-tab" />
         </div>
-        <div className="grid gap-3">
+        <div className="approvals-skeleton-grid">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-36 w-full" />
+            <Skeleton key={i} className="approvals-skeleton-card" />
           ))}
         </div>
       </div>
@@ -55,18 +55,18 @@ export function PageSkeleton({ variant = "list" }: PageSkeletonProps) {
 
   if (variant === "costs") {
     return (
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="costs-skeleton">
+        <div className="costs-skeleton-filters">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-9 w-28" />
+            <Skeleton key={i} className="costs-skeleton-filter" />
           ))}
         </div>
 
-        <Skeleton className="h-40 w-full" />
+        <Skeleton className="costs-skeleton-chart" />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Skeleton className="h-72 w-full" />
-          <Skeleton className="h-72 w-full" />
+        <div className="costs-skeleton-grid">
+          <Skeleton className="costs-skeleton-panel" />
+          <Skeleton className="costs-skeleton-panel" />
         </div>
       </div>
     );
@@ -74,19 +74,19 @@ export function PageSkeleton({ variant = "list" }: PageSkeletonProps) {
 
   if (variant === "inbox") {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-9 w-56" />
-          <Skeleton className="h-8 w-40" />
+      <div className="inbox-skeleton">
+        <div className="inbox-skeleton-header">
+          <Skeleton className="inbox-skeleton-tab" />
+          <Skeleton className="inbox-skeleton-filter" />
         </div>
 
-        <div className="space-y-5">
+        <div className="inbox-skeleton-body">
           {Array.from({ length: 3 }).map((_, section) => (
-            <div key={section} className="space-y-2">
-              <Skeleton className="h-4 w-40" />
-              <div className="space-y-1 border border-border">
+            <div key={section} className="inbox-skeleton-section">
+              <Skeleton className="inbox-skeleton-section-title" />
+              <div className="inbox-skeleton-section-rows">
                 {Array.from({ length: 3 }).map((_, row) => (
-                  <Skeleton key={row} className="h-14 w-full rounded-none" />
+                  <Skeleton key={row} />
                 ))}
               </div>
             </div>
@@ -98,38 +98,38 @@ export function PageSkeleton({ variant = "list" }: PageSkeletonProps) {
 
   if (variant === "org-chart") {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-[calc(100vh-4rem)] w-full rounded-lg border border-border" />
+      <div className="org-chart-skeleton">
+        <Skeleton className="org-chart-skeleton-map" />
       </div>
     );
   }
 
   if (variant === "detail") {
     return (
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <Skeleton className="h-3 w-64" />
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-6 w-6" />
-            <Skeleton className="h-6 w-6" />
-            <Skeleton className="h-7 w-48" />
+      <div className="detail-skeleton">
+        <div className="detail-skeleton-block">
+          <Skeleton className="detail-skeleton-line" />
+          <div className="detail-skeleton-meta">
+            <Skeleton className="detail-skeleton-meta-icon" />
+            <Skeleton className="detail-skeleton-meta-icon" />
+            <Skeleton className="detail-skeleton-meta-title" />
           </div>
-          <Skeleton className="h-4 w-40" />
+          <Skeleton className="detail-skeleton-label" />
         </div>
 
-        <div className="space-y-3">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-32 w-full" />
+        <div className="detail-skeleton-block">
+          <Skeleton className="detail-skeleton-card" />
+          <Skeleton className="detail-skeleton-card _h-32" />
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-24" />
-            <Skeleton className="h-8 w-24" />
-            <Skeleton className="h-8 w-24" />
+        <div className="detail-skeleton-block">
+          <div className="detail-skeleton-card-row">
+            <Skeleton className="detail-skeleton-card" />
+            <Skeleton className="detail-skeleton-card" />
+            <Skeleton className="detail-skeleton-card" />
           </div>
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+          <Skeleton className="detail-skeleton-card-block" />
+          <Skeleton className="detail-skeleton-card-block" />
         </div>
       </div>
     );
@@ -137,22 +137,22 @@ export function PageSkeleton({ variant = "list" }: PageSkeletonProps) {
 
   if (variant === "issues-list") {
     return (
-      <div className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Skeleton className="h-9 w-64" />
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-16" />
-            <Skeleton className="h-8 w-16" />
-            <Skeleton className="h-8 w-16" />
-            <Skeleton className="h-8 w-24" />
+      <div className="issues-list-skeleton">
+        <div className="issues-list-skeleton-header">
+          <Skeleton className="issues-list-skeleton-title" />
+          <div className="issues-list-skeleton-actions">
+            <Skeleton className="issues-list-skeleton-action" />
+            <Skeleton className="issues-list-skeleton-action" />
+            <Skeleton className="issues-list-skeleton-action" />
+            <Skeleton className="issues-list-skeleton-action _w-24" />
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-40" />
-          <div className="space-y-1">
+        <div className="detail-skeleton-block">
+          <Skeleton className="issues-list-skeleton-filter" />
+          <div className="issues-list-skeleton-rows">
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-11 w-full rounded-none" />
+              <Skeleton key={i} className="issues-list-skeleton-row" />
             ))}
           </div>
         </div>
@@ -161,18 +161,18 @@ export function PageSkeleton({ variant = "list" }: PageSkeletonProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <Skeleton className="h-9 w-44" />
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-8 w-20" />
-          <Skeleton className="h-8 w-24" />
+    <div className="list-skeleton">
+      <div className="list-skeleton-header">
+        <Skeleton className="list-skeleton-header-title" />
+        <div className="list-skeleton-actions">
+          <Skeleton className="list-skeleton-action _w-20" />
+          <Skeleton className="list-skeleton-action _w-24" />
         </div>
       </div>
 
-      <div className="space-y-1">
+      <div className="list-skeleton-rows">
         {Array.from({ length: 7 }).map((_, i) => (
-          <Skeleton key={i} className="h-11 w-full rounded-none" />
+          <Skeleton key={i} className="list-skeleton-row" />
         ))}
       </div>
     </div>

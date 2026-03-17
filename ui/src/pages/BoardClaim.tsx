@@ -5,6 +5,7 @@ import { accessApi } from "../api/access";
 import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
+import "./BoardClaim.css";
 
 export function BoardClaimPage() {
   const queryClient = useQueryClient();
@@ -41,19 +42,19 @@ export function BoardClaimPage() {
   });
 
   if (!token || !code) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-destructive">Invalid board claim URL.</div>;
+    return <div className="board-claim-page error">Invalid board claim URL.</div>;
   }
 
   if (statusQuery.isLoading || sessionQuery.isLoading) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Loading claim challenge...</div>;
+    return <div className="board-claim-page muted">Loading claim challenge...</div>;
   }
 
   if (statusQuery.error) {
     return (
-      <div className="mx-auto max-w-xl py-10">
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h1 className="text-lg font-semibold">Claim challenge unavailable</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <div className="board-claim-page">
+        <div className="board-claim-card">
+          <h1>Claim challenge unavailable</h1>
+          <p className="board-claim-card-desc">
             {statusQuery.error instanceof Error ? statusQuery.error.message : "Challenge is invalid or expired."}
           </p>
         </div>
@@ -63,18 +64,18 @@ export function BoardClaimPage() {
 
   const status = statusQuery.data;
   if (!status) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-destructive">Claim challenge unavailable.</div>;
+    return <div className="board-claim-page error">Claim challenge unavailable.</div>;
   }
 
   if (status.status === "claimed") {
     return (
-      <div className="mx-auto max-w-xl py-10">
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h1 className="text-lg font-semibold">Board ownership claimed</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <div className="board-claim-page">
+        <div className="board-claim-card">
+          <h1>Board ownership claimed</h1>
+          <p className="board-claim-card-desc">
             This instance is now linked to your authenticated user.
           </p>
-          <Button asChild className="mt-4">
+          <Button asChild className="board-claim-card-actions">
             <Link to="/">Open board</Link>
           </Button>
         </div>
@@ -84,13 +85,13 @@ export function BoardClaimPage() {
 
   if (!sessionQuery.data) {
     return (
-      <div className="mx-auto max-w-xl py-10">
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h1 className="text-lg font-semibold">Sign in required</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <div className="board-claim-page">
+        <div className="board-claim-card">
+          <h1>Sign in required</h1>
+          <p className="board-claim-card-desc">
             Sign in or create an account, then return to this page to claim Board ownership.
           </p>
-          <Button asChild className="mt-4">
+          <Button asChild className="board-claim-card-actions">
             <Link to={`/auth?next=${encodeURIComponent(currentPath)}`}>Sign in / Create account</Link>
           </Button>
         </div>
@@ -99,21 +100,21 @@ export function BoardClaimPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl py-10">
-      <div className="rounded-lg border border-border bg-card p-6">
-        <h1 className="text-xl font-semibold">Claim Board ownership</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+    <div className="board-claim-page">
+      <div className="board-claim-card">
+        <h1 className="lg">Claim Board ownership</h1>
+        <p className="board-claim-card-desc">
           This will promote your user to instance admin and migrate company ownership access from local trusted mode.
         </p>
 
         {claimMutation.error && (
-          <p className="mt-3 text-sm text-destructive">
+          <p className="board-claim-card-error">
             {claimMutation.error instanceof Error ? claimMutation.error.message : "Failed to claim board ownership"}
           </p>
         )}
 
         <Button
-          className="mt-5"
+          className="board-claim-card-actions cta"
           onClick={() => claimMutation.mutate()}
           disabled={claimMutation.isPending}
         >

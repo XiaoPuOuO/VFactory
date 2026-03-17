@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { CostByAgent } from "@paperclipai/shared";
 import type { CostByProject } from "../api/costs";
 import { ChartCard } from "./ActivityCharts";
@@ -10,12 +11,25 @@ const CHART_COLORS = {
 
 /**
  * Token usage by agent — horizontal stacked bar chart (input / output tokens).
+ * @param totalTokenSummary - 可選，顯示在標題右側的總消耗小字（依時間範圍）
  */
-export function TokenUsageByAgentChart({ data }: { data: CostByAgent[] }) {
+export function TokenUsageByAgentChart({
+  data,
+  totalTokenSummary,
+}: {
+  data: CostByAgent[];
+  totalTokenSummary?: string;
+}) {
+  const { t } = useTranslation("costs");
+
   if (data.length === 0) {
     return (
-      <ChartCard title="Token Usage (By Agent)" subtitle="Input / Output tokens">
-        <p className="text-xs text-muted-foreground">No usage data yet.</p>
+      <ChartCard
+        title={t("tokenUsageByAgent")}
+        subtitle={t("inputOutputTokens")}
+        titleRight={totalTokenSummary}
+      >
+        <p className="ui-cost-chart-empty">{t("noUsageDataYet")}</p>
       </ChartCard>
     );
   }
@@ -28,23 +42,27 @@ export function TokenUsageByAgentChart({ data }: { data: CostByAgent[] }) {
   const maxTotal = Math.max(...sorted.map((r) => r.totalTokens), 1);
 
   return (
-    <ChartCard title="Token Usage (By Agent)" subtitle="Input / Output tokens">
-      <div className="space-y-2">
-        {sorted.slice(0, 12).map((row, i) => {
+    <ChartCard
+      title={t("tokenUsageByAgent")}
+      subtitle={t("inputOutputTokens")}
+      titleRight={totalTokenSummary}
+    >
+      <div className="ui-cost-chart-list">
+        {sorted.slice(0, 12).map((row) => {
           const inPct = (row.inputTokens / maxTotal) * 100;
           const outPct = (row.outputTokens / maxTotal) * 100;
           const label = (row.agentName ?? row.agentId).slice(0, 20);
           return (
-            <div key={row.agentId} className="flex items-center gap-2 min-h-[24px]">
+            <div key={row.agentId} className="ui-cost-chart-row">
               <span
-                className="text-[10px] text-muted-foreground truncate shrink-0 w-24 tabular-nums"
+                className="ui-cost-chart-label"
                 title={row.agentName ?? row.agentId}
               >
                 {label}
               </span>
-              <div className="flex-1 flex h-5 min-w-0 rounded overflow-hidden bg-muted/40">
+              <div className="ui-cost-chart-bar-wrap">
                 <div
-                  className="h-full transition-[width] duration-200"
+                  className="ui-cost-chart-bar-segment"
                   style={{
                     width: `${inPct}%`,
                     minWidth: row.inputTokens > 0 ? 2 : 0,
@@ -53,7 +71,7 @@ export function TokenUsageByAgentChart({ data }: { data: CostByAgent[] }) {
                   title={`in: ${formatTokens(row.inputTokens)}`}
                 />
                 <div
-                  className="h-full transition-[width] duration-200"
+                  className="ui-cost-chart-bar-segment"
                   style={{
                     width: `${outPct}%`,
                     minWidth: row.outputTokens > 0 ? 2 : 0,
@@ -62,26 +80,26 @@ export function TokenUsageByAgentChart({ data }: { data: CostByAgent[] }) {
                   title={`out: ${formatTokens(row.outputTokens)}`}
                 />
               </div>
-              <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 w-16 text-right">
+              <span className="ui-cost-chart-value">
                 {formatTokens(row.totalTokens)}
               </span>
             </div>
           );
         })}
         {sorted.length > 12 && (
-          <p className="text-[10px] text-muted-foreground pt-1">
-            Top 12 of {sorted.length} agents
+          <p className="ui-cost-chart-footnote">
+            {t("topOfAgents", { top: 12, total: sorted.length })}
           </p>
         )}
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 pt-2 border-t border-border">
-        <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS.input }} />
-          Input tokens
+      <div className="ui-cost-chart-legend">
+        <span className="ui-cost-chart-legend-item">
+          <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.input }} />
+          {t("inputTokens")}
         </span>
-        <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS.output }} />
-          Output tokens
+        <span className="ui-cost-chart-legend-item">
+          <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.output }} />
+          {t("outputTokens")}
         </span>
       </div>
     </ChartCard>
@@ -90,12 +108,25 @@ export function TokenUsageByAgentChart({ data }: { data: CostByAgent[] }) {
 
 /**
  * Token usage by project — horizontal stacked bar chart (input / output tokens).
+ * @param totalTokenSummary - 可選，顯示在標題右側的總消耗小字（依時間範圍）
  */
-export function TokenUsageByProjectChart({ data }: { data: CostByProject[] }) {
+export function TokenUsageByProjectChart({
+  data,
+  totalTokenSummary,
+}: {
+  data: CostByProject[];
+  totalTokenSummary?: string;
+}) {
+  const { t } = useTranslation("costs");
+
   if (data.length === 0) {
     return (
-      <ChartCard title="Token Usage (By Project)" subtitle="Input / Output tokens">
-        <p className="text-xs text-muted-foreground">No project usage data yet.</p>
+      <ChartCard
+        title={t("tokenUsageByProject")}
+        subtitle={t("inputOutputTokens")}
+        titleRight={totalTokenSummary}
+      >
+        <p className="ui-cost-chart-empty">{t("noProjectUsageDataYet")}</p>
       </ChartCard>
     );
   }
@@ -108,23 +139,27 @@ export function TokenUsageByProjectChart({ data }: { data: CostByProject[] }) {
   const maxTotal = Math.max(...sorted.map((r) => r.totalTokens), 1);
 
   return (
-    <ChartCard title="Token Usage (By Project)" subtitle="Input / Output tokens">
-      <div className="space-y-2">
+    <ChartCard
+      title={t("tokenUsageByProject")}
+      subtitle={t("inputOutputTokens")}
+      titleRight={totalTokenSummary}
+    >
+      <div className="ui-cost-chart-list">
         {sorted.slice(0, 10).map((row) => {
           const inPct = (row.inputTokens / maxTotal) * 100;
           const outPct = (row.outputTokens / maxTotal) * 100;
-          const label = (row.projectName ?? row.projectId ?? "Unattributed").slice(0, 20);
+          const label = (row.projectName ?? row.projectId ?? t("unattributed")).slice(0, 20);
           return (
-            <div key={row.projectId ?? "na"} className="flex items-center gap-2 min-h-[24px]">
+            <div key={row.projectId ?? "na"} className="ui-cost-chart-row">
               <span
-                className="text-[10px] text-muted-foreground truncate shrink-0 w-24 tabular-nums"
-                title={row.projectName ?? row.projectId ?? "Unattributed"}
+                className="ui-cost-chart-label"
+                title={row.projectName ?? row.projectId ?? t("unattributed")}
               >
                 {label}
               </span>
-              <div className="flex-1 flex h-5 min-w-0 rounded overflow-hidden bg-muted/40">
+              <div className="ui-cost-chart-bar-wrap">
                 <div
-                  className="h-full transition-[width] duration-200"
+                  className="ui-cost-chart-bar-segment"
                   style={{
                     width: `${inPct}%`,
                     minWidth: row.inputTokens > 0 ? 2 : 0,
@@ -133,7 +168,7 @@ export function TokenUsageByProjectChart({ data }: { data: CostByProject[] }) {
                   title={`in: ${formatTokens(row.inputTokens)}`}
                 />
                 <div
-                  className="h-full transition-[width] duration-200"
+                  className="ui-cost-chart-bar-segment"
                   style={{
                     width: `${outPct}%`,
                     minWidth: row.outputTokens > 0 ? 2 : 0,
@@ -142,26 +177,26 @@ export function TokenUsageByProjectChart({ data }: { data: CostByProject[] }) {
                   title={`out: ${formatTokens(row.outputTokens)}`}
                 />
               </div>
-              <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 w-16 text-right">
+              <span className="ui-cost-chart-value">
                 {formatTokens(row.totalTokens)}
               </span>
             </div>
           );
         })}
         {sorted.length > 10 && (
-          <p className="text-[10px] text-muted-foreground pt-1">
-            Top 10 of {sorted.length} projects
+          <p className="ui-cost-chart-footnote">
+            {t("topOfProjects", { top: 10, total: sorted.length })}
           </p>
         )}
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 pt-2 border-t border-border">
-        <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS.input }} />
-          Input tokens
+      <div className="ui-cost-chart-legend">
+        <span className="ui-cost-chart-legend-item">
+          <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.input }} />
+          {t("inputTokens")}
         </span>
-        <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS.output }} />
-          Output tokens
+        <span className="ui-cost-chart-legend-item">
+          <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.output }} />
+          {t("outputTokens")}
         </span>
       </div>
     </ChartCard>
@@ -172,11 +207,12 @@ export function TokenUsageByProjectChart({ data }: { data: CostByProject[] }) {
  * Subscription runs by agent — horizontal bar chart.
  */
 export function SubscriptionRunsByAgentChart({ data }: { data: CostByAgent[] }) {
+  const { t } = useTranslation("costs");
   const withRuns = data.filter((r) => r.subscriptionRunCount > 0);
   if (withRuns.length === 0) {
     return (
-      <ChartCard title="Subscription Runs (By Agent)" subtitle="Subscription runs">
-        <p className="text-xs text-muted-foreground">No subscription run data yet.</p>
+      <ChartCard title={t("subscriptionRunsByAgent")} subtitle={t("subscriptionRuns")}>
+        <p className="ui-cost-chart-empty">{t("noSubscriptionRunDataYet")}</p>
       </ChartCard>
     );
   }
@@ -185,22 +221,22 @@ export function SubscriptionRunsByAgentChart({ data }: { data: CostByAgent[] }) 
   const maxRuns = Math.max(...sorted.map((r) => r.subscriptionRunCount), 1);
 
   return (
-    <ChartCard title="Subscription Runs (By Agent)" subtitle="Subscription runs">
-      <div className="space-y-2">
+    <ChartCard title={t("subscriptionRunsByAgent")} subtitle={t("subscriptionRuns")}>
+      <div className="ui-cost-chart-list">
         {sorted.slice(0, 12).map((row) => {
           const pct = (row.subscriptionRunCount / maxRuns) * 100;
           const label = (row.agentName ?? row.agentId).slice(0, 20);
           return (
-            <div key={row.agentId} className="flex items-center gap-2 min-h-[24px]">
+            <div key={row.agentId} className="ui-cost-chart-row">
               <span
-                className="text-[10px] text-muted-foreground truncate shrink-0 w-24"
+                className="ui-cost-chart-label"
                 title={row.agentName ?? row.agentId}
               >
                 {label}
               </span>
-              <div className="flex-1 h-5 min-w-0 rounded overflow-hidden bg-muted/40">
+              <div className="ui-cost-chart-bar-wrap">
                 <div
-                  className="h-full rounded transition-[width] duration-200"
+                  className="ui-cost-chart-bar-segment"
                   style={{
                     width: `${pct}%`,
                     minWidth: row.subscriptionRunCount > 0 ? 4 : 0,
@@ -209,7 +245,7 @@ export function SubscriptionRunsByAgentChart({ data }: { data: CostByAgent[] }) 
                   title={`${row.subscriptionRunCount} runs`}
                 />
               </div>
-              <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 w-8 text-right">
+              <span className="ui-cost-chart-value narrow">
                 {row.subscriptionRunCount}
               </span>
             </div>

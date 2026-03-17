@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { AdapterConfigFieldsProps } from "../types";
 import {
   Field,
@@ -24,12 +25,13 @@ export function CodexLocalConfigFields({
   mark,
   models,
 }: AdapterConfigFieldsProps) {
+  const { t } = useTranslation("agents");
   const bypassEnabled =
     config.dangerouslyBypassApprovalsAndSandbox === true || config.dangerouslyBypassSandbox === true;
 
   return (
     <>
-      <Field label="Agent instructions file" hint={instructionsFileHint}>
+      <Field label={t("agentInstructionsFile")} hint={instructionsFileHint}>
         <div className="flex items-center gap-2">
           <DraftInput
             value={

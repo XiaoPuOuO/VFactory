@@ -1,0 +1,156 @@
+/**
+ * ProjectDetail 頁面 — 原生 CSS（無 Tailwind）
+ */
+.project-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.project-detail-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.project-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.project-detail-icon-btn {
+  flex-shrink: 0;
+  border-radius: 14px;
+  width: 2.75rem;
+  height: 2.75rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+
+.project-detail-icon-btn:hover {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--foreground) 20%, transparent);
+}
+
+.project-detail-icon-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--foreground) 30%, transparent);
+}
+
+.project-detail-icon-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.project-detail-title-wrap {
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 0%;
+}
+
+.project-detail-title-wrap .project-detail-title-inline {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.project-detail-config-wrap {
+  max-width: 56rem;
+}
+
+/* Overview tab */
+.project-detail-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.project-detail-overview .project-detail-overview-desc {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.project-detail-overview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .project-detail-overview-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.project-detail-overview-grid .project-detail-overview-label {
+  color: var(--muted-foreground);
+}
+
+.project-detail-overview-grid .project-detail-overview-value {
+  margin-top: 0.25rem;
+}
+
+/* Color picker */
+.project-detail-color-picker-wrap {
+  position: relative;
+}
+
+.project-detail-color-trigger {
+  flex-shrink: 0;
+  height: 1.25rem;
+  width: 1.25rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+
+.project-detail-color-trigger:hover {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--foreground) 20%, transparent);
+}
+
+.project-detail-color-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  z-index: 50;
+  width: max-content;
+}
+
+.project-detail-color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.375rem;
+}
+
+.project-detail-color-swatch {
+  height: 1.5rem;
+  width: 1.5rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.project-detail-color-swatch:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--foreground) 30%, transparent);
+}
+
+.project-detail-color-swatch.selected {
+  box-shadow: 0 0 0 2px var(--foreground);
+  outline: 1px solid var(--background);
+  outline-offset: 1px;
+}

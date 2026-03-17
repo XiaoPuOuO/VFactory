@@ -35,6 +35,10 @@ export interface Project {
   leadAgentId: string | null;
   targetDate: string | null;
   color: string | null;
+  /** 專案圖示 asset id；若有則顯示上傳圖，否則以 color 顯示色塊。 */
+  iconAssetId: string | null;
+  /** API 回傳：圖示圖片 URL（/api/assets/:id/content），僅在 iconAssetId 有值時存在。 */
+  iconContentPath?: string | null;
   executionWorkspacePolicy: ProjectExecutionWorkspacePolicy | null;
   workspaces: ProjectWorkspace[];
   primaryWorkspace: ProjectWorkspace | null;

@@ -1,37 +1,27 @@
 # Deployment Modes
 
-Status: Canonical deployment and auth mode model  
+Status: Authenticated-only deployment model  
 Date: 2026-02-23
 
 ## 1. Purpose
 
-Paperclip supports two runtime modes:
-
-1. `local_trusted`
-2. `authenticated`
+Paperclip runs in **authenticated** mode only. All human access requires login (Better Auth sessions).
 
 `authenticated` supports two exposure policies:
 
 1. `private`
 2. `public`
 
-This keeps one authenticated auth stack while still separating low-friction private-network defaults from internet-facing hardening requirements.
+This keeps one auth stack while separating low-friction private-network defaults from internet-facing hardening requirements.
 
 ## 2. Canonical Model
 
 | Runtime Mode | Exposure | Human auth | Primary use |
 |---|---|---|---|
-| `local_trusted` | n/a | No login required | Single-operator local machine workflow |
-| `authenticated` | `private` | Login required | Private-network access (for example Tailscale/VPN/LAN) |
+| `authenticated` | `private` | Login required | Private-network access (for example Tailscale/VPN/LAN) or local dev |
 | `authenticated` | `public` | Login required | Internet-facing/cloud deployment |
 
 ## 3. Security Policy
-
-## `local_trusted`
-
-- loopback-only host binding
-- no human login flow
-- optimized for fastest local startup
 
 ## `authenticated + private`
 
@@ -55,14 +45,9 @@ pnpm paperclipai onboard
 
 Server prompt behavior:
 
-1. ask mode, default `local_trusted`
-2. option copy:
-- `local_trusted`: "Easiest for local setup (no login, localhost-only)"
-- `authenticated`: "Login required; use for private network or public hosting"
-3. if `authenticated`, ask exposure:
-- `private`: "Private network access (for example Tailscale), lower setup friction"
-- `public`: "Internet-facing deployment, stricter security requirements"
-4. ask explicit public URL only for `authenticated + public`
+1. deployment mode is always `authenticated`
+2. ask exposure: `private` or `public`
+3. ask explicit public URL only for `public` exposure
 
 `configure --section server` follows the same interactive behavior.
 
@@ -88,29 +73,35 @@ Required integration points:
 
 This is required because user assignment paths validate active membership for `assigneeUserId`.
 
-## 7. Local Trusted -> Authenticated Claim Flow
+## 6.1 Multi-tenant (SaaS) and tenant resolution
 
-When running `authenticated` mode, if the only instance admin is `local-board`, Paperclip emits a startup warning with a one-time high-entropy claim URL.
+When running in SaaS multi-tenant mode, every request is scoped to a tenant. Tenant is resolved in this order:
+
+1. **Header** `X-Tenant-Slug` or `X-Tenant-ID` — API and agent clients send the current tenant.
+2. **Default** — If no header is sent, the server uses the configured default tenant slug (e.g. `default`).
+
+Board users must have a `tenant_memberships` row for the resolved tenant to see companies and data. Instance admins can access all tenants. See `doc/SPEC-implementation.md` for the data model.
+
+## 7. Board Claim (First Instance Admin)
+
+When no instance admin exists, Paperclip can emit a startup warning with a one-time high-entropy claim URL.
 
 - URL format: `/board-claim/<token>?code=<code>`
 - intended use: signed-in human claims board ownership
 - claim action:
   - promotes current signed-in user to `instance_admin`
-  - demotes `local-board` admin role
   - ensures active owner membership for the claiming user across existing companies
-
-This prevents lockout when a user migrates from long-running local trusted usage to authenticated mode.
 
 ## 8. Current Code Reality (As Of 2026-02-23)
 
-- runtime values are `local_trusted | authenticated`
-- `authenticated` uses Better Auth sessions and bootstrap invite flow
-- `local_trusted` ensures a real local Board user principal in `authUsers` with `instance_user_roles` admin access
+- runtime mode is `authenticated` only
+- Better Auth sessions and bootstrap invite flow
 - company creation ensures creator membership in `company_memberships` so user assignment/access flows remain consistent
+- tenant resolution middleware sets `req.tenantId` / `req.tenantSlug` from header or default; board actor `companyIds` are filtered by tenant; `tenant_memberships` restricts which users can access which tenant
 
 ## 9. Naming and Compatibility Policy
 
-- canonical naming is `local_trusted` and `authenticated` with `private/public` exposure
+- canonical naming is `authenticated` with `private/public` exposure
 - no long-term compatibility alias layer for discarded naming variants
 
 ## 10. Relationship to Other Docs

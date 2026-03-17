@@ -5,14 +5,13 @@ import type { Db } from "@paperclipai/db";
 import { agents as agentsTable, companies, heartbeatRuns } from "@paperclipai/db";
 import { and, desc, eq, inArray, not, sql } from "drizzle-orm";
 import {
+  addAgentMemorySchema,
   createAgentKeySchema,
   createAgentHireSchema,
   createAgentSchema,
-  deriveAgentUrlKey,
   isUuidLike,
   resetAgentSessionSchema,
   testAdapterEnvironmentSchema,
-  type InstanceSchedulerHeartbeatAgent,
   updateAgentPermissionsSchema,
   updateAgentInstructionsPathSchema,
   wakeAgentSchema,
@@ -20,18 +19,22 @@ import {
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import {
+  agentMemoriesService,
   agentService,
   accessService,
   approvalService,
+  companyService,
   heartbeatService,
   issueApprovalService,
   issueService,
   logActivity,
   secretService,
 } from "../services/index.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
 import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
-import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
+import { assertBoard, assertCompanyAccess, getActorInfo, hasCompanyViewAll } from "./authz.js";
 import { findServerAdapter, listAdapterModels } from "../adapters/index.js";
+import { testCloudConnection, isCloudAdapter } from "../adapters/cloud-connection-test.js";
 import { redactEventPayload } from "../redaction.js";
 import { redactCurrentUserValue } from "../log-redaction.js";
 import { runClaudeLogin } from "@paperclipai/adapter-claude-local/server";
@@ -46,8 +49,11 @@ import { ensureOpenCodeModelConfiguredAndAvailable } from "@paperclipai/adapter-
 export function agentRoutes(db: Db) {
   const DEFAULT_INSTRUCTIONS_PATH_KEYS: Record<string, string> = {
     claude_local: "instructionsFilePath",
+    claude_remote: "instructionsFilePath",
     codex_local: "instructionsFilePath",
+    codex_remote: "instructionsFilePath",
     gemini_local: "instructionsFilePath",
+    gemini_remote: "instructionsFilePath",
     opencode_local: "instructionsFilePath",
     cursor: "instructionsFilePath",
   };
@@ -56,6 +62,7 @@ export function agentRoutes(db: Db) {
   const router = Router();
   const svc = agentService(db);
   const access = accessService(db);
+  const memoriesSvc = agentMemoriesService(db);
   const approvalsSvc = approvalService(db);
   const heartbeat = heartbeatService(db);
   const issueApprovalsSvc = issueApprovalService(db);
@@ -68,9 +75,10 @@ export function agentRoutes(db: Db) {
   }
 
   async function assertCanCreateAgentsForCompany(req: Request, companyId: string) {
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "banned") throw forbidden("Account banned");
     if (req.actor.type === "board") {
-      if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) return null;
+      if (hasCompanyViewAll(req)) return null;
       const allowed = await access.canUser(companyId, req.actor.userId, "agents:create");
       if (!allowed) {
         throw forbidden("Missing permission: agents:create");
@@ -94,9 +102,10 @@ export function agentRoutes(db: Db) {
   }
 
   async function actorCanReadConfigurationsForCompany(req: Request, companyId: string) {
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "banned") return false;
     if (req.actor.type === "board") {
-      if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) return true;
+      if (hasCompanyViewAll(req)) return true;
       return access.canUser(companyId, req.actor.userId, "agents:create");
     }
     if (!req.actor.agentId) return false;
@@ -107,7 +116,8 @@ export function agentRoutes(db: Db) {
   }
 
   async function assertCanUpdateAgent(req: Request, targetAgent: { id: string; companyId: string }) {
-    assertCompanyAccess(req, targetAgent.companyId);
+    await assertCompanyAccess(req, targetAgent.companyId, db);
+    if (req.actor.type === "banned") throw forbidden("Account banned");
     if (req.actor.type === "board") return;
     if (!req.actor.agentId) throw forbidden("Agent authentication required");
 
@@ -135,7 +145,7 @@ export function agentRoutes(db: Db) {
         ? companyIdQuery.trim()
         : null;
     if (requestedCompanyId) {
-      assertCompanyAccess(req, requestedCompanyId);
+      await assertCompanyAccess(req, requestedCompanyId, db);
       return requestedCompanyId;
     }
     if (req.actor.type === "agent" && req.actor.companyId) {
@@ -211,14 +221,6 @@ export function agentRoutes(db: Db) {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  function parseSchedulerHeartbeatPolicy(runtimeConfig: unknown) {
-    const heartbeat = asRecord(asRecord(runtimeConfig)?.heartbeat) ?? {};
-    return {
-      enabled: parseBooleanLike(heartbeat.enabled) ?? true,
-      intervalSec: Math.max(0, parseNumberLike(heartbeat.intervalSec) ?? 0),
-    };
-  }
-
   function generateEd25519PrivateKeyPem(): string {
     const { privateKey } = generateKeyPairSync("ed25519");
     return privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -240,7 +242,7 @@ export function agentRoutes(db: Db) {
     adapterConfig: Record<string, unknown>,
   ): Record<string, unknown> {
     const next = { ...adapterConfig };
-    if (adapterType === "codex_local") {
+    if (adapterType === "codex_local" || adapterType === "codex_remote") {
       if (!asNonEmptyString(next.model)) {
         next.model = DEFAULT_CODEX_LOCAL_MODEL;
       }
@@ -252,7 +254,7 @@ export function agentRoutes(db: Db) {
       }
       return ensureGatewayDeviceKey(adapterType, next);
     }
-    if (adapterType === "gemini_local" && !asNonEmptyString(next.model)) {
+    if ((adapterType === "gemini_local" || adapterType === "gemini_remote") && !asNonEmptyString(next.model)) {
       next.model = DEFAULT_GEMINI_LOCAL_MODEL;
       return ensureGatewayDeviceKey(adapterType, next);
     }
@@ -261,6 +263,93 @@ export function agentRoutes(db: Db) {
       next.model = DEFAULT_CURSOR_LOCAL_MODEL;
     }
     return ensureGatewayDeviceKey(adapterType, next);
+  }
+
+  /** Only remote adapters require API Key; local adapters must not set it. */
+  const NON_ADMIN_API_KEY_KEYS: Record<string, string[]> = {
+    claude_remote: ["ANTHROPIC_API_KEY"],
+    codex_remote: ["OPENAI_API_KEY"],
+    gemini_remote: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+  };
+
+  /** For local adapters, strip these env keys on persist so API Key is never stored. */
+  const LOCAL_ADAPTER_STRIP_ENV_KEYS: Record<string, string[]> = {
+    claude_local: ["ANTHROPIC_API_KEY"],
+    codex_local: ["OPENAI_API_KEY"],
+    gemini_local: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+  };
+
+  function envHasApiKeySet(env: unknown, keys: string[]): boolean {
+    const record = asRecord(env);
+    if (!record) return false;
+    for (const key of keys) {
+      const binding = record[key];
+      if (binding === undefined || binding === null) continue;
+      if (typeof binding === "string") {
+        if (binding.trim() !== "") return true;
+        continue;
+      }
+      if (typeof binding === "object" && binding !== null) {
+        const o = binding as Record<string, unknown>;
+        if (o.type === "plain" && typeof o.value === "string" && o.value.trim() !== "") return true;
+        if (o.type === "secret_ref" && typeof o.secretId === "string" && o.secretId.trim() !== "") return true;
+      }
+    }
+    return false;
+  }
+
+  async function assertAdapterAllowed(companyId: string, req: Request, adapterType: string | null | undefined) {
+    if (!adapterType) return;
+    const allowed = await access.getAllowedAdapterTypes(
+      companyId,
+      req.actor.type === "board" ? req.actor.userId : null,
+      hasCompanyViewAll(req),
+    );
+    if (!allowed.includes(adapterType)) {
+      throw forbidden(
+        "You do not have permission to use this adapter type in this company. Required permission: model.<adapter> (e.g. model.claude.remote).",
+      );
+    }
+  }
+
+  /** Remove API Key env keys from adapterConfig for local adapters so they are never persisted. */
+  function stripLocalAdapterApiKeys(
+    adapterType: string | null | undefined,
+    adapterConfig: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const keysToStrip = adapterType ? LOCAL_ADAPTER_STRIP_ENV_KEYS[adapterType] : undefined;
+    if (!keysToStrip?.length || !Object.prototype.hasOwnProperty.call(adapterConfig, "env")) {
+      return adapterConfig;
+    }
+    const env = asRecord(adapterConfig.env);
+    if (!env) return adapterConfig;
+    const nextEnv = { ...env };
+    let changed = false;
+    for (const key of keysToStrip) {
+      if (key in nextEnv) {
+        delete nextEnv[key];
+        changed = true;
+      }
+    }
+    if (!changed) return adapterConfig;
+    return { ...adapterConfig, env: nextEnv };
+  }
+
+  function assertNonAdminApiKeyRequired(
+    adapterType: string | null | undefined,
+    adapterConfig: Record<string, unknown>,
+    req: Request,
+  ) {
+    if (hasCompanyViewAll(req)) return;
+    const keys = adapterType ? NON_ADMIN_API_KEY_KEYS[adapterType] : undefined;
+    if (!keys) return;
+    const env = asRecord(adapterConfig.env);
+    if (!envHasApiKeySet(env, keys)) {
+      const keyNames = keys.join(" or ");
+      throw unprocessable(
+        `Non-admin users must set ${keyNames} in adapter environment (adapterConfig.env) for this adapter.`,
+      );
+    }
   }
 
   async function assertAdapterConfigConstraints(
@@ -301,7 +390,8 @@ export function agentRoutes(db: Db) {
   }
 
   async function assertCanManageInstructionsPath(req: Request, targetAgent: { id: string; companyId: string }) {
-    assertCompanyAccess(req, targetAgent.companyId);
+    await assertCompanyAccess(req, targetAgent.companyId, db);
+    if (req.actor.type === "banned") throw forbidden("Account banned");
     if (req.actor.type === "board") return;
     if (!req.actor.agentId) throw forbidden("Agent authentication required");
 
@@ -417,7 +507,7 @@ export function agentRoutes(db: Db) {
 
   router.get("/companies/:companyId/adapters/:type/models", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const type = req.params.type as string;
     const models = await listAdapterModels(type);
     res.json(models);
@@ -449,6 +539,12 @@ export function agentRoutes(db: Db) {
         normalizedAdapterConfig,
       );
 
+      if (isCloudAdapter(type)) {
+        const result = await testCloudConnection(type, runtimeAdapterConfig);
+        res.json(result);
+        return;
+      }
+
       const result = await adapter.testEnvironment({
         companyId,
         adapterType: type,
@@ -461,7 +557,7 @@ export function agentRoutes(db: Db) {
 
   router.get("/companies/:companyId/agents", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const result = await svc.list(companyId);
     const canReadConfigs = await actorCanReadConfigurationsForCompany(req, companyId);
     if (canReadConfigs || req.actor.type === "board") {
@@ -471,84 +567,9 @@ export function agentRoutes(db: Db) {
     res.json(result.map((agent) => redactForRestrictedAgentView(agent)));
   });
 
-  router.get("/instance/scheduler-heartbeats", async (req, res) => {
-    assertBoard(req);
-
-    const accessConditions = [];
-    if (req.actor.source !== "local_implicit" && !req.actor.isInstanceAdmin) {
-      const allowedCompanyIds = req.actor.companyIds ?? [];
-      if (allowedCompanyIds.length === 0) {
-        res.json([]);
-        return;
-      }
-      accessConditions.push(inArray(agentsTable.companyId, allowedCompanyIds));
-    }
-
-    const rows = await db
-      .select({
-        id: agentsTable.id,
-        companyId: agentsTable.companyId,
-        agentName: agentsTable.name,
-        role: agentsTable.role,
-        title: agentsTable.title,
-        status: agentsTable.status,
-        adapterType: agentsTable.adapterType,
-        runtimeConfig: agentsTable.runtimeConfig,
-        lastHeartbeatAt: agentsTable.lastHeartbeatAt,
-        companyName: companies.name,
-        companyIssuePrefix: companies.issuePrefix,
-      })
-      .from(agentsTable)
-      .innerJoin(companies, eq(agentsTable.companyId, companies.id))
-      .where(accessConditions.length > 0 ? and(...accessConditions) : undefined)
-      .orderBy(companies.name, agentsTable.name);
-
-    const items: InstanceSchedulerHeartbeatAgent[] = rows
-      .map((row) => {
-        const policy = parseSchedulerHeartbeatPolicy(row.runtimeConfig);
-        const statusEligible =
-          row.status !== "paused" &&
-          row.status !== "terminated" &&
-          row.status !== "pending_approval";
-
-        return {
-          id: row.id,
-          companyId: row.companyId,
-          companyName: row.companyName,
-          companyIssuePrefix: row.companyIssuePrefix,
-          agentName: row.agentName,
-          agentUrlKey: deriveAgentUrlKey(row.agentName, row.id),
-          role: row.role as InstanceSchedulerHeartbeatAgent["role"],
-          title: row.title,
-          status: row.status as InstanceSchedulerHeartbeatAgent["status"],
-          adapterType: row.adapterType,
-          intervalSec: policy.intervalSec,
-          heartbeatEnabled: policy.enabled,
-          schedulerActive: statusEligible && policy.enabled && policy.intervalSec > 0,
-          lastHeartbeatAt: row.lastHeartbeatAt,
-        };
-      })
-      .filter((item) =>
-        item.intervalSec > 0 &&
-        item.status !== "paused" &&
-        item.status !== "terminated" &&
-        item.status !== "pending_approval",
-      )
-      .sort((left, right) => {
-        if (left.schedulerActive !== right.schedulerActive) {
-          return left.schedulerActive ? -1 : 1;
-        }
-        const companyOrder = left.companyName.localeCompare(right.companyName);
-        if (companyOrder !== 0) return companyOrder;
-        return left.agentName.localeCompare(right.agentName);
-      });
-
-    res.json(items);
-  });
-
   router.get("/companies/:companyId/org", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const tree = await svc.orgForCompany(companyId);
     const leanTree = tree.map((node) => toLeanOrgNode(node as Record<string, unknown>));
     res.json(leanTree);
@@ -575,6 +596,94 @@ export function agentRoutes(db: Db) {
     res.json({ ...agent, chainOfCommand });
   });
 
+  /** Agent 寫入一筆跨聊天記憶（僅該 agent 的 Bearer 可呼叫）。 */
+  router.post(
+    "/companies/:companyId/agents/me/memories",
+    validate(addAgentMemorySchema),
+    async (req, res) => {
+      if (req.actor.type !== "agent" || !req.actor.agentId) {
+        res.status(401).json({ error: "Agent authentication required" });
+        return;
+      }
+      const companyId = req.params.companyId as string;
+      await assertCompanyAccess(req, companyId, db);
+      const agent = await svc.getById(req.actor.agentId);
+      if (!agent || agent.companyId !== companyId) {
+        res.status(403).json({ error: "Agent key cannot access another company" });
+        return;
+      }
+      const body = req.body as { content: string; sourceRoomId?: string | null };
+      const memory = await memoriesSvc.add(
+        companyId,
+        agent.id,
+        body.content,
+        body.sourceRoomId ?? null,
+      );
+      res.status(201).json(memory);
+    },
+  );
+
+  /** 列出該 agent 的跨聊天記憶（board 或 agent 本人；agentId 可為 "me" 表示本人）。 */
+  router.get("/companies/:companyId/agents/:agentId/memories", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    let agentId = req.params.agentId as string;
+    await assertCompanyAccess(req, companyId, db);
+    if (agentId === "me") {
+      if (req.actor.type !== "agent" || !req.actor.agentId) {
+        res.status(401).json({ error: "Agent authentication required" });
+        return;
+      }
+      agentId = req.actor.agentId;
+    } else if (req.actor.type === "agent" && req.actor.agentId !== agentId) {
+      res.status(403).json({ error: "Agent can only read own memories" });
+      return;
+    }
+    const list = await memoriesSvc.list(companyId, agentId);
+    res.json(list);
+  });
+
+  /** 刪除該 agent 的單筆記憶。 */
+  router.delete("/companies/:companyId/agents/:agentId/memories/:memoryId", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    let agentId = req.params.agentId as string;
+    const memoryId = req.params.memoryId as string;
+    await assertCompanyAccess(req, companyId, db);
+    if (agentId === "me") {
+      if (req.actor.type !== "agent" || !req.actor.agentId) {
+        res.status(401).json({ error: "Agent authentication required" });
+        return;
+      }
+      agentId = req.actor.agentId;
+    } else if (req.actor.type === "agent" && req.actor.agentId !== agentId) {
+      res.status(403).json({ error: "Agent can only delete own memories" });
+      return;
+    }
+    await memoriesSvc.deleteOne(companyId, agentId, memoryId);
+    res.status(204).send();
+  });
+
+  /** 刪除該 agent 的全部記憶。 */
+  router.delete("/companies/:companyId/agents/:agentId/memories", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    let agentId = req.params.agentId as string;
+    await assertCompanyAccess(req, companyId, db);
+    if (agentId === "me") {
+      if (req.actor.type !== "agent" || !req.actor.agentId) {
+        res.status(401).json({ error: "Agent authentication required" });
+        return;
+      }
+      agentId = req.actor.agentId;
+    } else {
+      assertBoard(req);
+    }
+    if (req.actor.type === "agent" && req.actor.agentId !== agentId) {
+      res.status(403).json({ error: "Agent can only delete own memories" });
+      return;
+    }
+    await memoriesSvc.deleteAll(companyId, agentId);
+    res.status(204).send();
+  });
+
   router.get("/agents/:id", async (req, res) => {
     const id = req.params.id as string;
     const agent = await svc.getById(id);
@@ -582,7 +691,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
-    assertCompanyAccess(req, agent.companyId);
+    await assertCompanyAccess(req, agent.companyId, db);
     if (req.actor.type === "agent" && req.actor.agentId !== id) {
       const canRead = await actorCanReadConfigurationsForCompany(req, agent.companyId);
       if (!canRead) {
@@ -678,7 +787,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
-    assertCompanyAccess(req, agent.companyId);
+    await assertCompanyAccess(req, agent.companyId, db);
 
     const state = await heartbeat.getRuntimeState(id);
     res.json(state);
@@ -692,7 +801,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
-    assertCompanyAccess(req, agent.companyId);
+    await assertCompanyAccess(req, agent.companyId, db);
 
     const sessions = await heartbeat.listTaskSessions(id);
     res.json(
@@ -711,7 +820,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
-    assertCompanyAccess(req, agent.companyId);
+    await assertCompanyAccess(req, agent.companyId, db);
 
     const taskKey =
       typeof req.body.taskKey === "string" && req.body.taskKey.trim().length > 0
@@ -737,20 +846,26 @@ export function agentRoutes(db: Db) {
     await assertCanCreateAgentsForCompany(req, companyId);
     const sourceIssueIds = parseSourceIssueIds(req.body);
     const { sourceIssueId: _sourceIssueId, sourceIssueIds: _sourceIssueIds, ...hireInput } = req.body;
-    const requestedAdapterConfig = applyCreateDefaultsByAdapterType(
-      hireInput.adapterType,
-      ((hireInput.adapterConfig ?? {}) as Record<string, unknown>),
+    await assertAdapterAllowed(companyId, req, hireInput.adapterType);
+    const requestedAdapterConfig = stripCwdIfNotAdmin(
+      applyCreateDefaultsByAdapterType(
+        hireInput.adapterType,
+        ((hireInput.adapterConfig ?? {}) as Record<string, unknown>),
+      ),
+      req,
     );
-    const normalizedAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
+    let normalizedAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
       companyId,
       requestedAdapterConfig,
       { strictMode: strictSecretsMode },
     );
+    normalizedAdapterConfig = stripLocalAdapterApiKeys(hireInput.adapterType, normalizedAdapterConfig) as typeof normalizedAdapterConfig;
     await assertAdapterConfigConstraints(
       companyId,
       hireInput.adapterType,
       normalizedAdapterConfig,
     );
+    assertNonAdminApiKeyRequired(hireInput.adapterType, normalizedAdapterConfig, req);
     const normalizedHireInput = {
       ...hireInput,
       adapterConfig: normalizedAdapterConfig,
@@ -869,32 +984,55 @@ export function agentRoutes(db: Db) {
     res.status(201).json({ agent, approval });
   });
 
+  function stripCwdIfNotAdmin(adapterConfig: Record<string, unknown>, req: Request): Record<string, unknown> {
+    if (hasCompanyViewAll(req)) return adapterConfig;
+    if (!Object.prototype.hasOwnProperty.call(adapterConfig, "cwd")) return adapterConfig;
+    const { cwd: _cwd, ...rest } = adapterConfig;
+    return rest;
+  }
+
   router.post("/companies/:companyId/agents", validate(createAgentSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
 
     if (req.actor.type === "agent") {
       assertBoard(req);
     }
 
-    const requestedAdapterConfig = applyCreateDefaultsByAdapterType(
-      req.body.adapterType,
-      ((req.body.adapterConfig ?? {}) as Record<string, unknown>),
+    await assertAdapterAllowed(companyId, req, req.body.adapterType);
+    const requestedAdapterConfig = stripCwdIfNotAdmin(
+      applyCreateDefaultsByAdapterType(
+        req.body.adapterType,
+        ((req.body.adapterConfig ?? {}) as Record<string, unknown>),
+      ),
+      req,
     );
-    const normalizedAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
+    let finalAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
       companyId,
       requestedAdapterConfig,
       { strictMode: strictSecretsMode },
     );
+    finalAdapterConfig = stripLocalAdapterApiKeys(req.body.adapterType, finalAdapterConfig) as typeof finalAdapterConfig;
+    if (!hasCompanyViewAll(req) && !finalAdapterConfig.cwd) {
+      const defaultPath = await instanceSettingsService(db).getDefaultCompanyPath();
+      const company = await companyService(db).getById(companyId);
+      const effectiveCwd =
+        company?.workingDirectory?.trim() ||
+        (defaultPath ? path.join(defaultPath, companyId) : undefined);
+      if (effectiveCwd) {
+        finalAdapterConfig = { ...finalAdapterConfig, cwd: effectiveCwd };
+      }
+    }
     await assertAdapterConfigConstraints(
       companyId,
       req.body.adapterType,
-      normalizedAdapterConfig,
+      finalAdapterConfig,
     );
+    assertNonAdminApiKeyRequired(req.body.adapterType, finalAdapterConfig, req);
 
     const agent = await svc.create(companyId, {
       ...req.body,
-      adapterConfig: normalizedAdapterConfig,
+      adapterConfig: finalAdapterConfig,
       status: "idle",
       spentMonthlyCents: 0,
       lastHeartbeatAt: null,
@@ -923,7 +1061,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
-    assertCompanyAccess(req, existing.companyId);
+    await assertCompanyAccess(req, existing.companyId, db);
 
     if (req.actor.type === "agent") {
       const actorAgent = req.actor.agentId ? await svc.getById(req.actor.agentId) : null;
@@ -987,11 +1125,12 @@ export function agentRoutes(db: Db) {
       nextAdapterConfig[adapterConfigKey] = resolveInstructionsFilePath(req.body.path, existingAdapterConfig);
     }
 
-    const normalizedAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
+    let normalizedAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
       existing.companyId,
       nextAdapterConfig,
       { strictMode: strictSecretsMode },
     );
+    normalizedAdapterConfig = stripLocalAdapterApiKeys(existing.adapterType, normalizedAdapterConfig) as typeof normalizedAdapterConfig;
     const actor = getActorInfo(req);
     const agent = await svc.update(
       id,
@@ -1052,10 +1191,14 @@ export function agentRoutes(db: Db) {
 
     const patchData = { ...(req.body as Record<string, unknown>) };
     if (Object.prototype.hasOwnProperty.call(patchData, "adapterConfig")) {
-      const adapterConfig = asRecord(patchData.adapterConfig);
+      let adapterConfig = asRecord(patchData.adapterConfig);
       if (!adapterConfig) {
         res.status(422).json({ error: "adapterConfig must be an object" });
         return;
+      }
+      if (!hasCompanyViewAll(req) && Object.prototype.hasOwnProperty.call(adapterConfig, "cwd")) {
+        const existingCwd = (asRecord(existing.adapterConfig) ?? {})?.cwd;
+        adapterConfig = { ...adapterConfig, cwd: existingCwd };
       }
       const changingInstructionsPath = Object.keys(adapterConfig).some((key) =>
         KNOWN_INSTRUCTIONS_PATH_KEYS.has(key),
@@ -1072,6 +1215,7 @@ export function agentRoutes(db: Db) {
       Object.prototype.hasOwnProperty.call(patchData, "adapterType") ||
       Object.prototype.hasOwnProperty.call(patchData, "adapterConfig");
     if (touchesAdapterConfiguration) {
+      await assertAdapterAllowed(existing.companyId, req, requestedAdapterType);
       const rawEffectiveAdapterConfig = Object.prototype.hasOwnProperty.call(patchData, "adapterConfig")
         ? (asRecord(patchData.adapterConfig) ?? {})
         : (asRecord(existing.adapterConfig) ?? {});
@@ -1079,11 +1223,16 @@ export function agentRoutes(db: Db) {
         requestedAdapterType,
         rawEffectiveAdapterConfig,
       );
-      const normalizedEffectiveAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
+      let normalizedEffectiveAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
         existing.companyId,
         effectiveAdapterConfig,
         { strictMode: strictSecretsMode },
       );
+      normalizedEffectiveAdapterConfig = stripLocalAdapterApiKeys(
+        requestedAdapterType,
+        normalizedEffectiveAdapterConfig,
+      ) as typeof normalizedEffectiveAdapterConfig;
+      assertNonAdminApiKeyRequired(requestedAdapterType, normalizedEffectiveAdapterConfig, req);
       patchData.adapterConfig = normalizedEffectiveAdapterConfig;
     }
     if (touchesAdapterConfiguration && requestedAdapterType === "opencode_local") {
@@ -1257,7 +1406,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
-    assertCompanyAccess(req, agent.companyId);
+    await assertCompanyAccess(req, agent.companyId, db);
 
     if (req.actor.type === "agent" && req.actor.agentId !== id) {
       res.status(403).json({ error: "Agent can only invoke itself" });
@@ -1306,7 +1455,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
-    assertCompanyAccess(req, agent.companyId);
+    await assertCompanyAccess(req, agent.companyId, db);
 
     if (req.actor.type === "agent" && req.actor.agentId !== id) {
       res.status(403).json({ error: "Agent can only invoke itself" });
@@ -1356,7 +1505,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
-    assertCompanyAccess(req, agent.companyId);
+    await assertCompanyAccess(req, agent.companyId, db);
     if (agent.adapterType !== "claude_local") {
       res.status(400).json({ error: "Login is only supported for claude_local agents" });
       return;
@@ -1381,7 +1530,7 @@ export function agentRoutes(db: Db) {
 
   router.get("/companies/:companyId/heartbeat-runs", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const agentId = req.query.agentId as string | undefined;
     const limitParam = req.query.limit as string | undefined;
     const limit = limitParam ? Math.max(1, Math.min(1000, parseInt(limitParam, 10) || 200)) : undefined;
@@ -1391,7 +1540,7 @@ export function agentRoutes(db: Db) {
 
   router.get("/companies/:companyId/live-runs", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
 
     const minCountParam = req.query.minCount as string | undefined;
     const minCount = minCountParam ? Math.max(0, Math.min(20, parseInt(minCountParam, 10) || 0)) : 0;
@@ -1410,6 +1559,7 @@ export function agentRoutes(db: Db) {
       issueId: sql<string | null>`${heartbeatRuns.contextSnapshot} ->> 'issueId'`.as("issueId"),
     };
 
+    // 排除聊天觸發的 run，不顯示在側邊欄「工作中」
     const liveRuns = await db
       .select(columns)
       .from(heartbeatRuns)
@@ -1418,6 +1568,7 @@ export function agentRoutes(db: Db) {
         and(
           eq(heartbeatRuns.companyId, companyId),
           inArray(heartbeatRuns.status, ["queued", "running"]),
+          sql`((${heartbeatRuns.contextSnapshot} ->> 'taskKey') is null or (${heartbeatRuns.contextSnapshot} ->> 'taskKey') not like 'chat:%')`,
         ),
       )
       .orderBy(desc(heartbeatRuns.createdAt));
@@ -1452,7 +1603,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Heartbeat run not found" });
       return;
     }
-    assertCompanyAccess(req, run.companyId);
+    await assertCompanyAccess(req, run.companyId, db);
     res.json(redactCurrentUserValue(run));
   });
 
@@ -1483,7 +1634,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Heartbeat run not found" });
       return;
     }
-    assertCompanyAccess(req, run.companyId);
+    await assertCompanyAccess(req, run.companyId, db);
 
     const afterSeq = Number(req.query.afterSeq ?? 0);
     const limit = Number(req.query.limit ?? 200);
@@ -1504,7 +1655,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Heartbeat run not found" });
       return;
     }
-    assertCompanyAccess(req, run.companyId);
+    await assertCompanyAccess(req, run.companyId, db);
 
     const offset = Number(req.query.offset ?? 0);
     const limitBytes = Number(req.query.limitBytes ?? 256000);
@@ -1525,7 +1676,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
 
     const liveRuns = await db
       .select({
@@ -1563,7 +1714,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    assertCompanyAccess(req, issue.companyId);
+    await assertCompanyAccess(req, issue.companyId, db);
 
     let run = issue.executionRunId ? await heartbeat.getRun(issue.executionRunId) : null;
     if (run && run.status !== "queued" && run.status !== "running") {

@@ -1,20 +1,22 @@
 ---
 name: paperclip
 description: >
-  Interact with the Paperclip control plane API to manage tasks, coordinate with
+  Interact with the VFactory control plane API to manage tasks, coordinate with
   other agents, and follow company governance. Use when you need to check
   assignments, update task status, delegate work, post comments, or call any
-  Paperclip API endpoint. Do NOT use for the actual domain work itself (writing
-  code, research, etc.) — only for Paperclip coordination.
+  VFactory API endpoint. Do NOT use for the actual domain work itself (writing
+  code, research, etc.) — only for VFactory coordination.
 ---
 
-# Paperclip Skill
+# VFactory Skill
 
-You run in **heartbeats** — short execution windows triggered by Paperclip. Each heartbeat, you wake up, check your work, do something useful, and exit. You do not run continuously.
+You run in **heartbeats** — short execution windows triggered by VFactory. Each heartbeat, you wake up, check your work, do something useful, and exit. You do not run continuously.
 
 ## Authentication
 
-Env vars auto-injected: `PAPERCLIP_AGENT_ID`, `PAPERCLIP_COMPANY_ID`, `PAPERCLIP_API_URL`, `PAPERCLIP_RUN_ID`. Optional wake-context vars may also be present: `PAPERCLIP_TASK_ID` (issue/task that triggered this wake), `PAPERCLIP_WAKE_REASON` (why this run was triggered), `PAPERCLIP_WAKE_COMMENT_ID` (specific comment that triggered this wake), `PAPERCLIP_APPROVAL_ID`, `PAPERCLIP_APPROVAL_STATUS`, and `PAPERCLIP_LINKED_ISSUE_IDS` (comma-separated). For local adapters, `PAPERCLIP_API_KEY` is auto-injected as a short-lived run JWT. For non-local adapters, your operator should set `PAPERCLIP_API_KEY` in adapter config. All requests use `Authorization: Bearer $PAPERCLIP_API_KEY`. All endpoints under `/api`, all JSON. Never hard-code the API URL.
+Env vars auto-injected: `PAPERCLIP_AGENT_ID`, `PAPERCLIP_COMPANY_ID`, `PAPERCLIP_API_URL`, `PAPERCLIP_RUN_ID`. Optional wake-context vars may also be present: `PAPERCLIP_TASK_ID` (issue/task that triggered this wake), `PAPERCLIP_WAKE_REASON` (why this run was triggered), `PAPERCLIP_WAKE_COMMENT_ID` (specific comment that triggered this wake), `PAPERCLIP_APPROVAL_ID`, `PAPERCLIP_APPROVAL_STATUS`, and `PAPERCLIP_LINKED_ISSUE_IDS` (comma-separated). For chat heartbeats you may also receive `PAPERCLIP_CHAT_ROOM_ID`, `PAPERCLIP_CHAT_ROOM_TYPE` (`direct` or `group`), and `PAPERCLIP_CHAT_MESSAGE_ID` (the triggering message id), plus an optional `PAPERCLIP_CHAT_PROJECT_ID` / `PAPERCLIP_CHAT_PROJECT_NAME` scope. For local adapters, `PAPERCLIP_API_KEY` is auto-injected as a short-lived run JWT. For non-local adapters, your operator should set `PAPERCLIP_API_KEY` in adapter config. All requests use `Authorization: Bearer $PAPERCLIP_API_KEY`. All endpoints under `/api`, all JSON. Never hard-code the API URL.
+
+**Prompt context:** The run’s prompt template receives the **current company** for the agent: `company.id`, `company.name`, `company.description`, `company.issuePrefix`. Use `{{company.name}}` or `{{company.description}}` in custom prompt templates so the agent knows which company it is acting for.
 
 **Wake reason and payload semantics:** `PAPERCLIP_WAKE_REASON` can be set by the control plane. Notable values:
 
@@ -22,7 +24,85 @@ Env vars auto-injected: `PAPERCLIP_AGENT_ID`, `PAPERCLIP_COMPANY_ID`, `PAPERCLIP
 - **`issue_updated_while_running`** — This run was started because the issue you were working on was edited (e.g. title, description, status, priority) while you had an active run; that run was cancelled and you were woken with the latest issue state. **Behavior:** Treat the **current issue content as the source of truth**. Do not repeat work already reflected in comments or task session; if something conflicts with what you did before, **prefer the new content**.
 - **`issue_updated`** — An issue assigned to you was updated (e.g. title, description, status, priority). Fetch the latest issue and comments and continue or adjust your plan accordingly.
 
-Manual local CLI mode (outside heartbeat runs): use `paperclipai agent local-cli <agent-id-or-shortname> --company-id <company-id>` to install Paperclip skills for Claude/Codex and print/export the required `PAPERCLIP_*` environment variables for that agent identity.
+**Chat wake semantics (PAPERCLIP_CHAT_ROOM_ID set):**
+
+- If `PAPERCLIP_CHAT_ROOM_ID` is present, this heartbeat was triggered by a message in a VFactory chat room.
+- Always treat these wakes as **short, conversational turns**, not long-running projects.
+- Style expectations:
+  - Prefer a **direct reply to the latest user message**, not a long report.
+  - Use the **same natural language** the user is using in the conversation (for this company, often Traditional Chinese).
+  - Keep each message focused: 1–3 short paragraphs or a short list; avoid full-blown status reports unless explicitly requested.
+  - It is OK to ask **one clarifying question** if needed, but avoid planning documents in chat mode.
+- You MUST:
+  1. Read the latest conversation:
+     - `GET /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages?limit=50`
+  2. Decide whether to reply:
+     - For `PAPERCLIP_CHAT_ROOM_TYPE=direct`: **always reply** to the triggering message in this heartbeat.
+     - For `PAPERCLIP_CHAT_ROOM_TYPE=group`: reply only if the triggering message is clearly directed at you (e.g. `@YourAgentName` mention or content matching your responsibilities).
+  3. When replying, always post back into the same room:
+     - Endpoint:
+       - `POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages`
+     - Headers:
+       - `Authorization: Bearer $PAPERCLIP_API_KEY`
+       - `X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID`
+     - Body:
+       - `{ "body": "<your conversational markdown reply>", "projectId": PAPERCLIP_CHAT_PROJECT_ID? }`
+- Do **not** treat chat replies as issue comments unless the conversation explicitly asks you to open or update an issue. In that case you **must**:
+  - Create an issue with `POST /api/companies/$PAPERCLIP_COMPANY_ID/issues` and mention it in your chat reply, or
+  - Update an existing issue and then explain what you did in the chat thread.
+
+### Converting chat directives into Issues (all chat-capable agents)
+
+When chat is used to give you **high-level or multi-step work**, you **must** convert that work into one or more Issues instead of only chatting about it. This applies to **all agents that can reply in chat**, not just CEO agents.
+
+- Treat the **Board / company owner in chat as the highest-priority actor**. When they ask for sustained work (not just a quick question), you **must**:
+  1. **Summarize the latest directive.**
+     - Read the transcript you just fetched.
+     - Identify the **latest message from the Board / user** that contains a concrete request (for example: hiring plans, management team design, long-term roadmap, large refactor, multi-step migration, etc.).
+     - Write a one-sentence English summary and a one-sentence summary in the user's language (usually Traditional Chinese).
+  2. **Decide whether an Issue is required (and err on the side of opening one).**
+     - You **must open at least one Issue** when the request is:
+       - a multi-step project (e.g. "Hire and build the Management Team", "design the company org chart"),
+       - a long-running goal (e.g. "plan the next 6 months of product work"),
+       - or any change that clearly needs tracking, iteration, or approvals.
+     - You **may skip creating a new Issue** only when the request is:
+       - simple clarification questions,
+       - one-off factual questions,
+       - or very small, already-tracked changes.
+  3. **Create an Issue when appropriate.** Use:
+     - Endpoint:
+       - `POST /api/companies/$PAPERCLIP_COMPANY_ID/issues`
+     - Headers:
+       - `Authorization: Bearer $PAPERCLIP_API_KEY`
+       - `X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID`
+     - **When creating from chat:** always set `sourceChatRoomId` to `$PAPERCLIP_CHAT_ROOM_ID` so that when the Issue is marked done, VFactory will automatically post a completion report back to that chat room.
+     - Body (example for a CEO agent handling a Board chat directive):
+       ```json
+       {
+         "title": "Hire and establish the Management Team",
+         "description": "This Issue was created from a Board → CEO chat directive.\\n\\nLatest chat summary (zh-TW): <短句描述董事長的要求>\\n\\nLatest chat summary (en): <short English summary of the directive>\\n\\nInitial plan:\\n- Clarify the target org structure and Management Team roles.\\n- Propose concrete C-level / lead roles with responsibilities.\\n- Outline the hiring pipeline (sources, evaluation, timelines).\\n- Create follow-up Issues for each hire / sub-project as needed.",
+         "sourceChatRoomId": "$PAPERCLIP_CHAT_ROOM_ID",
+         "assigneeAgentId": "$PAPERCLIP_AGENT_ID",
+         "status": "todo"
+       }
+       ```
+     - Adjust the `title` and `description` to match the actual directive; when possible, include **chat excerpts** and your initial plan.
+  4. **Use the Issue as your execution context.**
+     - Future heartbeats for this work should be driven by the Issue (via `PAPERCLIP_TASK_ID`) rather than the original chat wake.
+     - In the Issue heartbeat:
+       - Follow the normal Issue workflow (checkout, understand context, do the work, update status, comment).
+       - If the work involves creating or configuring other agents, use the `paperclip-create-agent` skill and/or project/agent APIs as needed.
+  5. **Report back in chat briefly.**
+     - After creating the Issue, you should send a short chat reply in the user's language:
+       - Confirm that you understood the directive.
+       - Mention the newly created Issue identifier.
+       - Explain at a high level what you will do next, in 1–3 short bullet points.
+     - Example (Traditional Chinese tone for CEO agent replying to the Board):
+       > 我已把你剛剛的指示整理成一個 Issue（例如：`PAP-123`），會在那裡規劃並執行整個 Management Team 的設計與 Hiring 流程。\\n\\n接下來這一兩個 heartbeat，我會先：\\n- 盤點你目前的公司目標與產品方向，\\n- 拉出建議的 Management Team 結構（職稱與職責），\\n- 再拆成多個具體的 Hire / 設計 Issue 給自己與其他代理人。
+
+These rules apply to **all chat-capable agents**. CEO-style / manager agents should follow them most aggressively, but even specialist agents (e.g. CTO, CPO, infra agents) must open or update Issues when chat is being used as a control-channel for work that extends beyond a single quick reply.
+
+Manual local CLI mode (outside heartbeat runs): use `paperclipai agent local-cli <agent-id-or-shortname> --company-id <company-id>` to install VFactory skills for Claude/Codex and print/export the required `PAPERCLIP_*` environment variables for that agent identity.
 
 **Run audit trail:** You MUST include `-H 'X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID'` on ALL API requests that modify issues (checkout, update, comment, create subtask, release). This links your actions to the current heartbeat run for traceability.
 
@@ -69,6 +149,7 @@ If `PAPERCLIP_WAKE_COMMENT_ID` is set, find that specific comment first and trea
 
 **Step 8 — Update status and communicate.** Always include the run ID header.
 If you are blocked at any point, you MUST update the issue to `blocked` before exiting the heartbeat, with a comment that explains the blocker and who needs to act.
+**Permission blocks:** If you are blocked because you lack a required permission (e.g. you cannot call `agent-hires` because you do not have `canCreateAgents`), you MUST **first** escalate to the **Parent Issue's responsible agent**, not to the Board. From `GET /api/issues/{issueId}` your issue has `parentId` and `ancestors`; the immediate parent's `assigneeAgentId` is the agent who owns the parent task. You must **tag** that agent in your comment using **@AgentName** (e.g. `@CEO`) — **writing their name in plain text is not enough**; only an @-mention triggers a wake so they are notified. Post the comment with the @-tag, set status to `blocked`, and ask them to perform the action or escalate. Only if there is no parent or no parent assignee should you escalate via `chainOfCommand` (CEO) or Board.
 
 ```json
 PATCH /api/issues/{issueId}
@@ -138,8 +219,9 @@ Access control:
 - **@-mentions** (`@AgentName` in comments) trigger heartbeats — use sparingly, they cost budget.
 - **Budget**: auto-paused at 100%. Above 80%, focus on critical tasks only.
 - **Escalate** via `chainOfCommand` when stuck. Reassign to manager or create a task for them.
+- **Permission escalation (sub-agent):** When you lack a required permission (e.g. `canCreateAgents` for agent-hires), **do not** report to the Board first. **First** notify the **Parent Issue's responsible agent**: from `GET /api/issues/{issueId}` your task has `parentId` and `ancestors`; the immediate parent's `assigneeAgentId` is who to call. You must **tag** them in the comment with **@AgentName** (e.g. `@CEO`) — **plain text like "請 CEO 代為送出" does not trigger a wake**; only @-mention does. Post a comment with the @-tag, set status to `blocked`, and explain what action is needed. Only if there is no parent or no parent assignee, then escalate via `chainOfCommand` to CEO or Board.
 - **Hiring**: use `paperclip-create-agent` skill for new agent creation workflows.
-- **Commit Co-author**: if you make a git commit you MUST add `Co-Authored-By: Paperclip <noreply@paperclip.ing>` to the end of each commit message
+- **Commit Co-author**: if you make a git commit you MUST add `Co-Authored-By: VFactory <noreply@vfactory.dev>` to the end of each commit message
 
 ## Comment Style (Required)
 
@@ -248,6 +330,10 @@ PATCH /api/agents/{agentId}/instructions-path
 | List agents                           | `GET /api/companies/:companyId/agents`                                                     |
 | Dashboard                             | `GET /api/companies/:companyId/dashboard`                                                  |
 | Search issues                         | `GET /api/companies/:companyId/issues?q=search+term`                                       |
+| List schedules                        | `GET /api/companies/:companyId/schedules` (optional `?agentId=`, `?enabled=`)              |
+| Create schedule                       | `POST /api/companies/:companyId/schedules` (omit `agentId` to schedule yourself)          |
+| Update schedule                       | `PATCH /api/companies/:companyId/schedules/:scheduleId`                                    |
+| Delete schedule                       | `DELETE /api/companies/:companyId/schedules/:scheduleId`                                   |
 
 ## Searching Issues
 
@@ -261,7 +347,7 @@ Results are ranked by relevance: title matches first, then identifier, descripti
 
 ## Self-Test Playbook (App-Level)
 
-Use this when validating Paperclip itself (assignment flow, checkouts, run visibility, and status transitions).
+Use this when validating VFactory itself (assignment flow, checkouts, run visibility, and status transitions).
 
 1. Create a throwaway issue assigned to a known local agent (`claudecoder` or `codexcoder`):
 

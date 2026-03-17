@@ -1,46 +1,7 @@
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
-
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-}
+/* CSS 變數與 base 樣式（無 Tailwind）。效用 class 見 styles/utilities.css，元件見 styles/ui.css。 */
+@import "./styles/utilities.css";
+@import "./styles/ui.css";
+@import "./styles/board-pages.css";
 
 :root {
   color-scheme: light;
@@ -77,6 +38,10 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* 圖層順序：側欄／主內容 < 對話框 (50) < Toast 通知 (最高)，避免 modal 與通知並存時格式錯亂 */
+  --z-sidebar: 40;
+  --z-dialog: 50;
+  --z-toast: 2147483647;
 }
 
 .dark {
@@ -114,34 +79,46 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  html {
-    height: 100%;
-    -webkit-tap-highlight-color: color-mix(in oklab, var(--foreground) 20%, transparent);
-  }
-  body {
-    @apply bg-background text-foreground antialiased;
-    height: 100%;
-    overflow: hidden;
-  }
-  h1,
-  h2,
-  h3 {
-    text-wrap: balance;
-  }
-  /* Prevent double-tap-to-zoom on interactive elements for mobile */
-  a,
-  button,
-  [role="button"],
-  input,
-  select,
-  textarea,
-  label {
-    touch-action: manipulation;
-  }
+* {
+  border-color: var(--border);
+}
+
+html {
+  height: 100%;
+  -webkit-tap-highlight-color: color-mix(in oklab, var(--foreground) 20%, transparent);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Toast 通知層：永遠置於 body 直屬、高於側欄與 modal，避免被側欄滾動條或對話框遮擋 */
+[data-toast-viewport] {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast) !important;
+  pointer-events: none;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+a,
+button,
+[role="button"],
+input,
+select,
+textarea,
+label {
+  touch-action: manipulation;
 }
 
 @media (pointer: coarse) {
@@ -155,51 +132,125 @@
   }
 }
 
-/* Dark mode scrollbars */
+/* ==========================================================================
+   自訂細滾動條（覆蓋原生 scrollbar，細且美觀，符合 HIG）
+   - WebKit: 細軌道 + 圓角滑塊，hover 時略亮
+   - Firefox: scrollbar-width: thin + scrollbar-color
+   ========================================================================== */
 .dark {
   color-scheme: dark;
 }
 
+/* --- 淺色模式：自訂細滾動條 --- */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: oklch(0.75 0 0);
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.55 0 0);
+}
+*::-webkit-scrollbar-thumb:active {
+  background: oklch(0.45 0 0);
+}
+
+/* Firefox 淺色 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.75 0 0) transparent;
+}
+
+/* --- 深色模式：自訂細滾動條 --- */
 .dark *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
-
 .dark *::-webkit-scrollbar-track {
-  background: oklch(0.205 0 0);
+  background: transparent;
 }
-
 .dark *::-webkit-scrollbar-thumb {
-  background: oklch(0.4 0 0);
-  border-radius: 4px;
+  background: oklch(0.38 0 0);
+  border-radius: 999px;
+  transition: background 0.15s ease;
 }
-
 .dark *::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.5 0 0);
+  background: oklch(0.48 0 0);
+}
+.dark *::-webkit-scrollbar-thumb:active {
+  background: oklch(0.55 0 0);
 }
 
-/* Auto-hide scrollbar: transparent by default, visible on container hover */
+.dark * {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.38 0 0) transparent;
+}
+
+/* Auto-hide：預設透明，僅在容器 hover 時顯示滑塊 */
 .scrollbar-auto-hide::-webkit-scrollbar-thumb {
   background: transparent !important;
 }
 .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb {
-  background: oklch(0.4 0 0) !important;
+  background: oklch(0.75 0 0) !important;
 }
 .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.5 0 0) !important;
+  background: oklch(0.55 0 0) !important;
+}
+.dark .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb {
+  background: oklch(0.38 0 0) !important;
+}
+.dark .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.48 0 0) !important;
 }
 
-/* Hide scrollbar completely while keeping scroll behaviour (sidebar, etc.) */
+/* 完全隱藏滾動條（保留捲動行為） */
 .scrollbar-none {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE / legacy Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 .scrollbar-none::-webkit-scrollbar {
-  display: none; /* WebKit (Chrome, Safari, Edge) */
+  display: none;
 }
 
-/* Expandable dialog transition for max-width changes */
+/* Radix ScrollArea：與全域自訂滾動條一致的細滑桿 */
+[data-slot="scroll-area-scrollbar"][data-orientation="vertical"] {
+  width: 6px !important;
+  min-width: 6px;
+}
+[data-slot="scroll-area-scrollbar"][data-orientation="horizontal"] {
+  height: 6px !important;
+  min-height: 6px;
+}
+[data-slot="scroll-area-thumb"] {
+  background: oklch(0.75 0 0);
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+[data-slot="scroll-area-thumb"]:hover {
+  background: oklch(0.55 0 0);
+}
+.dark [data-slot="scroll-area-thumb"] {
+  background: oklch(0.38 0 0);
+}
+.dark [data-slot="scroll-area-thumb"]:hover {
+  background: oklch(0.48 0 0);
+}
+
+/* Dialog layout & transition
+   - Constrain width on large screens (HIG-style centered sheet)
+   - Keep small margin on narrow viewports
+   - Preserve smooth max-width animation used by some flows */
 [data-slot="dialog-content"] {
+  max-width: min(32rem, 100vw - 3rem);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
   transition: max-width 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -246,6 +297,21 @@
 }
 
 /* MDXEditor theme integration */
+.paperclip-mdxeditor-scope {
+  position: relative;
+}
+
+.paperclip-mdxeditor-scope.bordered {
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: transparent;
+}
+
+.paperclip-mdxeditor-scope.is-drag-over {
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 60%, transparent);
+  background: color-mix(in oklch, var(--accent) 20%, transparent);
+}
+
 .paperclip-mdxeditor-scope,
 .paperclip-mdxeditor {
   --baseBase: var(--background);
@@ -314,6 +380,11 @@
   font-size: inherit;
   line-height: inherit;
   color: inherit;
+  outline: none;
+}
+
+.paperclip-mdxeditor-content:focus {
+  outline: none;
 }
 
 .paperclip-mdxeditor-content > *:first-child {
@@ -618,3 +689,140 @@ a.paperclip-project-mention-chip {
 [class*="_toolbarNodeKindSelectContainer_"] {
   z-index: 81 !important;
 }
+
+/* ==========================================================================
+   App 閘道頁（BootstrapPending、Onboarding、NoCompanies、Loading）
+   ========================================================================== */
+.app-gate-wrap {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 36rem;
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.app-gate-card {
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 1.5rem;
+}
+
+.app-gate-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.app-gate-desc {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.app-gate-banned-reason {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  background: color-mix(in oklab, var(--destructive) 15%, transparent);
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+}
+
+.app-gate-pre {
+  margin-top: 1rem;
+  overflow-x: auto;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+  padding: 0.75rem;
+  font-size: 0.75rem;
+}
+
+.app-gate-actions {
+  margin-top: 1rem;
+}
+
+.app-gate-message {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.app-gate-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+/* ==========================================================================
+   NotFound 頁（無需 layout 的獨立頁）
+   ========================================================================== */
+.app-not-found-wrap {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 42rem;
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.app-not-found-card {
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 1.5rem;
+}
+
+.app-not-found-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-not-found-icon-wrap {
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in oklab, var(--destructive) 20%, transparent);
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+  padding: 0.5rem;
+}
+
+.app-not-found-icon-wrap svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--destructive);
+}
+
+.app-not-found-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.app-not-found-desc {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.app-not-found-path {
+  margin-top: 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--muted) 20%, transparent);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.app-not-found-path code {
+  font-family: ui-monospace, monospace;
+}
+
+.app-not-found-actions {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.app-not-found-actions [data-slot="button"] svg {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.375rem;
+}
+

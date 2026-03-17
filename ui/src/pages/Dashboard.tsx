@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "../api/dashboard";
@@ -18,7 +19,10 @@ import { PriorityIcon } from "../components/PriorityIcon";
 import { ActivityRow } from "../components/ActivityRow";
 import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
-import { cn, formatCents } from "../lib/utils";
+import { formatRelativeTime } from "../lib/formatRelativeTime";
+import { formatCents } from "../lib/utils";
+
+import "./Dashboard.css";
 import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
@@ -31,6 +35,7 @@ function getRecentIssues(issues: Issue[]): Issue[] {
 }
 
 export function Dashboard() {
+  const { t } = useTranslation();
   const { selectedCompanyId, companies } = useCompany();
   const { openOnboarding } = useDialog();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -46,8 +51,8 @@ export function Dashboard() {
   });
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Dashboard" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("dashboard.title") }]);
+  }, [setBreadcrumbs, t]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.dashboard(selectedCompanyId!),
@@ -167,14 +172,14 @@ export function Dashboard() {
       return (
         <EmptyState
           icon={LayoutDashboard}
-          message="Welcome to Paperclip. Set up your first company and agent to get started."
-          action="Get Started"
+          message={t("dashboard.welcomeMessage")}
+          action={t("dashboard.getStarted")}
           onAction={openOnboarding}
         />
       );
     }
     return (
-      <EmptyState icon={LayoutDashboard} message="Create or select a company to view the dashboard." />
+      <EmptyState icon={LayoutDashboard} message={t("dashboard.selectCompanyMessage")} />
     );
   }
 
@@ -185,22 +190,21 @@ export function Dashboard() {
   const hasNoAgents = agents !== undefined && agents.length === 0;
 
   return (
-    <div className="space-y-6">
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
+    <div className="dashboard-page">
+      {error && <p className="dashboard-error">{error.message}</p>}
 
       {hasNoAgents && (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-500/25 dark:bg-amber-950/60">
-          <div className="flex items-center gap-2.5">
-            <Bot className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            <p className="text-sm text-amber-900 dark:text-amber-100">
-              You have no agents.
-            </p>
+        <div className="dashboard-alert">
+          <div className="dashboard-alert-inner">
+            <Bot className="dashboard-alert-icon" />
+            <p className="dashboard-alert-text">{t("dashboard.noAgents")}</p>
           </div>
           <button
+            type="button"
             onClick={() => openOnboarding({ initialStep: 2, companyId: selectedCompanyId! })}
-            className="text-sm font-medium text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100 underline underline-offset-2 shrink-0"
+            className="dashboard-alert-action"
           >
-            Create one here
+            {t("dashboard.createAgentHere")}
           </button>
         </div>
       )}
@@ -209,81 +213,81 @@ export function Dashboard() {
 
       {data && (
         <>
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-1 sm:gap-2">
+          <div className="dashboard-metrics-grid">
             <MetricCard
               icon={Bot}
               value={data.agents.active + data.agents.running + data.agents.paused + data.agents.error}
-              label="Agents Enabled"
+              label={t("dashboard.agentsEnabled")}
               to="/agents"
               description={
                 <span>
-                  {data.agents.running} running{", "}
-                  {data.agents.paused} paused{", "}
-                  {data.agents.error} errors
+                  {data.agents.running} {t("dashboard.running")}{", "}
+                  {data.agents.paused} {t("dashboard.paused")}{", "}
+                  {data.agents.error} {t("dashboard.errors")}
                 </span>
               }
             />
             <MetricCard
               icon={CircleDot}
               value={data.tasks.inProgress}
-              label="Tasks In Progress"
+              label={t("dashboard.tasksInProgress")}
               to="/issues"
               description={
                 <span>
-                  {data.tasks.open} open{", "}
-                  {data.tasks.blocked} blocked
+                  {data.tasks.open} {t("dashboard.open")}{", "}
+                  {data.tasks.blocked} {t("dashboard.blocked")}
                 </span>
               }
             />
             <MetricCard
               icon={DollarSign}
               value={formatCents(data.costs.monthSpendCents)}
-              label="Month Spend"
+              label={t("dashboard.monthSpend")}
               to="/costs"
               description={
                 <span>
                   {data.costs.monthBudgetCents > 0
-                    ? `${data.costs.monthUtilizationPercent}% of ${formatCents(data.costs.monthBudgetCents)} budget`
-                    : "Unlimited budget"}
+                    ? t("dashboard.budgetOf", {
+                        percent: data.costs.monthUtilizationPercent,
+                        budget: formatCents(data.costs.monthBudgetCents),
+                      })
+                    : t("dashboard.unlimitedBudget")}
                 </span>
               }
             />
             <MetricCard
               icon={ShieldCheck}
               value={data.pendingApprovals}
-              label="Pending Approvals"
+              label={t("dashboard.pendingApprovals")}
               to="/approvals"
               description={
                 <span>
-                  Awaiting board review
+                  {t("dashboard.awaitingBoardReview")}
                 </span>
               }
             />
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <ChartCard title="Run Activity" subtitle="Last 14 days">
+          <div className="dashboard-charts-grid">
+            <ChartCard title={t("dashboard.runActivity")} subtitle={t("dashboard.last14Days")}>
               <RunActivityChart runs={runs ?? []} />
             </ChartCard>
-            <ChartCard title="Issues by Priority" subtitle="Last 14 days">
+            <ChartCard title={t("dashboard.issuesByPriority")} subtitle={t("dashboard.last14Days")}>
               <PriorityChart issues={issues ?? []} />
             </ChartCard>
-            <ChartCard title="Issues by Status" subtitle="Last 14 days">
+            <ChartCard title={t("dashboard.issuesByStatus")} subtitle={t("dashboard.last14Days")}>
               <IssueStatusChart issues={issues ?? []} />
             </ChartCard>
-            <ChartCard title="Success Rate" subtitle="Last 14 days">
+            <ChartCard title={t("dashboard.successRate")} subtitle={t("dashboard.last14Days")}>
               <SuccessRateChart runs={runs ?? []} />
             </ChartCard>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Recent Activity */}
+          <div className="dashboard-two-col">
             {recentActivity.length > 0 && (
-              <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                  Recent Activity
-                </h3>
-                <div className="border border-border divide-y divide-border overflow-hidden">
+              <div className="dashboard-two-col-cell">
+                <h3 className="dashboard-section-title">{t("dashboard.recentActivity")}</h3>
+                <div className="dashboard-panel">
                   {recentActivity.map((event) => (
                     <ActivityRow
                       key={event.id}
@@ -298,49 +302,45 @@ export function Dashboard() {
               </div>
             )}
 
-            {/* Recent Tasks */}
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                Recent Tasks
-              </h3>
+            <div className="dashboard-two-col-cell">
+              <h3 className="dashboard-section-title">{t("dashboard.recentTasks")}</h3>
               {recentIssues.length === 0 ? (
-                <div className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground">No tasks yet.</p>
+                <div className="dashboard-panel-empty">
+                  <p className="dashboard-panel-empty-text">{t("dashboard.noTasksYet")}</p>
                 </div>
               ) : (
-                <div className="border border-border divide-y divide-border overflow-hidden">
+                <div className="dashboard-panel">
                   {recentIssues.slice(0, 10).map((issue) => (
                     <Link
                       key={issue.id}
                       to={`/issues/${issue.identifier ?? issue.id}`}
-                      className="px-4 py-3 text-sm cursor-pointer hover:bg-accent/50 transition-colors no-underline text-inherit block"
+                      className="dashboard-issue-link"
                     >
-                      <div className="flex items-start gap-2 sm:items-center sm:gap-3">
-                        {/* Status icon - left column on mobile */}
-                        <span className="shrink-0 sm:hidden">
+                      <div className="dashboard-issue-link-inner">
+                        <span className="dashboard-issue-link-status-mobile">
                           <StatusIcon status={issue.status} />
                         </span>
-
-                        {/* Right column on mobile: title + metadata stacked */}
-                        <span className="flex min-w-0 flex-1 flex-col gap-1 sm:contents">
-                          <span className="line-clamp-2 text-sm sm:order-2 sm:flex-1 sm:min-w-0 sm:line-clamp-none sm:truncate">
-                            {issue.title}
-                          </span>
-                          <span className="flex items-center gap-2 sm:order-1 sm:shrink-0">
-                            <span className="hidden sm:inline-flex"><PriorityIcon priority={issue.priority} /></span>
-                            <span className="hidden sm:inline-flex"><StatusIcon status={issue.status} /></span>
-                            <span className="text-xs font-mono text-muted-foreground">
+                        <span className="dashboard-issue-link-content">
+                          <span className="dashboard-issue-link-title">{issue.title}</span>
+                          <span className="dashboard-issue-link-meta">
+                            <span className="dashboard-issue-link-meta-icon">
+                              <PriorityIcon priority={issue.priority} />
+                            </span>
+                            <span className="dashboard-issue-link-meta-icon">
+                              <StatusIcon status={issue.status} />
+                            </span>
+                            <span className="dashboard-issue-link-id">
                               {issue.identifier ?? issue.id.slice(0, 8)}
                             </span>
                             {issue.assigneeAgentId && (() => {
                               const name = agentName(issue.assigneeAgentId);
                               return name
-                                ? <span className="hidden sm:inline-flex"><Identity name={name} size="sm" /></span>
+                                ? <span className="dashboard-issue-link-meta-icon"><Identity name={name} size="sm" /></span>
                                 : null;
                             })()}
-                            <span className="text-xs text-muted-foreground sm:hidden">&middot;</span>
-                            <span className="text-xs text-muted-foreground shrink-0 sm:order-last">
-                              {timeAgo(issue.updatedAt)}
+                            <span className="dashboard-issue-link-dot-mobile">&middot;</span>
+                            <span className="dashboard-issue-link-time">
+                              {formatRelativeTime(t, issue.updatedAt)}
                             </span>
                           </span>
                         </span>

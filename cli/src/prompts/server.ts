@@ -9,55 +9,31 @@ export async function promptServer(opts?: {
   const currentServer = opts?.currentServer;
   const currentAuth = opts?.currentAuth;
 
-  const deploymentModeSelection = await p.select({
-    message: "Deployment mode",
+  const deploymentMode: ServerConfig["deploymentMode"] = "authenticated";
+
+  const exposureSelection = await p.select({
+    message: "Exposure profile",
     options: [
       {
-        value: "local_trusted",
-        label: "Local trusted",
-        hint: "Easiest for local setup (no login, localhost-only)",
+        value: "private",
+        label: "Private network",
+        hint: "Private access (for example Tailscale), lower setup friction",
       },
       {
-        value: "authenticated",
-        label: "Authenticated",
-        hint: "Login required; use for private network or public hosting",
+        value: "public",
+        label: "Public internet",
+        hint: "Internet-facing deployment with stricter requirements",
       },
     ],
-    initialValue: currentServer?.deploymentMode ?? "local_trusted",
+    initialValue: currentServer?.exposure ?? "private",
   });
-
-  if (p.isCancel(deploymentModeSelection)) {
+  if (p.isCancel(exposureSelection)) {
     p.cancel("Setup cancelled.");
     process.exit(0);
   }
-  const deploymentMode = deploymentModeSelection as ServerConfig["deploymentMode"];
+  const exposure = exposureSelection as ServerConfig["exposure"];
 
-  let exposure: ServerConfig["exposure"] = "private";
-  if (deploymentMode === "authenticated") {
-    const exposureSelection = await p.select({
-      message: "Exposure profile",
-      options: [
-        {
-          value: "private",
-          label: "Private network",
-          hint: "Private access (for example Tailscale), lower setup friction",
-        },
-        {
-          value: "public",
-          label: "Public internet",
-          hint: "Internet-facing deployment with stricter requirements",
-        },
-      ],
-      initialValue: currentServer?.exposure ?? "private",
-    });
-    if (p.isCancel(exposureSelection)) {
-      p.cancel("Setup cancelled.");
-      process.exit(0);
-    }
-    exposure = exposureSelection as ServerConfig["exposure"];
-  }
-
-  const hostDefault = deploymentMode === "local_trusted" ? "127.0.0.1" : "0.0.0.0";
+  const hostDefault = "127.0.0.1";
   const hostStr = await p.text({
     message: "Bind host",
     defaultValue: currentServer?.host ?? hostDefault,

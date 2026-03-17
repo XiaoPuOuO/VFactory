@@ -11,6 +11,7 @@ import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { formatDate } from "../lib/utils";
 import { ListTodo } from "lucide-react";
+import "./MyIssues.css";
 
 export function MyIssues() {
   const { selectedCompanyId } = useCompany();
@@ -40,15 +41,15 @@ export function MyIssues() {
   );
 
   return (
-    <div className="space-y-4">
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
+    <div className="my-issues-page">
+      {error && <p className="my-issues-error">{error.message}</p>}
 
       {myIssues.length === 0 && (
         <EmptyState icon={ListTodo} message="No issues assigned to you." />
       )}
 
       {myIssues.length > 0 && (
-        <div className="border border-border">
+        <div className="my-issues-list">
           {myIssues.map((issue) => (
             <EntityRow
               key={issue.id}
@@ -62,7 +63,7 @@ export function MyIssues() {
                 </>
               }
               trailing={
-                <span className="text-xs text-muted-foreground">
+                <span className="my-issues-row-meta">
                   {formatDate(issue.createdAt)}
                 </span>
               }

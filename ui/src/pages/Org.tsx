@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { agentsApi, type OrgNode } from "../api/agents";
@@ -9,7 +10,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { ChevronRight, GitBranch } from "lucide-react";
-import { cn } from "../lib/utils";
+import "./Org.css";
 
 function OrgTree({
   nodes,
@@ -45,41 +46,30 @@ function OrgTreeNode({
     <div>
       <Link
         to={hrefFn(node.id)}
-        className="flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer hover:bg-accent/50 no-underline text-inherit"
+        className="org-tree-node-link"
         style={{ paddingLeft: `${depth * 16 + 12}px` }}
       >
         {hasChildren ? (
           <button
-            className="p-0.5"
+            type="button"
+            className={`org-tree-node-toggle ${expanded ? "expanded" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               setExpanded(!expanded);
             }}
           >
-            <ChevronRight
-              className={cn("h-3 w-3 transition-transform", expanded && "rotate-90")}
-            />
+            <ChevronRight />
           </button>
         ) : (
-          <span className="w-4" />
+          <span className="org-tree-node-spacer" aria-hidden />
         )}
         <span
-          className={cn(
-            "h-2 w-2 rounded-full shrink-0",
-            node.status === "active"
-              ? "bg-green-400"
-              : node.status === "paused"
-                ? "bg-yellow-400"
-                : node.status === "pending_approval"
-                  ? "bg-amber-400"
-                : node.status === "error"
-                  ? "bg-red-400"
-                  : "bg-neutral-400"
-          )}
+          className="org-tree-node-dot"
+          data-status={node.status}
         />
-        <span className="font-medium flex-1">{node.name}</span>
-        <span className="text-xs text-muted-foreground">{node.role}</span>
+        <span className="org-tree-node-name">{node.name}</span>
+        <span className="org-tree-node-role">{node.role}</span>
         <StatusBadge status={node.status} />
       </Link>
       {hasChildren && expanded && (
@@ -90,12 +80,13 @@ function OrgTreeNode({
 }
 
 export function Org() {
+  const { t } = useTranslation("org");
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Org Chart" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("pageTitle") }]);
+  }, [setBreadcrumbs, t]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.org(selectedCompanyId!),
@@ -104,7 +95,7 @@ export function Org() {
   });
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={GitBranch} message="Select a company to view org chart." />;
+    return <EmptyState icon={GitBranch} message={t("selectCompanyToView")} />;
   }
 
   if (isLoading) {
@@ -112,18 +103,18 @@ export function Org() {
   }
 
   return (
-    <div className="space-y-4">
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
+    <div className="org-page">
+      {error && <p className="org-error">{error.message}</p>}
 
       {data && data.length === 0 && (
         <EmptyState
           icon={GitBranch}
-          message="No agents in the organization. Create agents to build your org chart."
+          message={t("noAgentsCreateFirst")}
         />
       )}
 
       {data && data.length > 0 && (
-        <div className="border border-border py-1">
+        <div className="org-list">
           <OrgTree nodes={data} hrefFn={(id) => `/agents/${id}`} />
         </div>
       )}

@@ -1,160 +1,115 @@
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "@/lib/router";
+import { useTranslation } from "react-i18next";
 import { authApi } from "../api/auth";
+import { healthApi } from "../api/health";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
 import { Sparkles } from "lucide-react";
+import "./Auth.css";
 
-type AuthMode = "sign_in" | "sign_up";
+function GoogleIcon() {
+  return (
+    <svg className="auth-google-icon" viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
 
+/**
+ * 登入頁 — 僅支援 Google 登入，無註冊／帳密表單。
+ */
 export function AuthPage() {
-  const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<AuthMode>("sign_in");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
   const nextPath = useMemo(() => searchParams.get("next") || "/", [searchParams]);
+
+  const { data: providers } = useQuery({
+    queryKey: queryKeys.auth.providers,
+    queryFn: () => authApi.getProviders(),
+    retry: false,
+  });
+  const healthQuery = useQuery({
+    queryKey: queryKeys.health,
+    queryFn: () => healthApi.get(),
+    retry: false,
+  });
+  const requireLogin = healthQuery.data?.deploymentMode === "authenticated";
   const { data: session, isLoading: isSessionLoading } = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
     retry: false,
+    enabled: requireLogin,
   });
 
   useEffect(() => {
-    if (session) {
+    if (requireLogin && session) {
       navigate(nextPath, { replace: true });
     }
-  }, [session, navigate, nextPath]);
+  }, [requireLogin, session, navigate, nextPath]);
 
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (mode === "sign_in") {
-        await authApi.signInEmail({ email: email.trim(), password });
-        return;
-      }
-      await authApi.signUpEmail({
-        name: name.trim(),
-        email: email.trim(),
-        password,
-      });
-    },
-    onSuccess: async () => {
-      setError(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
-      navigate(nextPath, { replace: true });
-    },
-    onError: (err) => {
-      setError(err instanceof Error ? err.message : "Authentication failed");
-    },
-  });
-
-  const canSubmit =
-    email.trim().length > 0 &&
-    password.trim().length >= 8 &&
-    (mode === "sign_in" || name.trim().length > 0);
-
-  if (isSessionLoading) {
+  if (healthQuery.isLoading || (requireLogin && isSessionLoading)) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      <div className="auth-loading-wrap">
+        <p>{t("app.loading")}</p>
       </div>
     );
   }
 
+  const googleEnabled = providers?.google === true;
+
   return (
-    <div className="fixed inset-0 flex bg-background">
-      {/* Left half — form */}
-      <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
-        <div className="w-full max-w-md mx-auto my-auto px-8 py-12">
-          <div className="flex items-center gap-2 mb-8">
-            <Sparkles className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Paperclip</span>
+    <div className="auth-page">
+      <div className="auth-form-pane">
+        <div className="auth-form-inner">
+          <div className="auth-brand">
+            <Sparkles />
+            <span>VFactory</span>
           </div>
 
-          <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? "Sign in to Paperclip" : "Create your Paperclip account"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "sign_in"
-              ? "Use your email and password to access this instance."
-              : "Create an account for this instance. Email confirmation is not required in v1."}
-          </p>
+          <h1 className="auth-title">{t("auth.signInTitle")}</h1>
+          <p className="auth-desc">{t("auth.signInDescGoogleOnly")}</p>
 
-          <form
-            className="mt-6 space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              mutation.mutate();
-            }}
-          >
-            {mode === "sign_up" && (
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Name</label>
-                <input
-                  className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  autoComplete="name"
-                  autoFocus
-                />
-              </div>
-            )}
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Email</label>
-              <input
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                autoComplete="email"
-                autoFocus={mode === "sign_in"}
-              />
+          {googleEnabled ? (
+            <div className="auth-form-group">
+              <Button
+                type="button"
+                variant="outline"
+                className="auth-google-btn"
+                onClick={() => {
+                  const base = typeof window !== "undefined" ? window.location.origin : "";
+                  authApi.signInWithGoogle(base + (nextPath || "/"));
+                }}
+              >
+                <GoogleIcon />
+                {t("auth.signInWithGoogle")}
+              </Button>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Password</label>
-              <input
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
-              />
-            </div>
-            {error && <p className="text-xs text-destructive">{error}</p>}
-            <Button type="submit" disabled={!canSubmit || mutation.isPending} className="w-full">
-              {mutation.isPending
-                ? "Working…"
-                : mode === "sign_in"
-                  ? "Sign In"
-                  : "Create Account"}
-            </Button>
-          </form>
-
-          <div className="mt-5 text-sm text-muted-foreground">
-            {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
-            <button
-              type="button"
-              className="font-medium text-foreground underline underline-offset-2"
-              onClick={() => {
-                setError(null);
-                setMode(mode === "sign_in" ? "sign_up" : "sign_in");
-              }}
-            >
-              {mode === "sign_in" ? "Create one" : "Sign in"}
-            </button>
-          </div>
+          ) : (
+            <p className="auth-form-error">{t("auth.googleNotConfigured")}</p>
+          )}
         </div>
       </div>
 
-      {/* Right half — ASCII art animation (hidden on mobile) */}
-      <div className="hidden md:block w-1/2 overflow-hidden">
+      <div className="auth-ascii-pane">
         <AsciiArtAnimation />
       </div>
     </div>

@@ -29,19 +29,34 @@ POST /api/companies/{companyId}/goals
   "title": "Launch MVP by Q1",
   "description": "Ship minimum viable product",
   "level": "company",
-  "status": "active"
+  "status": "active",
+  "recurrence": "one_time"
 }
 ```
+
+- **recurrence**: `one_time` (default) | `daily` | `weekly` | `monthly` | `custom`. One-time goals are marked **achieved** when all linked issues are done/cancelled. Recurring goals do not auto-achieve; when all linked issues are done, the system sets **recurrence_next_refresh_at** = now + interval, and the goal is considered "waiting for refresh" until that time.
+- **Custom recurrence**: when `recurrence` is `custom`, send **recurrenceIntervalDays** (0–365), **recurrenceIntervalHours** (0–23), **recurrenceIntervalMinutes** (0–59), **recurrenceIntervalSeconds** (0–59). At least one must be &gt; 0. Example: every 2 days 3 hours = `recurrenceIntervalDays: 2`, `recurrenceIntervalHours: 3`, minutes/seconds 0.
+- **recurrence_next_refresh_at** (read-only): for recurring goals, the next time the goal is considered "active" again (has work). Heartbeat skip logic treats a goal as having no work when `now < recurrence_next_refresh_at`.
 
 ### Update Goal
 
 ```
 PATCH /api/goals/{goalId}
 {
-  "status": "completed",
-  "description": "Updated description"
+  "status": "achieved",
+  "description": "Updated description",
+  "recurrence": "weekly"
 }
 ```
+
+When setting `recurrence` to `custom`, include the four interval fields; they cannot all be zero.
+
+### Auto-achieve and recurring refresh
+
+When an issue is set to **done** and it is linked to a goal (`goalId`):
+
+- If the goal has **recurrence** `one_time` and all linked issues are done/cancelled, the goal is updated to **status** `achieved`.
+- If the goal has **recurrence** `daily` | `weekly` | `monthly` | `custom` and all linked issues are done/cancelled, the goal is not achieved; instead **recurrence_next_refresh_at** is set to *now* + the goal’s interval (e.g. daily = +1 day). Until `now >= recurrence_next_refresh_at`, the goal is treated as "waiting for refresh" (no work) for heartbeat timer skip logic.
 
 ## Projects
 

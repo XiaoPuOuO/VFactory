@@ -81,7 +81,7 @@ export function parseCursorJsonl(stdout: string) {
       const usageObj = parseObject(event.usage);
       usage.inputTokens += asNumber(
         usageObj.input_tokens,
-        asNumber(usageObj.inputTokens, 0),
+        asNumber(usageObj.inputTokens, asNumber(usageObj.prompt_tokens, 0)),
       );
       usage.cachedInputTokens += asNumber(
         usageObj.cached_input_tokens,
@@ -89,7 +89,7 @@ export function parseCursorJsonl(stdout: string) {
       );
       usage.outputTokens += asNumber(
         usageObj.output_tokens,
-        asNumber(usageObj.outputTokens, 0),
+        asNumber(usageObj.outputTokens, asNumber(usageObj.completion_tokens, 0)),
       );
       totalCostUsd += asNumber(event.total_cost_usd, asNumber(event.cost_usd, asNumber(event.cost, 0)));
 
@@ -132,11 +132,38 @@ export function parseCursorJsonl(stdout: string) {
       const part = parseObject(event.part);
       const tokens = parseObject(part.tokens);
       const cache = parseObject(tokens.cache);
-      usage.inputTokens += asNumber(tokens.input, 0);
+      usage.inputTokens += asNumber(
+        tokens.input,
+        asNumber(tokens.input_tokens, asNumber(tokens.prompt_tokens, 0)),
+      );
       usage.cachedInputTokens += asNumber(cache.read, 0);
-      usage.outputTokens += asNumber(tokens.output, 0);
+      usage.outputTokens += asNumber(
+        tokens.output,
+        asNumber(tokens.output_tokens, asNumber(tokens.completion_tokens, 0)),
+      );
       totalCostUsd += asNumber(part.cost, 0);
       continue;
+    }
+
+    // 非 result/step_finish 的 event 若帶有 usage 也累加（避免 CLI 將 usage 放在 message 等型別時漏計 input）
+    if (
+      type !== "result" &&
+      type !== "step_finish" &&
+      event.usage != null
+    ) {
+      const usageObj = parseObject(event.usage);
+      usage.inputTokens += asNumber(
+        usageObj.input_tokens,
+        asNumber(usageObj.inputTokens, asNumber(usageObj.prompt_tokens, 0)),
+      );
+      usage.cachedInputTokens += asNumber(
+        usageObj.cached_input_tokens,
+        asNumber(usageObj.cachedInputTokens, asNumber(usageObj.cache_read_input_tokens, 0)),
+      );
+      usage.outputTokens += asNumber(
+        usageObj.output_tokens,
+        asNumber(usageObj.outputTokens, asNumber(usageObj.completion_tokens, 0)),
+      );
     }
   }
 

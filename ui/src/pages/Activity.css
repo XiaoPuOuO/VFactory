@@ -1,0 +1,33 @@
+/**
+ * Activity 頁面 — 原生 CSS（無 Tailwind）
+ */
+.activity-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.activity-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.activity-filter-trigger {
+  width: 8.75rem;
+  height: 2rem;
+  font-size: 0.75rem;
+}
+
+.activity-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.activity-list {
+  border: 1px solid var(--border);
+}
+
+.activity-list > * + * {
+  border-top: 1px solid var(--border);
+}

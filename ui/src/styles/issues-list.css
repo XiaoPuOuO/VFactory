@@ -1,0 +1,858 @@
+/**
+ * 議題列表頁 — 原生 CSS（無 Tailwind）
+ * 對齊 Apple HIG：簡約、精緻、足夠留白與層次。
+ */
+
+/* ---------------------------------------------------------------------------
+   頁面容器
+   --------------------------------------------------------------------------- */
+.issues-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   工具列
+   --------------------------------------------------------------------------- */
+.issues-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .issues-toolbar {
+    gap: 0.75rem;
+  }
+}
+
+.issues-toolbar-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .issues-toolbar-left {
+    gap: 0.75rem;
+  }
+}
+
+.issues-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .issues-toolbar-right {
+    gap: 0.25rem;
+  }
+}
+
+/* 搜尋框外層 */
+.issues-search-wrap {
+  position: relative;
+  width: 12rem;
+}
+
+@media (min-width: 640px) {
+  .issues-search-wrap {
+    width: 16rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .issues-search-wrap {
+    width: 20rem;
+  }
+}
+
+.issues-search-icon {
+  pointer-events: none;
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.issues-search-input {
+  padding-left: 1.75rem;
+  font-size: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .issues-search-input {
+    font-size: 0.875rem;
+  }
+}
+
+/* 檢視模式切換（列表 / 看板） */
+.issues-view-toggle {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  overflow: hidden;
+  margin-right: 0.25rem;
+}
+
+.issues-view-toggle-btn {
+  padding: 0.375rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.issues-view-toggle-btn:hover {
+  color: var(--foreground);
+}
+
+.issues-view-toggle-btn.active {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.issues-view-toggle-btn svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.issues-filter-btn {
+  font-size: 0.75rem;
+}
+
+.issues-filter-btn svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .issues-filter-btn svg {
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-right: 0.25rem;
+  }
+}
+
+/* 篩選按鈕有數量時高亮 */
+.issues-filter-btn.active-count {
+  color: #2563eb;
+}
+
+.dark .issues-filter-btn.active-count {
+  color: #60a5fa;
+}
+
+.issues-toolbar-btn-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+@media (min-width: 640px) {
+  .issues-toolbar-btn-icon {
+    margin-right: 0.25rem;
+  }
+}
+
+.issues-toolbar-btn-icon-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .issues-toolbar-btn-icon-sm {
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-right: 0.25rem;
+  }
+}
+
+.issues-toolbar-btn-label {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .issues-toolbar-btn-label {
+    display: inline;
+  }
+}
+
+.issues-toolbar-btn-text {
+  font-size: 0.75rem;
+}
+
+.issues-filter-count-mobile {
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 0.125rem;
+}
+
+@media (min-width: 640px) {
+  .issues-filter-count-mobile {
+    display: none;
+  }
+}
+
+.issues-filter-clear-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-left: 0.25rem;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+@media (max-width: 639px) {
+  .issues-filter-clear-icon {
+    display: none;
+  }
+}
+
+.issues-popover-check-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+
+.issues-identity-min-w-0 {
+  min-width: 0;
+}
+
+.issues-assignee-option.active {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+/* 錯誤訊息 */
+.issues-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+/* ---------------------------------------------------------------------------
+   群組（依狀態/優先級/負責人分組時）
+   --------------------------------------------------------------------------- */
+.issues-group {
+  margin-bottom: 0;
+}
+
+.issues-group-header {
+  display: flex;
+  align-items: center;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  padding-left: 0.25rem;
+  padding-right: 0.75rem;
+}
+
+.issues-group-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.issues-group-trigger svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  transition: transform 0.15s;
+}
+
+.issues-group.open .issues-group-trigger svg {
+  transform: rotate(90deg);
+}
+
+.issues-group-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.issues-group-add-btn {
+  margin-left: auto;
+  color: var(--muted-foreground);
+}
+
+.issues-group-add-btn-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+/* 列表容器：邊框 + 分隔線 */
+.issues-list {
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   議題列（IssueRow）
+   --------------------------------------------------------------------------- */
+.issues-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  padding-left: 0.5rem;
+  padding-right: 0.75rem;
+  font-size: 0.875rem;
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s;
+}
+
+.issues-row:last-child {
+  border-bottom: none;
+}
+
+.issues-row:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+@media (min-width: 640px) {
+  .issues-row {
+    align-items: center;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    padding-left: 0.25rem;
+  }
+}
+
+.issues-row-mobile-lead {
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+@media (min-width: 640px) {
+  .issues-row-mobile-lead {
+    display: none;
+  }
+}
+
+.issues-row-content {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0%;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+@media (min-width: 640px) {
+  .issues-row-content {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+}
+
+.issues-row-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .issues-row-title {
+    order: 2;
+    min-width: 0;
+    flex: 1 1 0%;
+    -webkit-line-clamp: unset;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.issues-row-title-tag {
+  margin-left: 0.375rem;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  color: var(--muted-foreground);
+}
+
+.issues-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (min-width: 640px) {
+  .issues-row-meta {
+    order: 1;
+    flex-shrink: 0;
+  }
+}
+
+.issues-row-meta-icon {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .issues-row-meta-icon {
+    display: inline-flex;
+  }
+}
+
+.issues-row-id {
+  flex-shrink: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.issues-row-dot {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+@media (min-width: 640px) {
+  .issues-row-dot {
+    display: none;
+  }
+}
+
+.issues-row-meta-mobile {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+@media (min-width: 640px) {
+  .issues-row-meta-mobile {
+    display: none;
+  }
+}
+
+.issues-row-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 9999px;
+  background: color-mix(in oklab, #3b82f6 10%, transparent);
+  padding: 0.125rem 0.375rem;
+}
+
+@media (min-width: 640px) {
+  .issues-row-live {
+    gap: 0.375rem;
+    padding: 0.125rem 0.5rem;
+  }
+}
+
+.issues-row-live-dot {
+  position: relative;
+  display: flex;
+  width: 8px;
+  height: 8px;
+}
+
+.issues-row-live-dot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: #60a5fa;
+  opacity: 0.75;
+  animation: issues-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.issues-row-live-dot::after {
+  content: "";
+  position: relative;
+  display: inline-flex;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #3b82f6;
+}
+
+.issues-row-live-text {
+  display: none;
+  font-size: 11px;
+  font-weight: 500;
+  color: #2563eb;
+}
+
+.dark .issues-row-live-text {
+  color: #60a5fa;
+}
+
+@media (min-width: 640px) {
+  .issues-row-live-text {
+    display: inline;
+  }
+}
+
+@keyframes issues-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.issues-row-trailing {
+  margin-left: auto;
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .issues-row-trailing {
+    display: flex;
+    order: 3;
+    gap: 0.75rem;
+  }
+}
+
+.issues-row-trailing-meta {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.issues-row-unread-slot {
+  display: inline-flex;
+  height: 1rem;
+  width: 1rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
+
+.issues-row-unread-btn {
+  display: inline-flex;
+  height: 1rem;
+  width: 1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.issues-row-unread-btn:hover {
+  background: color-mix(in oklab, #3b82f6 20%, transparent);
+}
+
+.issues-row-unread-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #2563eb;
+  transition: opacity 0.3s;
+}
+
+.dark .issues-row-unread-dot {
+  background: #60a5fa;
+}
+
+.issues-row-unread-dot.fading {
+  opacity: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   篩選 Popover 內容
+   --------------------------------------------------------------------------- */
+.issues-popover-filters {
+  width: min(480px, calc(100vw - 2rem));
+  padding: 0;
+}
+
+.issues-popover-filters-inner {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.issues-popover-filters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.issues-popover-filters-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.issues-popover-clear {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.issues-popover-clear:hover {
+  color: var(--foreground);
+}
+
+.issues-popover-section-label {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.issues-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.issues-quick-filter-btn {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+  color: var(--muted-foreground);
+}
+
+.issues-quick-filter-btn:hover {
+  color: var(--foreground);
+  border-color: color-mix(in oklab, var(--foreground) 30%, transparent);
+}
+
+.issues-quick-filter-btn.active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+
+.issues-filter-divider {
+  border-top: 1px solid var(--border);
+}
+
+.issues-filter-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .issues-filter-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.issues-filter-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.issues-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.125rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.issues-filter-option:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.issues-filter-option span:last-child {
+  font-size: 0.875rem;
+}
+
+.issues-filter-option-scroll {
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+/* 排序 / 分組 下拉選項 */
+.issues-popover-menu {
+  width: 12rem;
+  padding: 0;
+}
+
+.issues-popover-menu-inner {
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.issues-popover-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  border-radius: 0.125rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--muted-foreground);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.issues-popover-menu-btn:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+  color: var(--foreground);
+}
+
+.issues-popover-menu-btn.active {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+  color: var(--foreground);
+}
+
+.issues-popover-menu-btn.active span.suffix {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+/* 負責人選擇器 */
+.issues-assignee-trigger {
+  display: flex;
+  width: 180px;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.issues-assignee-trigger:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.issues-assignee-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.issues-assignee-empty-icon {
+  display: inline-flex;
+  height: 1.25rem;
+  width: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px dashed color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+}
+
+.issues-assignee-empty-icon svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.issues-assignee-popover {
+  width: 14rem;
+  padding: 0.25rem;
+}
+
+.issues-assignee-search {
+  margin-bottom: 0.25rem;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  outline: none;
+  color: var(--foreground);
+}
+
+.issues-assignee-search::placeholder {
+  color: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+}
+
+.issues-assignee-list {
+  max-height: 12rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.issues-assignee-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 0.125rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.issues-assignee-option:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.issues-assignee-option.active {
+  background: var(--accent);
+}
+
+/* 標籤 chip */
+.issues-row-labels {
+  display: none;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  max-width: 240px;
+}
+
+@media (min-width: 768px) {
+  .issues-row-labels {
+    display: flex;
+  }
+}
+
+.issues-row-label-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid;
+  padding: 0.125rem 0.375rem;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.issues-row-label-more {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}

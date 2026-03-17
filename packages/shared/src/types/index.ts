@@ -1,3 +1,4 @@
+export type { Tenant, TenantSummary, TenantStatus, TenantMembershipRole } from "./tenant.js";
 export type { Company } from "./company.js";
 export type {
   Agent,
@@ -30,6 +31,15 @@ export type {
   IssueLabel,
 } from "./issue.js";
 export type { Goal } from "./goal.js";
+export type {
+  ChatRoom,
+  ChatRoomMember,
+  ChatMessage,
+  ChatRoomWithMeta,
+  ChatRoomDetail,
+  ChatListPreferences,
+} from "./chat.js";
+export type { AgentChatMemory } from "./agent-memory.js";
 export type { Approval, ApprovalComment } from "./approval.js";
 export type {
   SecretProvider,
@@ -48,7 +58,6 @@ export type {
   AgentRuntimeState,
   AgentTaskSession,
   AgentWakeupRequest,
-  InstanceSchedulerHeartbeatAgent,
 } from "./heartbeat.js";
 export type { LiveEvent } from "./live.js";
 export type { DashboardSummary } from "./dashboard.js";
@@ -79,3 +88,4 @@ export type {
   CompanyPortabilityImportResult,
   CompanyPortabilityExportRequest,
 } from "./company-portability.js";
+export type { AgentSchedule, ScheduleKind, ScheduleWindow } from "./schedule.js";

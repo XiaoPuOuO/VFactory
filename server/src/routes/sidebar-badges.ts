@@ -5,7 +5,7 @@ import { joinRequests } from "@paperclipai/db";
 import { sidebarBadgeService } from "../services/sidebar-badges.js";
 import { accessService } from "../services/access.js";
 import { dashboardService } from "../services/dashboard.js";
-import { assertCompanyAccess } from "./authz.js";
+import { assertCompanyAccess, hasCompanyViewAll } from "./authz.js";
 
 export function sidebarBadgeRoutes(db: Db) {
   const router = Router();
@@ -15,12 +15,11 @@ export function sidebarBadgeRoutes(db: Db) {
 
   router.get("/companies/:companyId/sidebar-badges", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     let canApproveJoins = false;
     if (req.actor.type === "board") {
       canApproveJoins =
-        req.actor.source === "local_implicit" ||
-        Boolean(req.actor.isInstanceAdmin) ||
+        hasCompanyViewAll(req) ||
         (await access.canUser(companyId, req.actor.userId, "joins:approve"));
     } else if (req.actor.type === "agent" && req.actor.agentId) {
       canApproveJoins = await access.hasPermission(companyId, "agent", req.actor.agentId, "joins:approve");

@@ -6,7 +6,6 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { pathToFileURL } from "node:url";
 import type { Request as ExpressRequest, RequestHandler } from "express";
-import { and, eq } from "drizzle-orm";
 import {
   createDb,
   ensurePostgresDatabase,
@@ -15,17 +14,13 @@ import {
   reconcilePendingMigrationHistory,
   formatDatabaseBackupResult,
   runDatabaseBackup,
-  authUsers,
-  companies,
-  companyMemberships,
-  instanceUserRoles,
 } from "@paperclipai/db";
 import detectPort from "detect-port";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { logger } from "./middleware/logger.js";
 import { setupLiveEventsWebSocketServer } from "./realtime/live-events-ws.js";
-import { heartbeatService, reconcilePersistedRuntimeServicesOnStartup } from "./services/index.js";
+import { heartbeatService, scheduleService, reconcilePersistedRuntimeServicesOnStartup } from "./services/index.js";
 import { createStorageServiceFromConfig } from "./storage/index.js";
 import { printStartupBanner } from "./startup-banner.js";
 import { getBoardClaimWarningUrl, initializeBoardClaimChallenge } from "./board-claim.js";
@@ -64,6 +59,9 @@ export interface StartedServer {
   listenPort: number;
   apiUrl: string;
   databaseUrl: string;
+  /** 僅在本次 process 啟動了 embedded Postgres 時存在，供 graceful shutdown 關閉 DB */
+  embeddedPostgres?: EmbeddedPostgresInstance | null;
+  embeddedPostgresStartedByThisProcess?: boolean;
 }
 
 export async function startServer(): Promise<StartedServer> {
@@ -162,71 +160,6 @@ export async function startServer(): Promise<StartedServer> {
     logger.info({ pendingMigrations: state.pendingMigrations }, `Applying ${state.pendingMigrations.length} pending migrations for ${label}`);
     await applyPendingMigrations(connectionString);
     return "applied (pending migrations)";
-  }
-  
-  function isLoopbackHost(host: string): boolean {
-    const normalized = host.trim().toLowerCase();
-    return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
-  }
-  
-  const LOCAL_BOARD_USER_ID = "local-board";
-  const LOCAL_BOARD_USER_EMAIL = "local@paperclip.local";
-  const LOCAL_BOARD_USER_NAME = "Board";
-  
-  async function ensureLocalTrustedBoardPrincipal(db: any): Promise<void> {
-    const now = new Date();
-    const existingUser = await db
-      .select({ id: authUsers.id })
-      .from(authUsers)
-      .where(eq(authUsers.id, LOCAL_BOARD_USER_ID))
-      .then((rows: Array<{ id: string }>) => rows[0] ?? null);
-  
-    if (!existingUser) {
-      await db.insert(authUsers).values({
-        id: LOCAL_BOARD_USER_ID,
-        name: LOCAL_BOARD_USER_NAME,
-        email: LOCAL_BOARD_USER_EMAIL,
-        emailVerified: true,
-        image: null,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-  
-    const role = await db
-      .select({ id: instanceUserRoles.id })
-      .from(instanceUserRoles)
-      .where(and(eq(instanceUserRoles.userId, LOCAL_BOARD_USER_ID), eq(instanceUserRoles.role, "instance_admin")))
-      .then((rows: Array<{ id: string }>) => rows[0] ?? null);
-    if (!role) {
-      await db.insert(instanceUserRoles).values({
-        userId: LOCAL_BOARD_USER_ID,
-        role: "instance_admin",
-      });
-    }
-  
-    const companyRows = await db.select({ id: companies.id }).from(companies);
-    for (const company of companyRows) {
-      const membership = await db
-        .select({ id: companyMemberships.id })
-        .from(companyMemberships)
-        .where(
-          and(
-            eq(companyMemberships.companyId, company.id),
-            eq(companyMemberships.principalType, "user"),
-            eq(companyMemberships.principalId, LOCAL_BOARD_USER_ID),
-          ),
-        )
-        .then((rows: Array<{ id: string }>) => rows[0] ?? null);
-      if (membership) continue;
-      await db.insert(companyMemberships).values({
-        companyId: company.id,
-        principalType: "user",
-        principalId: LOCAL_BOARD_USER_ID,
-        status: "active",
-        membershipRole: "owner",
-      });
-    }
   }
   
   let db;
@@ -334,7 +267,6 @@ export async function startServer(): Promise<StartedServer> {
         password: "paperclip",
         port,
         persistent: true,
-        initdbFlags: ["--encoding=UTF8", "--locale=C"],
         onLog: appendEmbeddedPostgresLog,
         onError: appendEmbeddedPostgresLog,
       });
@@ -384,17 +316,6 @@ export async function startServer(): Promise<StartedServer> {
     startupDbInfo = { mode: "embedded-postgres", dataDir, port };
   }
   
-  if (config.deploymentMode === "local_trusted" && !isLoopbackHost(config.host)) {
-    throw new Error(
-      `local_trusted mode requires loopback host binding (received: ${config.host}). ` +
-        "Use authenticated mode for non-loopback deployments.",
-    );
-  }
-  
-  if (config.deploymentMode === "local_trusted" && config.deploymentExposure !== "private") {
-    throw new Error("local_trusted mode only supports private exposure");
-  }
-  
   if (config.deploymentMode === "authenticated") {
     if (config.authBaseUrlMode === "explicit" && !config.authPublicBaseUrl) {
       throw new Error("auth.baseUrlMode=explicit requires auth.publicBaseUrl");
@@ -409,7 +330,7 @@ export async function startServer(): Promise<StartedServer> {
     }
   }
   
-  let authReady = config.deploymentMode === "local_trusted";
+  let authReady = false;
   let betterAuthHandler: RequestHandler | undefined;
   let resolveSession:
     | ((req: ExpressRequest) => Promise<BetterAuthSessionResult | null>)
@@ -417,9 +338,6 @@ export async function startServer(): Promise<StartedServer> {
   let resolveSessionFromHeaders:
     | ((headers: Headers) => Promise<BetterAuthSessionResult | null>)
     | undefined;
-  if (config.deploymentMode === "local_trusted") {
-    await ensureLocalTrustedBoardPrincipal(db as any);
-  }
   if (config.deploymentMode === "authenticated") {
     const {
       createBetterAuthHandler,
@@ -432,7 +350,7 @@ export async function startServer(): Promise<StartedServer> {
       process.env.BETTER_AUTH_SECRET?.trim() ?? process.env.PAPERCLIP_AGENT_JWT_SECRET?.trim();
     if (!betterAuthSecret) {
       throw new Error(
-        "authenticated mode requires BETTER_AUTH_SECRET (or PAPERCLIP_AGENT_JWT_SECRET) to be set",
+        "authenticated mode requires BETTER_AUTH_SECRET (or PAPERCLIP_AGENT_JWT_SECRET)",
       );
     }
     const derivedTrustedOrigins = deriveAuthTrustedOrigins(config);
@@ -460,13 +378,26 @@ export async function startServer(): Promise<StartedServer> {
     await initializeBoardClaimChallenge(db as any, { deploymentMode: config.deploymentMode });
     authReady = true;
   }
-  
+
+  const accessSvc =
+    config.deploymentMode === "authenticated"
+      ? (await import("./services/access.js")).accessService(db as any)
+      : null;
+
   const listenPort = await detectPort(config.port);
   const uiMode = config.uiDevMiddleware ? "vite-dev" : config.serveUi ? "static" : "none";
   const storageService = createStorageServiceFromConfig(config);
+  /** 先建立 server，讓 vite-dev 的 HMR 可綁定同一埠，避免另開 13100 */
+  const server = createServer();
+  /** 先註冊 events/ws upgrade，確保 /api/companies/:id/events/ws 由我們處理，其餘交給 Vite HMR */
+  setupLiveEventsWebSocketServer(server, db as any, {
+    deploymentMode: config.deploymentMode,
+    resolveSessionFromHeaders,
+  });
   const app = await createApp(db as any, {
     uiMode,
     serverPort: listenPort,
+    httpServer: server,
     storageService,
     deploymentMode: config.deploymentMode,
     deploymentExposure: config.deploymentExposure,
@@ -476,11 +407,19 @@ export async function startServer(): Promise<StartedServer> {
     companyDeletionEnabled: config.companyDeletionEnabled,
     betterAuthHandler,
     resolveSession,
+    getBanStatus: accessSvc ? (userId: string) => accessSvc.getBanStatus(userId) : undefined,
+    authProviders:
+      config.deploymentMode === "authenticated"
+        ? { emailPassword: false, google: config.authGoogleEnabled }
+        : undefined,
   });
-  const server = createServer(app as unknown as Parameters<typeof createServer>[0]);
-  
+  server.on("request", app as unknown as (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => void);
+
   if (listenPort !== config.port) {
     logger.warn(`Requested port is busy; using next free port (requestedPort=${config.port}, selectedPort=${listenPort})`);
+    logger.warn(
+      `若前次程序異常結束導致埠仍被佔用，可執行: pnpm run kill-port ${config.port} 或 lsof -ti :${config.port} | xargs kill -9`,
+    );
   }
   
   const runtimeListenHost = config.host;
@@ -491,11 +430,6 @@ export async function startServer(): Promise<StartedServer> {
   process.env.PAPERCLIP_LISTEN_HOST = runtimeListenHost;
   process.env.PAPERCLIP_LISTEN_PORT = String(listenPort);
   process.env.PAPERCLIP_API_URL = `http://${runtimeApiHost}:${listenPort}`;
-  
-  setupLiveEventsWebSocketServer(server, db as any, {
-    deploymentMode: config.deploymentMode,
-    resolveSessionFromHeaders,
-  });
 
   void reconcilePersistedRuntimeServicesOnStartup(db as any)
     .then((result) => {
@@ -510,26 +444,26 @@ export async function startServer(): Promise<StartedServer> {
       logger.error({ err }, "startup reconciliation of persisted runtime services failed");
     });
   
+  const heartbeat = heartbeatService(db as any);
+
   if (config.heartbeatSchedulerEnabled) {
-    const heartbeat = heartbeatService(db as any);
-  
     // Reap orphaned runs at startup (no threshold -- runningProcesses is empty)
     void heartbeat.reapOrphanedRuns().catch((err) => {
       logger.error({ err }, "startup reap of orphaned heartbeat runs failed");
     });
 
     setInterval(() => {
-      void heartbeat
+        void heartbeat
         .tickTimers(new Date())
         .then((result) => {
-          if (result.enqueued > 0) {
+          if (result.enqueued > 0 || (result.skippedNoWork ?? 0) > 0) {
             logger.info({ ...result }, "heartbeat timer tick enqueued runs");
           }
         })
         .catch((err) => {
           logger.error({ err }, "heartbeat timer tick failed");
         });
-  
+
       // Periodically reap orphaned runs (5-min staleness threshold)
       void heartbeat
         .reapOrphanedRuns({ staleThresholdMs: 5 * 60 * 1000 })
@@ -538,7 +472,23 @@ export async function startServer(): Promise<StartedServer> {
         });
     }, config.heartbeatSchedulerIntervalMs);
   }
-  
+
+  if (config.scheduleSchedulerEnabled) {
+    const schedules = scheduleService(db as any, () => heartbeat);
+    setInterval(() => {
+      void schedules
+        .tickSchedules(new Date())
+        .then((result) => {
+          if (result.triggered > 0) {
+            logger.info({ ...result }, "schedule tick triggered runs");
+          }
+        })
+        .catch((err) => {
+          logger.error({ err }, "schedule tick failed");
+        });
+    }, config.scheduleSchedulerIntervalMs);
+  }
+
   if (config.databaseBackupEnabled) {
     const backupIntervalMs = config.databaseBackupIntervalMinutes * 60 * 1000;
     let backupInFlight = false;
@@ -635,8 +585,7 @@ export async function startServer(): Promise<StartedServer> {
         console.log(
           [
             `${red}  BOARD CLAIM REQUIRED  ${reset}`,
-            `${yellow}This instance was previously local_trusted and still has local-board as the only admin.${reset}`,
-            `${yellow}Sign in with a real user and open this one-time URL to claim ownership:${reset}`,
+            `${yellow}No instance admin exists yet. Sign in with a real user and open this one-time URL to claim ownership:${reset}`,
             `${yellow}${boardClaimUrl}${reset}`,
             `${yellow}If you are connecting over Tailscale, replace the host in this URL with your Tailscale IP/MagicDNS name.${reset}`,
           ].join("\n"),
@@ -647,33 +596,40 @@ export async function startServer(): Promise<StartedServer> {
     });
   });
   
-  if (embeddedPostgres && embeddedPostgresStartedByThisProcess) {
-    const shutdown = async (signal: "SIGINT" | "SIGTERM") => {
-      logger.info({ signal }, "Stopping embedded PostgreSQL");
-      try {
-        await embeddedPostgres?.stop();
-      } catch (err) {
-        logger.error({ err }, "Failed to stop embedded PostgreSQL cleanly");
-      } finally {
-        process.exit(0);
-      }
-    };
-  
-    process.once("SIGINT", () => {
-      void shutdown("SIGINT");
-    });
-    process.once("SIGTERM", () => {
-      void shutdown("SIGTERM");
-    });
-  }
-
   return {
     server,
     host: config.host,
     listenPort,
     apiUrl: process.env.PAPERCLIP_API_URL ?? `http://${runtimeApiHost}:${listenPort}`,
     databaseUrl: activeDatabaseConnectionString,
+    embeddedPostgres: embeddedPostgres ?? undefined,
+    embeddedPostgresStartedByThisProcess,
   };
+}
+
+/**
+ * 註冊 SIGINT/SIGTERM：先關閉 HTTP server 釋放埠，再視情況停止 embedded Postgres，最後 exit。
+ * 僅由 main 流程呼叫，避免崩潰後埠殘留導致「lsof 查不到但 bind 顯示已被佔用」。
+ */
+function registerGracefulShutdown(started: StartedServer) {
+  const onSignal = (signal: "SIGINT" | "SIGTERM") => {
+    logger.info({ signal }, "Graceful shutdown: closing HTTP server");
+    started.server.close(() => {
+      void (async () => {
+        if (started.embeddedPostgresStartedByThisProcess && started.embeddedPostgres) {
+          try {
+            logger.info("Stopping embedded PostgreSQL");
+            await started.embeddedPostgres!.stop();
+          } catch (err) {
+            logger.error({ err }, "Failed to stop embedded PostgreSQL cleanly");
+          }
+        }
+        process.exit(0);
+      })();
+    });
+  };
+  process.once("SIGINT", () => onSignal("SIGINT"));
+  process.once("SIGTERM", () => onSignal("SIGTERM"));
 }
 
 function isMainModule(metaUrl: string): boolean {
@@ -687,8 +643,12 @@ function isMainModule(metaUrl: string): boolean {
 }
 
 if (isMainModule(import.meta.url)) {
-  void startServer().catch((err) => {
-    logger.error({ err }, "Paperclip server failed to start");
-    process.exit(1);
-  });
+  void startServer()
+    .then((started) => {
+      registerGracefulShutdown(started);
+    })
+    .catch((err) => {
+      logger.error({ err }, "Paperclip server failed to start");
+      process.exit(1);
+    });
 }

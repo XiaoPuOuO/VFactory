@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate, Link, Navigate, useBeforeUnload } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { agentsApi, type AgentKey, type ClaudeLoginResult } from "../api/agents";
+import { meApi } from "../api/me";
 import { heartbeatsApi } from "../api/heartbeats";
 import { ApiError } from "../api/client";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
@@ -26,8 +28,8 @@ import { Identity } from "../components/Identity";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { ScrollToBottom } from "../components/ScrollToBottom";
 import { formatCents, formatDate, relativeTime, formatTokens } from "../lib/utils";
-import { cn } from "../lib/utils";
 import { Button } from "@/components/ui/button";
+import "./AgentDetail.css";
 import { Tabs } from "@/components/ui/tabs";
 import {
   Popover,
@@ -62,13 +64,13 @@ import { isUuidLike, type Agent, type HeartbeatRun, type HeartbeatRunEvent, type
 import { redactHomePathUserSegments, redactHomePathUserSegmentsInValue } from "@paperclipai/adapter-utils";
 import { agentRouteRef } from "../lib/utils";
 
-const runStatusIcons: Record<string, { icon: typeof CheckCircle2; color: string }> = {
-  succeeded: { icon: CheckCircle2, color: "text-green-600 dark:text-green-400" },
-  failed: { icon: XCircle, color: "text-red-600 dark:text-red-400" },
-  running: { icon: Loader2, color: "text-cyan-600 dark:text-cyan-400" },
-  queued: { icon: Clock, color: "text-yellow-600 dark:text-yellow-400" },
-  timed_out: { icon: Timer, color: "text-orange-600 dark:text-orange-400" },
-  cancelled: { icon: Slash, color: "text-neutral-500 dark:text-neutral-400" },
+const runStatusIcons: Record<string, { icon: typeof CheckCircle2 }> = {
+  succeeded: { icon: CheckCircle2 },
+  failed: { icon: XCircle },
+  running: { icon: Loader2 },
+  queued: { icon: Clock },
+  timed_out: { icon: Timer },
+  cancelled: { icon: Slash },
 };
 
 const REDACTED_ENV_VALUE = "***REDACTED***";
@@ -238,6 +240,7 @@ export function AgentDetail() {
   const { companies, selectedCompanyId, setSelectedCompanyId } = useCompany();
   const { closePanel } = usePanel();
   const { openNewIssue } = useDialog();
+  const { t } = useTranslation(["nav", "agents"]);
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -402,26 +405,26 @@ export function AgentDetail() {
 
   useEffect(() => {
     const crumbs: { label: string; href?: string }[] = [
-      { label: "Agents", href: "/agents" },
+      { label: t("nav:agents"), href: "/agents" },
     ];
-    const agentName = agent?.name ?? routeAgentRef ?? "Agent";
+    const agentName = agent?.name ?? routeAgentRef ?? t("agents:agent");
     if (activeView === "dashboard" && !urlRunId) {
       crumbs.push({ label: agentName });
     } else {
       crumbs.push({ label: agentName, href: `/agents/${canonicalAgentRef}/dashboard` });
       if (urlRunId) {
-        crumbs.push({ label: "Runs", href: `/agents/${canonicalAgentRef}/runs` });
-        crumbs.push({ label: `Run ${urlRunId.slice(0, 8)}` });
+        crumbs.push({ label: t("agents:runs"), href: `/agents/${canonicalAgentRef}/runs` });
+        crumbs.push({ label: t("agents:runId", { id: urlRunId.slice(0, 8) }) });
       } else if (activeView === "configuration") {
-        crumbs.push({ label: "Configuration" });
+        crumbs.push({ label: t("agents:configuration") });
       } else if (activeView === "runs") {
-        crumbs.push({ label: "Runs" });
+        crumbs.push({ label: t("agents:runs") });
       } else {
-        crumbs.push({ label: "Dashboard" });
+        crumbs.push({ label: t("agents:dashboard") });
       }
     }
     setBreadcrumbs(crumbs);
-  }, [setBreadcrumbs, agent, routeAgentRef, canonicalAgentRef, activeView, urlRunId]);
+  }, [setBreadcrumbs, agent, routeAgentRef, canonicalAgentRef, activeView, urlRunId, t]);
 
   useEffect(() => {
     closePanel();
@@ -437,7 +440,7 @@ export function AgentDetail() {
   );
 
   if (isLoading) return <PageSkeleton variant="detail" />;
-  if (error) return <p className="text-sm text-destructive">{error.message}</p>;
+  if (error) return <p className="agent-detail-error">{error.message}</p>;
   if (!agent) return null;
   if (!urlRunId && !urlTab) {
     return <Navigate to={`/agents/${canonicalAgentRef}/dashboard`} replace />;
@@ -446,34 +449,33 @@ export function AgentDetail() {
   const showConfigActionBar = activeView === "configuration" && (configDirty || configSaving);
 
   return (
-    <div className={cn("space-y-6", isMobile && showConfigActionBar && "pb-24")}>
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 min-w-0">
+    <div className={["agent-detail-page", isMobile && showConfigActionBar && "with-mobile-bar"].filter(Boolean).join(" ")}>
+      <div className="agent-detail-header">
+        <div className="agent-detail-header-left">
           <AgentIconPicker
             value={agent.icon}
             onChange={(icon) => updateIcon.mutate(icon)}
           >
-            <button className="shrink-0 flex items-center justify-center h-12 w-12 rounded-lg bg-accent hover:bg-accent/80 transition-colors">
-              <AgentIcon icon={agent.icon} className="h-6 w-6" />
+            <button type="button" className="agent-detail-icon-btn">
+              <AgentIcon icon={agent.icon} />
             </button>
           </AgentIconPicker>
-          <div className="min-w-0">
-            <h2 className="text-2xl font-bold truncate">{agent.name}</h2>
-            <p className="text-sm text-muted-foreground truncate">
+          <div className="agent-detail-title-wrap">
+            <h2 className="agent-detail-title">{agent.name}</h2>
+            <p className="agent-detail-subtitle">
               {roleLabels[agent.role] ?? agent.role}
               {agent.title ? ` - ${agent.title}` : ""}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div className="agent-detail-header-actions">
           <Button
             variant="outline"
             size="sm"
             onClick={() => openNewIssue({ assigneeAgentId: agent.id })}
           >
-            <Plus className="h-3.5 w-3.5 sm:mr-1" />
-            <span className="hidden sm:inline">Assign Task</span>
+            <Plus />
+            <span className="agent-detail-btn-label">{t("agents:assignTask")}</span>
           </Button>
           <Button
             variant="outline"
@@ -481,8 +483,8 @@ export function AgentDetail() {
             onClick={() => agentAction.mutate("invoke")}
             disabled={agentAction.isPending || isPendingApproval}
           >
-            <Play className="h-3.5 w-3.5 sm:mr-1" />
-            <span className="hidden sm:inline">Run Heartbeat</span>
+            <Play />
+            <span className="agent-detail-btn-label">{t("agents:runHeartbeat")}</span>
           </Button>
           {agent.status === "paused" ? (
             <Button
@@ -491,8 +493,8 @@ export function AgentDetail() {
               onClick={() => agentAction.mutate("resume")}
               disabled={agentAction.isPending || isPendingApproval}
             >
-              <Play className="h-3.5 w-3.5 sm:mr-1" />
-              <span className="hidden sm:inline">Resume</span>
+              <Play />
+              <span className="agent-detail-btn-label">{t("agents:resume")}</span>
             </Button>
           ) : (
             <Button
@@ -501,61 +503,63 @@ export function AgentDetail() {
               onClick={() => agentAction.mutate("pause")}
               disabled={agentAction.isPending || isPendingApproval}
             >
-              <Pause className="h-3.5 w-3.5 sm:mr-1" />
-              <span className="hidden sm:inline">Pause</span>
+              <Pause />
+              <span className="agent-detail-btn-label">{t("agents:pause")}</span>
             </Button>
           )}
-          <span className="hidden sm:inline"><StatusBadge status={agent.status} /></span>
+          <span className="agent-detail-btn-label"><StatusBadge status={agent.status} /></span>
           {mobileLiveRun && (
             <Link
               to={`/agents/${canonicalAgentRef}/runs/${mobileLiveRun.id}`}
-              className="sm:hidden flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 transition-colors no-underline"
+              className="agent-detail-mobile-live-link"
             >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+              <span className="agent-detail-live-dot-wrap">
+                <span className="agent-detail-live-dot-pulse" />
+                <span className="agent-detail-live-dot" />
               </span>
-              <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400">Live</span>
+              <span className="agent-detail-mobile-live-text">{t("agents:live")}</span>
             </Link>
           )}
 
-          {/* Overflow menu */}
           <Popover open={moreOpen} onOpenChange={setMoreOpen}>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon-xs">
-                <MoreHorizontal className="h-4 w-4" />
+                <MoreHorizontal />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-44 p-1" align="end">
+            <PopoverContent className="agent-detail-popover-content" align="end">
               <button
-                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50"
+                type="button"
+                className="agent-detail-popover-item"
                 onClick={() => {
                   navigator.clipboard.writeText(agent.id);
                   setMoreOpen(false);
                 }}
               >
-                <Copy className="h-3 w-3" />
-                Copy Agent ID
+                <Copy />
+                {t("agents:copyAgentId")}
               </button>
               <button
-                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50"
+                type="button"
+                className="agent-detail-popover-item"
                 onClick={() => {
                   resetTaskSession.mutate(null);
                   setMoreOpen(false);
                 }}
               >
-                <RotateCcw className="h-3 w-3" />
-                Reset Sessions
+                <RotateCcw />
+                {t("agents:resetSessions")}
               </button>
               <button
-                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-destructive"
+                type="button"
+                className="agent-detail-popover-item destructive"
                 onClick={() => {
                   agentAction.mutate("terminate");
                   setMoreOpen(false);
                 }}
               >
-                <Trash2 className="h-3 w-3" />
-                Terminate
+                <Trash2 />
+                {t("agents:terminate")}
               </button>
             </PopoverContent>
           </Popover>
@@ -569,9 +573,9 @@ export function AgentDetail() {
         >
           <PageTabBar
             items={[
-              { value: "dashboard", label: "Dashboard" },
-              { value: "configuration", label: "Configuration" },
-              { value: "runs", label: "Runs" },
+              { value: "dashboard", label: t("agents:dashboard") },
+              { value: "configuration", label: t("agents:configuration") },
+              { value: "runs", label: t("agents:runs") },
             ]}
             value={activeView}
             onValueChange={(value) => navigate(`/agents/${canonicalAgentRef}/${value}`)}
@@ -579,48 +583,39 @@ export function AgentDetail() {
         </Tabs>
       )}
 
-      {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+      {actionError && <p className="agent-detail-action-error">{actionError}</p>}
       {isPendingApproval && (
-        <p className="text-sm text-amber-500">
-          This agent is pending board approval and cannot be invoked yet.
+        <p className="agent-detail-pending-approval">
+          {t("agents:pendingApprovalMessage")}
         </p>
       )}
 
-      {/* Floating Save/Cancel (desktop) */}
       {!isMobile && (
-        <div
-          className={cn(
-            "sticky top-6 z-10 float-right transition-opacity duration-150",
-            showConfigActionBar
-              ? "opacity-100"
-              : "opacity-0 pointer-events-none"
-          )}
-        >
-          <div className="flex items-center gap-2 bg-background/90 backdrop-blur-sm border border-border rounded-lg px-3 py-1.5 shadow-lg">
+        <div className={["agent-detail-float-bar", showConfigActionBar ? "" : "hidden"].filter(Boolean).join(" ")}>
+          <div className="agent-detail-float-bar-inner">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => cancelConfigActionRef.current?.()}
               disabled={configSaving}
             >
-              Cancel
+              {t("agents:cancel")}
             </Button>
             <Button
               size="sm"
               onClick={() => saveConfigActionRef.current?.()}
               disabled={configSaving}
             >
-              {configSaving ? "Saving…" : "Save"}
+              {configSaving ? t("agents:saving") : t("agents:saveButton")}
             </Button>
           </div>
         </div>
       )}
 
-      {/* Mobile bottom Save/Cancel bar */}
       {isMobile && showConfigActionBar && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-sm">
+        <div className="agent-detail-mobile-bar">
           <div
-            className="flex items-center justify-end gap-2 px-3 py-2"
+            className="agent-detail-mobile-bar-inner"
             style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}
           >
             <Button
@@ -629,14 +624,14 @@ export function AgentDetail() {
               onClick={() => cancelConfigActionRef.current?.()}
               disabled={configSaving}
             >
-              Cancel
+              {t("agents:cancel")}
             </Button>
             <Button
               size="sm"
               onClick={() => saveConfigActionRef.current?.()}
               disabled={configSaving}
             >
-              {configSaving ? "Saving…" : "Save"}
+              {configSaving ? t("agents:saving") : t("agents:saveButton")}
             </Button>
           </div>
         </div>
@@ -685,9 +680,9 @@ export function AgentDetail() {
 
 function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground text-xs">{label}</span>
-      <div className="flex items-center gap-1">{children}</div>
+    <div className="agent-detail-summary-row">
+      <span className="agent-detail-summary-row-label">{label}</span>
+      <div className="agent-detail-summary-row-value">{children}</div>
     </div>
   );
 }
@@ -702,58 +697,48 @@ function LatestRunCard({ runs, agentId }: { runs: HeartbeatRun[]; agentId: strin
   const liveRun = sorted.find((r) => r.status === "running" || r.status === "queued");
   const run = liveRun ?? sorted[0];
   const isLive = run.status === "running" || run.status === "queued";
-  const statusInfo = runStatusIcons[run.status] ?? { icon: Clock, color: "text-neutral-400" };
+  const statusInfo = runStatusIcons[run.status] ?? { icon: Clock };
   const StatusIcon = statusInfo.icon;
   const summary = run.resultJson
     ? String((run.resultJson as Record<string, unknown>).summary ?? (run.resultJson as Record<string, unknown>).result ?? "")
     : run.error ?? "";
 
   return (
-    <div className="space-y-3">
-      <div className="flex w-full items-center justify-between">
-        <h3 className="flex items-center gap-2 text-sm font-medium">
+    <div className="agent-detail-latest-run">
+      <div className="agent-detail-latest-run-header">
+        <h3 className="agent-detail-latest-run-title">
           {isLive && (
-            <span className="relative flex h-2 w-2">
-              <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
+            <span className="agent-detail-live-dot-wrap">
+              <span className="agent-detail-live-dot-pulse" />
+              <span className="agent-detail-live-dot" />
             </span>
           )}
           {isLive ? "Live Run" : "Latest Run"}
         </h3>
-        <Link
-          to={`/agents/${agentId}/runs/${run.id}`}
-          className="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors no-underline"
-        >
+        <Link to={`/agents/${agentId}/runs/${run.id}`} className="agent-detail-latest-run-link">
           View details &rarr;
         </Link>
       </div>
 
       <Link
         to={`/agents/${agentId}/runs/${run.id}`}
-        className={cn(
-          "block border rounded-lg p-4 space-y-2 w-full no-underline transition-colors hover:bg-muted/50 cursor-pointer",
-          isLive ? "border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.08)]" : "border-border"
-        )}
+        className={["agent-detail-latest-run-card", isLive && "live"].filter(Boolean).join(" ")}
       >
-        <div className="flex items-center gap-2">
-          <StatusIcon className={cn("h-3.5 w-3.5", statusInfo.color, run.status === "running" && "animate-spin")} />
+        <div className="agent-detail-latest-run-card-row">
+          <span className={["agent-detail-run-status-icon", run.status === "running" && "running-spin"].filter(Boolean).join(" ")} data-status={run.status}>
+            <StatusIcon />
+          </span>
           <StatusBadge status={run.status} />
-          <span className="font-mono text-xs text-muted-foreground">{run.id.slice(0, 8)}</span>
-          <span className={cn(
-            "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-            run.invocationSource === "timer" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
-              : run.invocationSource === "assignment" ? "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300"
-              : run.invocationSource === "on_demand" ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300"
-              : "bg-muted text-muted-foreground"
-          )}>
+          <span className="agent-detail-latest-run-card-id">{run.id.slice(0, 8)}</span>
+          <span className="agent-detail-source-badge" data-source={run.invocationSource ?? undefined}>
             {sourceLabels[run.invocationSource] ?? run.invocationSource}
           </span>
-          <span className="ml-auto text-xs text-muted-foreground">{relativeTime(run.createdAt)}</span>
+          <span className="agent-detail-latest-run-card-time">{relativeTime(run.createdAt)}</span>
         </div>
 
         {summary && (
-          <div className="overflow-hidden max-h-16">
-            <MarkdownBody className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">{summary}</MarkdownBody>
+          <div className="agent-detail-latest-run-summary">
+            <MarkdownBody>{summary}</MarkdownBody>
           </div>
         )}
       </Link>
@@ -779,12 +764,10 @@ function AgentOverview({
   agentRouteId: string;
 }) {
   return (
-    <div className="space-y-8">
-      {/* Latest Run */}
+    <div className="agent-detail-overview">
       <LatestRunCard runs={runs} agentId={agentRouteId} />
 
-      {/* Charts */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="agent-detail-charts-grid">
         <ChartCard title="Run Activity" subtitle="Last 14 days">
           <RunActivityChart runs={runs} />
         </ChartCard>
@@ -799,18 +782,17 @@ function AgentOverview({
         </ChartCard>
       </div>
 
-      {/* Recent Issues */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Recent Issues</h3>
-          <Link to={`/issues?assignee=${agentId}`} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+      <div className="agent-detail-section">
+        <div className="agent-detail-section-header">
+          <h3 className="agent-detail-section-title">Recent Issues</h3>
+          <Link to={`/issues?assignee=${agentId}`} className="agent-detail-section-link">
             See All &rarr;
           </Link>
         </div>
         {assignedIssues.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No assigned issues.</p>
+          <p className="agent-detail-empty">No assigned issues.</p>
         ) : (
-          <div className="border border-border rounded-lg">
+          <div className="agent-detail-issues-list">
             {assignedIssues.slice(0, 10).map((issue) => (
               <EntityRow
                 key={issue.id}
@@ -821,7 +803,7 @@ function AgentOverview({
               />
             ))}
             {assignedIssues.length > 10 && (
-              <div className="px-3 py-2 text-xs text-muted-foreground text-center border-t border-border">
+              <div className="agent-detail-issues-more">
                 +{assignedIssues.length - 10} more issues
               </div>
             )}
@@ -829,9 +811,8 @@ function AgentOverview({
         )}
       </div>
 
-      {/* Costs */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium">Costs</h3>
+      <div className="agent-detail-section">
+        <h3 className="agent-detail-section-title">Costs</h3>
         <CostsSection runtimeState={runtimeState} runs={runs} />
       </div>
     </div>
@@ -855,51 +836,51 @@ function CostsSection({
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
-    <div className="space-y-4">
+    <div className="agent-detail-costs">
       {runtimeState && (
-        <div className="border border-border rounded-lg p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 tabular-nums">
+        <div className="agent-detail-costs-card">
+          <div className="agent-detail-costs-grid">
             <div>
-              <span className="text-xs text-muted-foreground block">Input tokens</span>
-              <span className="text-lg font-semibold">{formatTokens(runtimeState.totalInputTokens)}</span>
+              <span className="agent-detail-costs-item-label">Input tokens</span>
+              <span className="agent-detail-costs-item-value">{formatTokens(runtimeState.totalInputTokens)}</span>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground block">Output tokens</span>
-              <span className="text-lg font-semibold">{formatTokens(runtimeState.totalOutputTokens)}</span>
+              <span className="agent-detail-costs-item-label">Output tokens</span>
+              <span className="agent-detail-costs-item-value">{formatTokens(runtimeState.totalOutputTokens)}</span>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground block">Cached tokens</span>
-              <span className="text-lg font-semibold">{formatTokens(runtimeState.totalCachedInputTokens)}</span>
+              <span className="agent-detail-costs-item-label">Cached tokens</span>
+              <span className="agent-detail-costs-item-value">{formatTokens(runtimeState.totalCachedInputTokens)}</span>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground block">Total cost</span>
-              <span className="text-lg font-semibold">{formatCents(runtimeState.totalCostCents)}</span>
+              <span className="agent-detail-costs-item-label">Total cost</span>
+              <span className="agent-detail-costs-item-value">{formatCents(runtimeState.totalCostCents)}</span>
             </div>
           </div>
         </div>
       )}
       {runsWithCost.length > 0 && (
-        <div className="border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
+        <div className="agent-detail-costs-table-wrap">
+          <table className="agent-detail-costs-table">
             <thead>
-              <tr className="border-b border-border bg-accent/20">
-                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Date</th>
-                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Run</th>
-                <th className="text-right px-3 py-2 font-medium text-muted-foreground">Input</th>
-                <th className="text-right px-3 py-2 font-medium text-muted-foreground">Output</th>
-                <th className="text-right px-3 py-2 font-medium text-muted-foreground">Cost</th>
+              <tr>
+                <th>Date</th>
+                <th>Run</th>
+                <th className="text-right">Input</th>
+                <th className="text-right">Output</th>
+                <th className="text-right">Cost</th>
               </tr>
             </thead>
             <tbody>
               {runsWithCost.slice(0, 10).map((run) => {
                 const u = run.usageJson as Record<string, unknown>;
                 return (
-                  <tr key={run.id} className="border-b border-border last:border-b-0">
-                    <td className="px-3 py-2">{formatDate(run.createdAt)}</td>
-                    <td className="px-3 py-2 font-mono">{run.id.slice(0, 8)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatTokens(Number(u.input_tokens ?? 0))}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatTokens(Number(u.output_tokens ?? 0))}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                  <tr key={run.id}>
+                    <td>{formatDate(run.createdAt)}</td>
+                    <td style={{ fontFamily: "ui-monospace, monospace" }}>{run.id.slice(0, 8)}</td>
+                    <td className="text-right">{formatTokens(Number(u.input_tokens ?? 0))}</td>
+                    <td className="text-right">{formatTokens(Number(u.output_tokens ?? 0))}</td>
+                    <td className="text-right">
                       {(u.cost_usd || u.total_cost_usd)
                         ? `$${Number(u.cost_usd ?? u.total_cost_usd ?? 0).toFixed(4)}`
                         : "-"
@@ -937,6 +918,7 @@ function AgentConfigurePage({
   onSavingChange: (saving: boolean) => void;
   updatePermissions: { mutate: (canCreate: boolean) => void; isPending: boolean };
 }) {
+  const { t } = useTranslation("agents");
   const queryClient = useQueryClient();
   const [revisionsOpen, setRevisionsOpen] = useState(false);
 
@@ -955,7 +937,7 @@ function AgentConfigurePage({
   });
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="agent-detail-config-page">
       <ConfigurationTab
         agent={agent}
         onDirtyChange={onDirtyChange}
@@ -966,56 +948,57 @@ function AgentConfigurePage({
         companyId={companyId}
       />
       <div>
-        <h3 className="text-sm font-medium mb-3">API Keys</h3>
+        <h3 className="agent-detail-config-section-title">{t("apiKeys")}</h3>
         <KeysTab agentId={agentId} companyId={companyId} />
       </div>
 
-      {/* Configuration Revisions — collapsible at the bottom */}
+      {companyId && (
+        <div>
+          <h3 className="agent-detail-config-section-title">{t("agents:crossChatMemory")}</h3>
+          <AgentMemoriesTab agentId={agentId} companyId={companyId} />
+        </div>
+      )}
+
       <div>
         <button
-          className="flex items-center gap-2 text-sm font-medium hover:text-foreground transition-colors"
+          type="button"
+          className={["agent-detail-revisions-toggle", revisionsOpen && "open"].filter(Boolean).join(" ")}
           onClick={() => setRevisionsOpen((v) => !v)}
         >
-          {revisionsOpen
-            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          }
-          Configuration Revisions
-          <span className="text-xs font-normal text-muted-foreground">{configRevisions?.length ?? 0}</span>
+          {revisionsOpen ? <ChevronDown /> : <ChevronRight />}
+          {t("configurationRevisions")}
+          <span className="agent-detail-revisions-count">{configRevisions?.length ?? 0}</span>
         </button>
         {revisionsOpen && (
-          <div className="mt-3">
+          <div className="agent-detail-revisions-list">
             {(configRevisions ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No configuration revisions yet.</p>
+              <p className="agent-detail-empty">{t("noConfigurationRevisions")}</p>
             ) : (
-              <div className="space-y-2">
-                {(configRevisions ?? []).slice(0, 10).map((revision) => (
-                  <div key={revision.id} className="border border-border/70 rounded-md p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-mono">{revision.id.slice(0, 8)}</span>
-                        <span className="mx-1">·</span>
-                        <span>{formatDate(revision.createdAt)}</span>
-                        <span className="mx-1">·</span>
-                        <span>{revision.source}</span>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2.5 text-xs"
-                        onClick={() => rollbackConfig.mutate(revision.id)}
-                        disabled={rollbackConfig.isPending}
-                      >
-                        Restore
-                      </Button>
+              (configRevisions ?? []).slice(0, 10).map((revision) => (
+                <div key={revision.id} className="agent-detail-revision-item">
+                  <div className="agent-detail-revision-meta">
+                    <div className="agent-detail-revision-meta-left">
+                      <span className="font-mono">{revision.id.slice(0, 8)}</span>
+                      <span style={{ margin: "0 0.25rem" }}>·</span>
+                      <span>{formatDate(revision.createdAt)}</span>
+                      <span style={{ margin: "0 0.25rem" }}>·</span>
+                      <span>{revision.source}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Changed:{" "}
-                      {revision.changedKeys.length > 0 ? revision.changedKeys.join(", ") : "no tracked changes"}
-                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => rollbackConfig.mutate(revision.id)}
+                      disabled={rollbackConfig.isPending}
+                    >
+                      {t("restore")}
+                    </Button>
                   </div>
-                ))}
-              </div>
+                  <p className="agent-detail-revision-changed">
+                    {t("changedKeysLabel")}:{" "}
+                    {revision.changedKeys.length > 0 ? revision.changedKeys.join(", ") : t("noTrackedChanges")}
+                  </p>
+                </div>
+              ))
             )}
           </div>
         )}
@@ -1043,6 +1026,7 @@ function ConfigurationTab({
   onSavingChange: (saving: boolean) => void;
   updatePermissions: { mutate: (canCreate: boolean) => void; isPending: boolean };
 }) {
+  const { t } = useTranslation("agents");
   const queryClient = useQueryClient();
   const [awaitingRefreshAfterSave, setAwaitingRefreshAfterSave] = useState(false);
   const lastAgentRef = useRef(agent);
@@ -1100,20 +1084,19 @@ function ConfigurationTab({
       />
 
       <div>
-        <h3 className="text-sm font-medium mb-3">Permissions</h3>
-        <div className="border border-border rounded-lg p-4">
-          <div className="flex items-center justify-between text-sm">
-            <span>Can create new agents</span>
+        <h3 className="agent-detail-config-section-title">{t("permissions")}</h3>
+        <div className="agent-detail-permissions-card">
+          <div className="agent-detail-permissions-row">
+            <span>{t("canCreateNewAgents")}</span>
             <Button
               variant={agent.permissions?.canCreateAgents ? "default" : "outline"}
               size="sm"
-              className="h-7 px-2.5 text-xs"
               onClick={() =>
                 updatePermissions.mutate(!Boolean(agent.permissions?.canCreateAgents))
               }
               disabled={updatePermissions.isPending}
             >
-              {agent.permissions?.canCreateAgents ? "Enabled" : "Disabled"}
+              {agent.permissions?.canCreateAgents ? t("enabled") : t("disabled")}
             </Button>
           </div>
         </div>
@@ -1125,7 +1108,7 @@ function ConfigurationTab({
 /* ---- Runs Tab ---- */
 
 function RunListItem({ run, isSelected, agentId }: { run: HeartbeatRun; isSelected: boolean; agentId: string }) {
-  const statusInfo = runStatusIcons[run.status] ?? { icon: Clock, color: "text-neutral-400" };
+  const statusInfo = runStatusIcons[run.status] ?? { icon: Clock };
   const StatusIcon = statusInfo.icon;
   const metrics = runMetrics(run);
   const summary = run.resultJson
@@ -1135,41 +1118,30 @@ function RunListItem({ run, isSelected, agentId }: { run: HeartbeatRun; isSelect
   return (
     <Link
       to={isSelected ? `/agents/${agentId}/runs` : `/agents/${agentId}/runs/${run.id}`}
-      className={cn(
-        "flex flex-col gap-1 w-full px-3 py-2.5 text-left border-b border-border last:border-b-0 transition-colors no-underline text-inherit",
-        isSelected ? "bg-accent/40" : "hover:bg-accent/20",
-      )}
+      className={["agent-detail-run-list-item", isSelected && "selected"].filter(Boolean).join(" ")}
     >
-      <div className="flex items-center gap-2">
-        <StatusIcon className={cn("h-3.5 w-3.5 shrink-0", statusInfo.color, run.status === "running" && "animate-spin")} />
-        <span className="font-mono text-xs text-muted-foreground">
-          {run.id.slice(0, 8)}
+      <div className="agent-detail-run-list-item-row">
+        <span className={["agent-detail-run-status-icon", run.status === "running" && "running-spin"].filter(Boolean).join(" ")} data-status={run.status}>
+          <StatusIcon />
         </span>
-        {(run.contextSnapshot as Record<string, unknown> | null)?.executionLabel && (
-          <span className="text-[11px] font-mono text-muted-foreground">
-            [{(run.contextSnapshot as Record<string, unknown>).executionLabel as string}]
+        <span className="agent-detail-run-list-item-id">{run.id.slice(0, 8)}</span>
+        {(run.contextSnapshot as Record<string, unknown> | null)?.executionLabel != null && (
+          <span className="agent-detail-run-list-item-exec-label">
+            [{String((run.contextSnapshot as Record<string, unknown>).executionLabel)}]
           </span>
         )}
-        <span className={cn(
-          "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0",
-          run.invocationSource === "timer" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
-            : run.invocationSource === "assignment" ? "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300"
-            : run.invocationSource === "on_demand" ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300"
-            : "bg-muted text-muted-foreground"
-        )}>
+        <span className="agent-detail-source-badge" data-source={run.invocationSource ?? undefined}>
           {sourceLabels[run.invocationSource] ?? run.invocationSource}
         </span>
-        <span className="ml-auto text-[11px] text-muted-foreground shrink-0">
-          {relativeTime(run.createdAt)}
-        </span>
+        <span className="agent-detail-run-list-item-time">{relativeTime(run.createdAt)}</span>
       </div>
       {summary && (
-        <span className="text-xs text-muted-foreground truncate pl-5.5">
+        <span className="agent-detail-run-list-item-summary">
           {summary.slice(0, 60)}
         </span>
       )}
       {(metrics.totalTokens > 0 || metrics.cost > 0) && (
-        <div className="flex items-center gap-2 pl-5.5 text-[11px] text-muted-foreground tabular-nums">
+        <div className="agent-detail-run-list-item-metrics">
           {metrics.totalTokens > 0 && <span>{formatTokens(metrics.totalTokens)} tok</span>}
           {metrics.cost > 0 && <span>${metrics.cost.toFixed(3)}</span>}
         </div>
@@ -1196,7 +1168,7 @@ function RunsTab({
   const { isMobile } = useSidebar();
 
   if (runs.length === 0) {
-    return <p className="text-sm text-muted-foreground">No runs yet.</p>;
+    return <p className="agent-detail-runs-empty">No runs yet.</p>;
   }
 
   // Sort by created descending
@@ -1208,16 +1180,12 @@ function RunsTab({
   const effectiveRunId = isMobile ? selectedRunId : (selectedRunId ?? sorted[0]?.id ?? null);
   const selectedRun = sorted.find((r) => r.id === effectiveRunId) ?? null;
 
-  // Mobile: show either run list OR run detail with back button
   if (isMobile) {
     if (selectedRun) {
       return (
-        <div className="space-y-3 min-w-0 overflow-x-hidden">
-          <Link
-            to={`/agents/${agentRouteId}/runs`}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors no-underline"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
+        <div className="agent-detail-runs-mobile-wrap">
+          <Link to={`/agents/${agentRouteId}/runs`} className="agent-detail-runs-back-link">
+            <ArrowLeft />
             Back to runs
           </Link>
           <RunDetail key={selectedRun.id} run={selectedRun} agentRouteId={agentRouteId} adapterType={adapterType} />
@@ -1225,7 +1193,7 @@ function RunsTab({
       );
     }
     return (
-      <div className="border border-border rounded-lg overflow-x-hidden">
+      <div className="agent-detail-runs-list-wrap">
         {sorted.map((run) => (
           <RunListItem key={run.id} run={run} isSelected={false} agentId={agentRouteId} />
         ))}
@@ -1233,24 +1201,17 @@ function RunsTab({
     );
   }
 
-  // Desktop: side-by-side layout
   return (
-    <div className="flex gap-0">
-      {/* Left: run list — border stretches full height, content sticks */}
-      <div className={cn(
-        "shrink-0 border border-border rounded-lg",
-        selectedRun ? "w-72" : "w-full",
-      )}>
-        <div className="sticky top-4 overflow-y-auto" style={{ maxHeight: "calc(100vh - 2rem)" }}>
-        {sorted.map((run) => (
-          <RunListItem key={run.id} run={run} isSelected={run.id === effectiveRunId} agentId={agentRouteId} />
-        ))}
+    <div className="agent-detail-runs-layout">
+      <div className={["agent-detail-runs-list-wrap", selectedRun && "with-detail"].filter(Boolean).join(" ")}>
+        <div className="agent-detail-runs-list-sticky" style={{ maxHeight: "calc(100vh - 2rem)" }}>
+          {sorted.map((run) => (
+            <RunListItem key={run.id} run={run} isSelected={run.id === effectiveRunId} agentId={agentRouteId} />
+          ))}
         </div>
       </div>
-
-      {/* Right: run detail — natural height, page scrolls */}
       {selectedRun && (
-        <div className="flex-1 min-w-0 pl-4">
+        <div className="agent-detail-runs-detail-pane">
           <RunDetail key={selectedRun.id} run={selectedRun} agentRouteId={agentRouteId} adapterType={adapterType} />
         </div>
       )}
@@ -1573,7 +1534,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType }: { run: Heartb
               className="flex items-center gap-1.5 w-full px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setSessionOpen((v) => !v)}
             >
-              <ChevronRight className={cn("h-3 w-3 transition-transform", sessionOpen && "rotate-90")} />
+              <ChevronRight className={["agent-detail-session-toggle-chevron", sessionOpen && "open"].filter(Boolean).join(" ")} />
               Session
               {sessionChanged && <span className="text-yellow-400 ml-1">(changed)</span>}
             </button>
@@ -2130,18 +2091,13 @@ function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: strin
         <span className="text-xs font-medium text-muted-foreground">
           Transcript ({transcript.length})
         </span>
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-0.5">
+        <div className="agent-detail-log-toolbar">
+          <div className="agent-detail-transcript-mode-toggle">
             {(["nice", "raw"] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-[11px] font-medium capitalize transition-colors",
-                  transcriptMode === mode
-                    ? "bg-accent text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
+                className={["agent-detail-transcript-mode-btn", transcriptMode === mode && "selected"].filter(Boolean).join(" ")}
                 onClick={() => setTranscriptMode(mode)}
               >
                 {mode}
@@ -2236,14 +2192,14 @@ function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: strin
                 ?? "text-foreground";
 
               return (
-                <div key={evt.id} className="flex gap-2">
-                  <span className="text-neutral-400 dark:text-neutral-600 shrink-0 select-none w-16">
+                <div key={evt.id} className="agent-detail-log-event-row">
+                  <span className="agent-detail-log-event-ts">
                     {new Date(evt.createdAt).toLocaleTimeString("en-US", { hour12: false })}
                   </span>
-                  <span className={cn("shrink-0 w-14", evt.stream ? (streamColors[evt.stream] ?? "text-neutral-500") : "text-neutral-500")}>
+                  <span className="agent-detail-log-viewer-stream">
                     {evt.stream ? `[${evt.stream}]` : ""}
                   </span>
-                  <span className={cn("break-all", color)}>
+                  <span className="agent-detail-log-viewer-msg">
                     {evt.message
                       ? redactHomePathUserSegments(evt.message)
                       : evt.payload
@@ -2260,14 +2216,94 @@ function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: strin
   );
 }
 
+/* ---- Agent memories (cross-chat) ---- */
+
+function AgentMemoriesTab({ agentId, companyId }: { agentId: string; companyId: string }) {
+  const { t } = useTranslation("agents");
+  const queryClient = useQueryClient();
+
+  const { data: memories, isLoading } = useQuery({
+    queryKey: queryKeys.agents.memories(companyId, agentId),
+    queryFn: () => agentsApi.listMemories(companyId, agentId),
+    enabled: !!companyId && !!agentId,
+  });
+
+  const deleteOne = useMutation({
+    mutationFn: (memoryId: string) => agentsApi.deleteMemory(companyId, agentId, memoryId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents.memories(companyId, agentId) });
+    },
+  });
+
+  const deleteAll = useMutation({
+    mutationFn: () => agentsApi.deleteAllMemories(companyId, agentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents.memories(companyId, agentId) });
+    },
+  });
+
+  const list = memories ?? [];
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        {t("crossChatMemoryDescription")}
+      </p>
+      {isLoading && <p className="text-sm text-muted-foreground">{t("loadingKeys")}</p>}
+      {!isLoading && list.length === 0 && (
+        <p className="text-sm text-muted-foreground">{t("noCrossChatMemories")}</p>
+      )}
+      {!isLoading && list.length > 0 && (
+        <>
+          <div className="border border-border rounded-lg divide-y divide-border">
+            {list.map((m) => (
+              <div key={m.id} className="flex items-start justify-between gap-2 px-4 py-2.5">
+                <p className="text-sm flex-1 min-w-0 break-words">{m.content}</p>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="flex-shrink-0 text-destructive hover:text-destructive"
+                  onClick={() => deleteOne.mutate(m.id)}
+                  disabled={deleteOne.isPending}
+                  aria-label={t("deleteMemory")}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive border-destructive/50 hover:bg-destructive/10"
+            onClick={() => deleteAll.mutate()}
+            disabled={deleteAll.isPending}
+          >
+            {deleteAll.isPending ? t("loadingKeys") : t("clearAllMemories")}
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ---- Keys Tab ---- */
 
 function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }) {
+  const { t } = useTranslation("agents");
   const queryClient = useQueryClient();
   const [newKeyName, setNewKeyName] = useState("");
   const [newToken, setNewToken] = useState<string | null>(null);
   const [tokenVisible, setTokenVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const { data: meProfile } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => meApi.get(),
+    retry: false,
+  });
+
+  if (!meProfile?.developerMode) return null;
 
   const { data: keys, isLoading } = useQuery({
     queryKey: queryKeys.agents.keys(agentId),
@@ -2307,7 +2343,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
       {newToken && (
         <div className="border border-yellow-300 dark:border-yellow-600/40 bg-yellow-50 dark:bg-yellow-500/5 rounded-lg p-4 space-y-2">
           <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
-            API key created — copy it now, it will not be shown again.
+            {t("apiKeyCreatedCopyNow")}
           </p>
           <div className="flex items-center gap-2">
             <code className="flex-1 bg-neutral-100 dark:bg-neutral-950 rounded px-3 py-1.5 text-xs font-mono text-green-700 dark:text-green-300 truncate">
@@ -2317,7 +2353,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
               variant="ghost"
               size="icon-sm"
               onClick={() => setTokenVisible((v) => !v)}
-              title={tokenVisible ? "Hide" : "Show"}
+              title={tokenVisible ? t("hide") : t("show")}
             >
               {tokenVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             </Button>
@@ -2325,11 +2361,11 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
               variant="ghost"
               size="icon-sm"
               onClick={copyToken}
-              title="Copy"
+              title={t("copy")}
             >
               <Copy className="h-3.5 w-3.5" />
             </Button>
-            {copied && <span className="text-xs text-green-400">Copied!</span>}
+            {copied && <span className="text-xs text-green-400">{t("copied")}</span>}
           </div>
           <Button
             variant="ghost"
@@ -2337,7 +2373,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
             className="text-muted-foreground text-xs"
             onClick={() => setNewToken(null)}
           >
-            Dismiss
+            {t("dismiss")}
           </Button>
         </div>
       )}
@@ -2346,14 +2382,14 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
       <div className="border border-border rounded-lg p-4 space-y-3">
         <h3 className="text-xs font-medium text-muted-foreground flex items-center gap-2">
           <Key className="h-3.5 w-3.5" />
-          Create API Key
+          {t("createApiKey")}
         </h3>
         <p className="text-xs text-muted-foreground">
-          API keys allow this agent to authenticate calls to the Paperclip server.
+          {t("apiKeysAllowAuth")}
         </p>
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Key name (e.g. production)"
+            placeholder={t("keyNamePlaceholder")}
             value={newKeyName}
             onChange={(e) => setNewKeyName(e.target.value)}
             className="h-8 text-sm"
@@ -2367,22 +2403,22 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
             disabled={createKey.isPending}
           >
             <Plus className="h-3.5 w-3.5 mr-1" />
-            Create
+            {t("create")}
           </Button>
         </div>
       </div>
 
       {/* Active keys */}
-      {isLoading && <p className="text-sm text-muted-foreground">Loading keys...</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">{t("loadingKeys")}</p>}
 
       {!isLoading && activeKeys.length === 0 && !newToken && (
-        <p className="text-sm text-muted-foreground">No active API keys.</p>
+        <p className="text-sm text-muted-foreground">{t("noActiveApiKeys")}</p>
       )}
 
       {activeKeys.length > 0 && (
         <div>
           <h3 className="text-xs font-medium text-muted-foreground mb-2">
-            Active Keys
+            {t("activeKeys")}
           </h3>
           <div className="border border-border rounded-lg divide-y divide-border">
             {activeKeys.map((key: AgentKey) => (
@@ -2390,7 +2426,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
                 <div>
                   <span className="text-sm font-medium">{key.name}</span>
                   <span className="text-xs text-muted-foreground ml-3">
-                    Created {formatDate(key.createdAt)}
+                    {t("createdAt", { date: formatDate(key.createdAt) })}
                   </span>
                 </div>
                 <Button
@@ -2400,7 +2436,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
                   onClick={() => revokeKey.mutate(key.id)}
                   disabled={revokeKey.isPending}
                 >
-                  Revoke
+                  {t("revoke")}
                 </Button>
               </div>
             ))}
@@ -2412,7 +2448,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
       {revokedKeys.length > 0 && (
         <div>
           <h3 className="text-xs font-medium text-muted-foreground mb-2">
-            Revoked Keys
+            {t("revokedKeys")}
           </h3>
           <div className="border border-border rounded-lg divide-y divide-border opacity-50">
             {revokedKeys.map((key: AgentKey) => (
@@ -2420,7 +2456,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
                 <div>
                   <span className="text-sm line-through">{key.name}</span>
                   <span className="text-xs text-muted-foreground ml-3">
-                    Revoked {key.revokedAt ? formatDate(key.revokedAt) : ""}
+                    {key.revokedAt ? t("revokedAt", { date: formatDate(key.revokedAt) }) : ""}
                   </span>
                 </div>
               </div>

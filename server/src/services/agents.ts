@@ -6,6 +6,7 @@ import {
   agentConfigRevisions,
   agentApiKeys,
   agentRuntimeState,
+  agentSchedules,
   agentTaskSessions,
   agentWakeupRequests,
   heartbeatRunEvents,
@@ -418,6 +419,7 @@ export function agentService(db: Db) {
         await tx.delete(agentTaskSessions).where(eq(agentTaskSessions.agentId, id));
         await tx.delete(heartbeatRuns).where(eq(heartbeatRuns.agentId, id));
         await tx.delete(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, id));
+        await tx.delete(agentSchedules).where(eq(agentSchedules.agentId, id));
         await tx.delete(agentApiKeys).where(eq(agentApiKeys.agentId, id));
         await tx.delete(agentRuntimeState).where(eq(agentRuntimeState.agentId, id));
         const deleted = await tx
@@ -558,9 +560,11 @@ export function agentService(db: Db) {
         .from(agents)
         .where(and(eq(agents.companyId, companyId), ne(agents.status, "terminated")));
       const normalizedRows = rows.map(normalizeAgentRow);
+      const validIds = new Set(normalizedRows.map((r) => r.id));
       const byManager = new Map<string | null, typeof normalizedRows>();
       for (const row of normalizedRows) {
-        const key = row.reportsTo ?? null;
+        const key =
+          row.reportsTo && validIds.has(row.reportsTo) ? row.reportsTo : null;
         const group = byManager.get(key) ?? [];
         group.push(row);
         byManager.set(key, group);

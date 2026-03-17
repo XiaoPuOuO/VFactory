@@ -1,0 +1,659 @@
+/**
+ * Landing 頁面 — 原生 CSS（無 Tailwind）
+ * 對齊 Apple HIG：Clarity、Deference、Depth
+ * 留白優先、材質（vibrancy/blur）、極淡陰影、無多餘裝飾。
+ */
+
+/* ---------------------------------------------------------------------------
+   根容器
+   --------------------------------------------------------------------------- */
+.landing-page {
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------------------
+   Header：材質 + 髮線分隔
+   --------------------------------------------------------------------------- */
+.landing-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  flex-shrink: 0;
+  background: color-mix(in oklab, var(--background) 80%, transparent);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .landing-header {
+    background: color-mix(in oklab, var(--background) 70%, transparent);
+  }
+}
+
+.landing-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 3.5rem;
+  max-width: 64rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .landing-header-inner {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.landing-logo-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--foreground);
+  transition: opacity 0.2s;
+}
+
+.landing-logo-link:hover {
+  opacity: 0.7;
+}
+
+.landing-logo-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.landing-logo-text {
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--foreground);
+}
+
+.landing-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* 按鈕覆寫（與原 Tailwind 視覺一致，Button 元件仍用 cva） */
+.landing-btn-ghost {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.landing-btn-primary {
+  gap: 0.375rem;
+  font-weight: 600;
+}
+
+.landing-btn-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.landing-btn-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 3rem;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 0.75rem;
+}
+
+.landing-btn-cta-ghost {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--primary);
+  border-radius: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Main
+   --------------------------------------------------------------------------- */
+.landing-main {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   Hero
+   --------------------------------------------------------------------------- */
+.landing-hero {
+  padding-top: 4rem;
+  padding-bottom: 5rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .landing-hero {
+    padding-top: 7rem;
+    padding-bottom: 8rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.landing-hero-inner {
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+.landing-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  padding: 0.5rem 1rem;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+  opacity: 0;
+}
+
+.landing-hero-badge .landing-hero-badge-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.landing-hero-title {
+  margin-top: 2rem;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  opacity: 0;
+}
+
+@media (min-width: 768px) {
+  .landing-hero-title {
+    font-size: 48px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-hero-title {
+    font-size: 56px;
+  }
+}
+
+.landing-hero-subtitle {
+  margin-top: 1.5rem;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+  opacity: 0;
+}
+
+@media (min-width: 768px) {
+  .landing-hero-subtitle {
+    font-size: 19px;
+  }
+}
+
+.landing-hero-values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 2rem;
+  row-gap: 0.75rem;
+  margin-top: 2rem;
+  margin-bottom: 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: 15px;
+  color: var(--muted-foreground);
+  opacity: 0;
+}
+
+.landing-hero-value-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.landing-hero-value-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.landing-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  opacity: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Stats
+   --------------------------------------------------------------------------- */
+.landing-stats {
+  border-top: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
+}
+
+.landing-stats-inner {
+  max-width: 56rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .landing-stats-inner {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.landing-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2.5rem;
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .landing-stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4rem;
+  }
+}
+
+.landing-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+@media (min-width: 768px) {
+  .landing-stat-value {
+    font-size: 32px;
+  }
+}
+
+.landing-stat-label {
+  margin-top: 0.375rem;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+   Features：卡牌無邊框、軟陰影、圓角 16pt
+   --------------------------------------------------------------------------- */
+.landing-features {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .landing-features {
+    padding-top: 7rem;
+    padding-bottom: 7rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.landing-features-inner {
+  max-width: 64rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.landing-section-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.landing-features-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--foreground);
+  text-align: center;
+  margin-bottom: 4rem;
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 768px) {
+  .landing-features-title {
+    font-size: 34px;
+    margin-bottom: 5rem;
+  }
+}
+
+.landing-features-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .landing-features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-features-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.landing-card {
+  background: var(--card);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--foreground) 0.04, transparent),
+    0 1px 4px color-mix(in oklab, var(--foreground) 0.02, transparent);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.landing-card:hover {
+  box-shadow:
+    0 4px 12px color-mix(in oklab, var(--foreground) 0.06, transparent),
+    0 2px 6px color-mix(in oklab, var(--foreground) 0.03, transparent);
+  transform: translateY(-1px);
+}
+
+.dark .landing-card {
+  box-shadow: 0 1px 3px color-mix(in oklab, black 0.3, transparent);
+}
+
+.dark .landing-card:hover {
+  box-shadow: 0 8px 24px color-mix(in oklab, black 0.4, transparent);
+  transform: translateY(-1px);
+}
+
+.landing-feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--primary);
+  margin-bottom: 1.25rem;
+}
+
+.landing-feature-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.landing-feature-card-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 0.5rem;
+}
+
+.landing-feature-card-desc {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+@media (min-width: 768px) {
+  .landing-card {
+    padding: 2rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   How it works：編號圓點、無連接線、留白
+   --------------------------------------------------------------------------- */
+.landing-how {
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .landing-how {
+    padding-top: 7rem;
+    padding-bottom: 7rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.landing-how-inner {
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.landing-how-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--foreground);
+  text-align: center;
+  margin-bottom: 4rem;
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 768px) {
+  .landing-how-title {
+    font-size: 34px;
+  }
+}
+
+.landing-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.landing-step-row {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.landing-step-dot {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.landing-step-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 0.375rem;
+}
+
+.landing-step-desc {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+   CTA：單一卡牌、軟陰影
+   --------------------------------------------------------------------------- */
+.landing-cta {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .landing-cta {
+    padding-top: 7rem;
+    padding-bottom: 7rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.landing-cta-inner {
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+  border-radius: 1rem;
+  padding: 2rem;
+  background: var(--card);
+  box-shadow:
+    0 2px 8px color-mix(in oklab, var(--foreground) 0.05, transparent),
+    0 1px 3px color-mix(in oklab, var(--foreground) 0.03, transparent);
+}
+
+.dark .landing-cta-inner {
+  box-shadow: 0 4px 16px color-mix(in oklab, black 0.35, transparent);
+}
+
+@media (min-width: 768px) {
+  .landing-cta-inner {
+    padding: 3.5rem;
+  }
+}
+
+.landing-cta-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--foreground);
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 768px) {
+  .landing-cta-title {
+    font-size: 28px;
+  }
+}
+
+.landing-cta-subtitle {
+  font-size: 15px;
+  color: var(--muted-foreground);
+  margin-bottom: 2rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Footer：髮線、Caption 樣式
+   --------------------------------------------------------------------------- */
+.landing-footer {
+  border-top: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .landing-footer {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.landing-footer-note {
+  font-size: 12px;
+  line-height: 1.625;
+  color: color-mix(in oklab, var(--muted-foreground) 90%, transparent);
+  text-align: center;
+  max-width: 28rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   入場動畫
+   --------------------------------------------------------------------------- */
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.landing-animate-in {
+  animation: landing-fade-up 0.4s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+.landing-animate-in-delay-1 { animation-delay: 0.05s; }
+.landing-animate-in-delay-2 { animation-delay: 0.1s; }
+.landing-animate-in-delay-3 { animation-delay: 0.15s; }
+.landing-animate-in-delay-4 { animation-delay: 0.2s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-animate-in,
+  .landing-animate-in-delay-1,
+  .landing-animate-in-delay-2,
+  .landing-animate-in-delay-3,
+  .landing-animate-in-delay-4 {
+    animation: none;
+    opacity: 1;
+  }
+  .landing-card:hover {
+    transform: none;
+  }
+  .dark .landing-card:hover {
+    transform: none;
+  }
+}

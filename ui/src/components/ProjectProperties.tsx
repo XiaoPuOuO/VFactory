@@ -1,30 +1,24 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Project } from "@paperclipai/shared";
 import { StatusBadge } from "./StatusBadge";
-import { cn, formatDate } from "../lib/utils";
+import { formatDate } from "../lib/utils";
 import { goalsApi } from "../api/goals";
 import { projectsApi } from "../api/projects";
 import { useCompany } from "../context/CompanyContext";
 import { queryKeys } from "../lib/queryKeys";
-import { statusBadge, statusBadgeDefault } from "../lib/status-colors";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertCircle, Check, ExternalLink, Github, Loader2, Plus, Trash2, X } from "lucide-react";
 import { ChoosePathButton } from "./PathInstructionsModal";
-import { DraftInput } from "./agent-config-primitives";
+import { DraftInput, Field, HintIcon } from "./agent-config-primitives";
 import { InlineEditor } from "./InlineEditor";
 
-const PROJECT_STATUSES = [
-  { value: "backlog", label: "Backlog" },
-  { value: "planned", label: "Planned" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
-];
+const PROJECT_STATUS_VALUES = ["backlog", "planned", "in_progress", "completed", "cancelled"] as const;
 
 // TODO(issue-worktree-support): re-enable this UI once the workflow is ready to ship.
 const SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI = false;
@@ -34,6 +28,8 @@ interface ProjectPropertiesProps {
   onUpdate?: (data: Record<string, unknown>) => void;
   onFieldUpdate?: (field: ProjectConfigFieldKey, data: Record<string, unknown>) => void;
   getFieldSaveState?: (field: ProjectConfigFieldKey) => ProjectFieldSaveState;
+  /** 從 Configuration 標籤內開啟圖示設定對話（可選）。 */
+  onOpenIconSetting?: () => void;
 }
 
 export type ProjectFieldSaveState = "idle" | "saving" | "saved" | "error";
@@ -41,6 +37,7 @@ export type ProjectConfigFieldKey =
   | "name"
   | "description"
   | "status"
+  | "color"
   | "goals"
   | "execution_workspace_enabled"
   | "execution_workspace_default_mode"
@@ -53,27 +50,28 @@ export type ProjectConfigFieldKey =
 const REPO_ONLY_CWD_SENTINEL = "/__paperclip_repo_only__";
 
 function SaveIndicator({ state }: { state: ProjectFieldSaveState }) {
+  const { t } = useTranslation("common");
   if (state === "saving") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        Saving
+      <span className="ui-project-save-indicator spin">
+        <Loader2 />
+        {t("saving")}
       </span>
     );
   }
   if (state === "saved") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-green-600 dark:text-green-400">
-        <Check className="h-3 w-3" />
-        Saved
+      <span className="ui-project-save-indicator saved">
+        <Check />
+        {t("saved")}
       </span>
     );
   }
   if (state === "error") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
-        <AlertCircle className="h-3 w-3" />
-        Failed
+      <span className="ui-project-save-indicator error">
+        <AlertCircle />
+        {t("failed")}
       </span>
     );
   }
@@ -88,8 +86,8 @@ function FieldLabel({
   state: ProjectFieldSaveState;
 }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
+    <div className="ui-project-field-label">
+      <span>{label}</span>
       <SaveIndicator state={state} />
     </div>
   );
@@ -107,9 +105,9 @@ function PropertyRow({
   valueClassName?: string;
 }) {
   return (
-    <div className={cn("flex gap-3 py-1.5", alignStart ? "items-start" : "items-center")}>
-      <div className="shrink-0 w-20">{label}</div>
-      <div className={cn("min-w-0 flex-1", alignStart ? "pt-0.5" : "flex items-center gap-1.5", valueClassName)}>
+    <div className={["ui-project-property-row", alignStart ? "align-start" : ""].filter(Boolean).join(" ")}>
+      <div className="label">{label}</div>
+      <div className={["value", valueClassName].filter(Boolean).join(" ")}>
         {children}
       </div>
     </div>
@@ -117,34 +115,33 @@ function PropertyRow({
 }
 
 function ProjectStatusPicker({ status, onChange }: { status: string; onChange: (status: string) => void }) {
+  const { t } = useTranslation("status");
   const [open, setOpen] = useState(false);
-  const colorClass = statusBadge[status] ?? statusBadgeDefault;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className={cn(
-            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap shrink-0 cursor-pointer hover:opacity-80 transition-opacity",
-            colorClass,
-          )}
+          type="button"
+          className="ui-project-status-trigger"
+          data-status={status}
         >
-          {status.replace("_", " ")}
+          {t(status, { defaultValue: status.replace(/_/g, " ") })}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-40 p-1" align="start">
-        {PROJECT_STATUSES.map((s) => (
+      <PopoverContent className="ui-properties-picker-content" align="start">
+        {PROJECT_STATUS_VALUES.map((value) => (
           <Button
-            key={s.value}
+            key={value}
             variant="ghost"
             size="sm"
-            className={cn("w-full justify-start gap-2 text-xs", s.value === status && "bg-accent")}
+            className={["ui-properties-picker-item", value === status ? "active" : ""].filter(Boolean).join(" ")}
             onClick={() => {
-              onChange(s.value);
+              onChange(value);
               setOpen(false);
             }}
           >
-            {s.label}
+            {t(value)}
           </Button>
         ))}
       </PopoverContent>
@@ -152,7 +149,8 @@ function ProjectStatusPicker({ status, onChange }: { status: string; onChange: (
   );
 }
 
-export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSaveState }: ProjectPropertiesProps) {
+export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSaveState, onOpenIconSetting }: ProjectPropertiesProps) {
+  const { t } = useTranslation(["project", "common"]);
   const { selectedCompanyId } = useCompany();
   const queryClient = useQueryClient();
   const [goalOpen, setGoalOpen] = useState(false);
@@ -363,157 +361,232 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
   };
 
   return (
-    <div>
-      <div className="space-y-1 pb-4">
-        <PropertyRow label={<FieldLabel label="Name" state={fieldState("name")} />}>
-          {onUpdate || onFieldUpdate ? (
-            <DraftInput
-              value={project.name}
-              onCommit={(name) => commitField("name", { name })}
-              immediate
-              className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm outline-none"
-              placeholder="Project name"
-            />
-          ) : (
-            <span className="text-sm">{project.name}</span>
-          )}
-        </PropertyRow>
-        <PropertyRow
-          label={<FieldLabel label="Description" state={fieldState("description")} />}
-          alignStart
-          valueClassName="space-y-0.5"
-        >
-          {onUpdate || onFieldUpdate ? (
-            <InlineEditor
-              value={project.description ?? ""}
-              onSave={(description) => commitField("description", { description })}
-              as="p"
-              className="text-sm text-muted-foreground"
-              placeholder="Add a description..."
-              multiline
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {project.description?.trim() || "No description"}
-            </p>
-          )}
-        </PropertyRow>
-        <PropertyRow label={<FieldLabel label="Status" state={fieldState("status")} />}>
-          {onUpdate || onFieldUpdate ? (
-            <ProjectStatusPicker
-              status={project.status}
-              onChange={(status) => commitField("status", { status })}
-            />
-          ) : (
-            <StatusBadge status={project.status} />
-          )}
-        </PropertyRow>
-        {project.leadAgentId && (
-          <PropertyRow label="Lead">
-            <span className="text-sm font-mono">{project.leadAgentId.slice(0, 8)}</span>
-          </PropertyRow>
-        )}
-        <PropertyRow
-          label={<FieldLabel label="Goals" state={fieldState("goals")} />}
-          alignStart
-          valueClassName="space-y-2"
-        >
-          {linkedGoals.length === 0 ? (
-            <span className="text-sm text-muted-foreground">None</span>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {linkedGoals.map((goal) => (
-                <span
-                  key={goal.id}
-                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
-                >
-                  <Link to={`/goals/${goal.id}`} className="hover:underline max-w-[220px] truncate">
-                    {goal.title}
-                  </Link>
-                  {(onUpdate || onFieldUpdate) && (
-                    <button
-                      className="text-muted-foreground hover:text-foreground"
-                      type="button"
-                      onClick={() => removeGoal(goal.id)}
-                      aria-label={`Remove goal ${goal.title}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
-          )}
-          {(onUpdate || onFieldUpdate) && (
-            <Popover open={goalOpen} onOpenChange={setGoalOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  className="h-6 w-fit px-2"
-                  disabled={availableGoals.length === 0}
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Goal
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-1" align="start">
-                {availableGoals.length === 0 ? (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    All goals linked.
-                  </div>
+    <div className="space-y-6">
+      {/* 外觀：與 Company 設定一致的模塊化區塊 */}
+      {onOpenIconSetting && (
+        <div className="space-y-4">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {t("project:sectionAppearance")}
+          </div>
+          <div className="space-y-3 rounded-md border border-border px-4 py-4">
+            <div className="flex items-start gap-4">
+              <button
+                type="button"
+                onClick={onOpenIconSetting}
+                className="shrink-0 rounded-[14px] w-11 h-11 overflow-hidden border border-border bg-muted/30 flex items-center justify-center hover:ring-2 hover:ring-foreground/20 focus:outline-none focus:ring-2 focus:ring-foreground/30 transition-[box-shadow]"
+                aria-label={t("project:iconSettingTitle")}
+              >
+                {project.iconContentPath ? (
+                  <img
+                    src={project.iconContentPath}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
-                  availableGoals.map((goal) => (
-                    <button
-                      key={goal.id}
-                      className="flex items-center w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50"
-                      onClick={() => addGoal(goal.id)}
-                    >
-                      {goal.title}
-                    </button>
-                  ))
+                  <div
+                    className="w-full h-full"
+                    style={{ backgroundColor: project.color ?? "#6366f1" }}
+                  />
                 )}
-              </PopoverContent>
-            </Popover>
-          )}
-        </PropertyRow>
-        <PropertyRow label={<FieldLabel label="Created" state="idle" />}>
-          <span className="text-sm">{formatDate(project.createdAt)}</span>
-        </PropertyRow>
-        <PropertyRow label={<FieldLabel label="Updated" state="idle" />}>
-          <span className="text-sm">{formatDate(project.updatedAt)}</span>
-        </PropertyRow>
-        {project.targetDate && (
-          <PropertyRow label={<FieldLabel label="Target Date" state="idle" />}>
-            <span className="text-sm">{formatDate(project.targetDate)}</span>
+              </button>
+              <div className="flex-1 space-y-2 min-w-0">
+                <Field label={t("project:projectColor")} hint={t("project:projectColorHint")}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={project.color ?? "#6366f1"}
+                      onChange={(e) => commitField("color", { color: e.target.value })}
+                      className="h-8 w-8 cursor-pointer rounded border border-border bg-transparent p-0"
+                    />
+                    <input
+                      type="text"
+                      value={project.color ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "" || /^#[0-9a-fA-F]{0,6}$/.test(v)) {
+                          commitField("color", { color: v || null });
+                        }
+                      }}
+                      placeholder={t("common:auto")}
+                      className="w-28 rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm font-mono outline-none"
+                    />
+                    {(project.color ?? "").trim() && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => commitField("color", { color: null })}
+                        className="text-xs text-muted-foreground"
+                      >
+                        {t("common:clear")}
+                      </Button>
+                    )}
+                  </div>
+                </Field>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 一般 */}
+      <div className="space-y-4">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {t("project:sectionGeneral")}
+        </div>
+        <div className="space-y-1 rounded-md border border-border px-4 py-4">
+          <PropertyRow label={<FieldLabel label={t("project:name")} state={fieldState("name")} />}>
+            {onUpdate || onFieldUpdate ? (
+              <DraftInput
+                value={project.name}
+                onCommit={(name) => commitField("name", { name })}
+                immediate
+                className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm outline-none"
+                placeholder={t("project:projectNamePlaceholder")}
+              />
+            ) : (
+              <span className="text-sm">{project.name}</span>
+            )}
           </PropertyRow>
-        )}
+          <PropertyRow
+            label={<FieldLabel label={t("project:description")} state={fieldState("description")} />}
+            alignStart
+            valueClassName="space-y-0.5"
+          >
+            {onUpdate || onFieldUpdate ? (
+              <InlineEditor
+                value={project.description ?? ""}
+                onSave={(description) => commitField("description", { description })}
+                as="p"
+                className="text-sm text-muted-foreground"
+                placeholder={t("project:addDescriptionPlaceholder")}
+                multiline
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {project.description?.trim() || t("project:noDescription")}
+              </p>
+            )}
+          </PropertyRow>
+          <PropertyRow label={<FieldLabel label={t("project:status")} state={fieldState("status")} />}>
+            {onUpdate || onFieldUpdate ? (
+              <ProjectStatusPicker
+                status={project.status}
+                onChange={(status) => commitField("status", { status })}
+              />
+            ) : (
+              <StatusBadge status={project.status} />
+            )}
+          </PropertyRow>
+          {project.leadAgentId && (
+            <PropertyRow label={t("project:lead")}>
+              <span className="text-sm font-mono">{project.leadAgentId.slice(0, 8)}</span>
+            </PropertyRow>
+          )}
+          <PropertyRow
+            label={<FieldLabel label={t("project:goals")} state={fieldState("goals")} />}
+            alignStart
+            valueClassName="space-y-2"
+          >
+            {linkedGoals.length === 0 ? (
+              <span className="text-sm text-muted-foreground">{t("project:none")}</span>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {linkedGoals.map((goal) => (
+                  <span
+                    key={goal.id}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
+                  >
+                    <Link to={`/goals/${goal.id}`} className="hover:underline max-w-[220px] truncate">
+                      {goal.title}
+                    </Link>
+                    {(onUpdate || onFieldUpdate) && (
+                      <button
+                        className="text-muted-foreground hover:text-foreground"
+                        type="button"
+                        onClick={() => removeGoal(goal.id)}
+                        aria-label={t("project:removeGoalAria", { title: goal.title })}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+            {(onUpdate || onFieldUpdate) && (
+              <Popover open={goalOpen} onOpenChange={setGoalOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="h-6 w-fit px-2"
+                    disabled={availableGoals.length === 0}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    {t("project:addGoal")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-1" align="start">
+                  {availableGoals.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      {t("project:allGoalsLinked")}
+                    </div>
+                  ) : (
+                    availableGoals.map((goal) => (
+                      <button
+                        key={goal.id}
+                        className="flex items-center w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50"
+                        onClick={() => addGoal(goal.id)}
+                      >
+                        {goal.title}
+                      </button>
+                    ))
+                  )}
+                </PopoverContent>
+              </Popover>
+            )}
+          </PropertyRow>
+          <PropertyRow label={<FieldLabel label={t("project:created")} state="idle" />}>
+            <span className="text-sm">{formatDate(project.createdAt)}</span>
+          </PropertyRow>
+          <PropertyRow label={<FieldLabel label={t("project:updated")} state="idle" />}>
+            <span className="text-sm">{formatDate(project.updatedAt)}</span>
+          </PropertyRow>
+          {project.targetDate && (
+            <PropertyRow label={<FieldLabel label={t("project:targetDate")} state="idle" />}>
+              <span className="text-sm">{formatDate(project.targetDate)}</span>
+            </PropertyRow>
+          )}
+        </div>
       </div>
 
-      <Separator className="my-4" />
-
-      <div className="space-y-1 py-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span>Workspaces</span>
+      {/* 工作區 */}
+      <div className="space-y-4">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {t("project:sectionWorkspaces")}
+        </div>
+        <div className="space-y-3 rounded-md border border-border px-4 py-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span>{t("project:workspaces")}</span>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[10px] text-muted-foreground hover:text-foreground"
-                  aria-label="Workspaces help"
+                  aria-label={t("project:workspacesHelp")}
                 >
                   ?
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">
-                Workspaces give your agents hints about where the work is
+                {t("project:workspacesHelp")}
               </TooltipContent>
             </Tooltip>
           </div>
           {workspaces.length === 0 ? (
             <p className="rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
-              No workspace configured.
+              {t("project:noWorkspaceConfigured")}
             </p>
           ) : (
             <div className="space-y-1">
@@ -526,7 +599,7 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                         variant="ghost"
                         size="icon-xs"
                         onClick={() => clearLocalWorkspace(workspace)}
-                        aria-label="Delete local folder"
+                        aria-label={t("project:deleteLocalFolder")}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -548,7 +621,7 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                         variant="ghost"
                         size="icon-xs"
                         onClick={() => clearRepoWorkspace(workspace)}
-                        aria-label="Delete workspace repo"
+                        aria-label={t("project:deleteWorkspaceRepo")}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -565,14 +638,8 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                             <div className="flex items-center gap-2">
                               <span className="text-[11px] font-medium">{service.serviceName}</span>
                               <span
-                                className={cn(
-                                  "rounded-full px-1.5 py-0.5 text-[10px] uppercase tracking-wide",
-                                  service.status === "running"
-                                    ? "bg-green-500/15 text-green-700 dark:text-green-300"
-                                    : service.status === "failed"
-                                      ? "bg-red-500/15 text-red-700 dark:text-red-300"
-                                      : "bg-muted text-muted-foreground",
-                                )}
+                                className="ui-project-service-badge"
+                                data-status={service.status === "running" ? "running" : service.status === "failed" ? "failed" : undefined}
                               >
                                 {service.status}
                               </span>
@@ -613,7 +680,7 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                 setWorkspaceError(null);
               }}
             >
-              Add workspace local folder
+              {t("project:addWorkspaceLocalFolder")}
             </Button>
             <Button
               variant="outline"
@@ -624,7 +691,7 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                 setWorkspaceError(null);
               }}
             >
-              Add workspace repo
+              {t("project:addWorkspaceRepo")}
             </Button>
           </div>
           {workspaceMode === "local" && (
@@ -646,7 +713,7 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                   disabled={!workspaceCwd.trim() || createWorkspace.isPending}
                   onClick={submitLocalWorkspace}
                 >
-                  Save
+                  {t("common:save")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -658,7 +725,7 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                     setWorkspaceError(null);
                   }}
                 >
-                  Cancel
+                  {t("common:cancel")}
                 </Button>
               </div>
             </div>
@@ -679,7 +746,7 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                   disabled={!workspaceRepoUrl.trim() || createWorkspace.isPending}
                   onClick={submitRepoWorkspace}
                 >
-                  Save
+                  {t("common:save")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -691,7 +758,7 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                     setWorkspaceError(null);
                   }}
                 >
-                  Cancel
+                  {t("common:cancel")}
                 </Button>
               </div>
             </div>
@@ -700,72 +767,67 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
             <p className="text-xs text-destructive">{workspaceError}</p>
           )}
           {createWorkspace.isError && (
-            <p className="text-xs text-destructive">Failed to save workspace.</p>
+            <p className="text-xs text-destructive">{t("project:failedToSaveWorkspace")}</p>
           )}
           {removeWorkspace.isError && (
-            <p className="text-xs text-destructive">Failed to delete workspace.</p>
+            <p className="text-xs text-destructive">{t("project:failedToDeleteWorkspace")}</p>
           )}
           {updateWorkspace.isError && (
-            <p className="text-xs text-destructive">Failed to update workspace.</p>
+            <p className="text-xs text-destructive">{t("project:failedToUpdateWorkspace")}</p>
           )}
         </div>
+        </div>
+      </div>
 
-        {SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI && (
-          <>
-        <Separator className="my-4" />
-
-        <div className="py-1.5 space-y-2">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span>Execution Workspaces</span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[10px] text-muted-foreground hover:text-foreground"
-                  aria-label="Execution workspaces help"
-                >
-                  ?
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                Project-owned defaults for isolated issue checkouts and execution workspace behavior.
-              </TooltipContent>
-            </Tooltip>
-          </div>
+      {SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI && (
+        <div className="space-y-4">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {t("project:executionWorkspaces")}
+        </div>
+        <div className="space-y-3 rounded-md border border-border px-4 py-4">
           <div className="space-y-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span>{t("project:executionWorkspaces")}</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[10px] text-muted-foreground hover:text-foreground"
+                    aria-label={t("project:executionWorkspacesHelp")}
+                  >
+                    ?
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {t("project:executionWorkspacesHelp")}
+                </TooltipContent>
+              </Tooltip>
+            </div>
             <div className="flex items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <span>Enable isolated issue checkouts</span>
+                  <span>{t("project:enableIsolatedCheckouts")}</span>
                   <SaveIndicator state={fieldState("execution_workspace_enabled")} />
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Let issues choose between the project’s primary checkout and an isolated execution workspace.
+                  {t("project:enableIsolatedCheckoutsHint")}
                 </div>
               </div>
               {onUpdate || onFieldUpdate ? (
                 <button
-                  className={cn(
-                    "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                    executionWorkspacesEnabled ? "bg-green-600" : "bg-muted",
-                  )}
                   type="button"
+                  className={["ui-new-issue-toggle", executionWorkspacesEnabled ? "on" : ""].filter(Boolean).join(" ")}
                   onClick={() =>
                     commitField(
                       "execution_workspace_enabled",
                       updateExecutionWorkspacePolicy({ enabled: !executionWorkspacesEnabled })!,
                     )}
                 >
-                  <span
-                    className={cn(
-                      "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
-                      executionWorkspacesEnabled ? "translate-x-4.5" : "translate-x-0.5",
-                    )}
-                  />
+                  <span className="ui-new-issue-toggle-thumb" />
                 </button>
               ) : (
                 <span className="text-xs text-muted-foreground">
-                  {executionWorkspacesEnabled ? "Enabled" : "Disabled"}
+                  {executionWorkspacesEnabled ? t("project:enabled") : t("project:disabled")}
                 </span>
               )}
             </div>
@@ -775,19 +837,16 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                 <div className="flex items-center justify-between gap-3">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2 text-sm">
-                      <span>New issues default to isolated checkout</span>
+                      <span>{t("project:newIssuesDefaultToIsolated")}</span>
                       <SaveIndicator state={fieldState("execution_workspace_default_mode")} />
                     </div>
                     <div className="text-[11px] text-muted-foreground">
-                      If disabled, new issues stay on the project’s primary checkout unless someone opts in.
+                      {t("project:newIssuesDefaultHint")}
                     </div>
                   </div>
                   <button
-                    className={cn(
-                      "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                      executionWorkspaceDefaultMode === "isolated" ? "bg-green-600" : "bg-muted",
-                    )}
                     type="button"
+                    className={["ui-new-issue-toggle", executionWorkspaceDefaultMode === "isolated" ? "on" : ""].filter(Boolean).join(" ")}
                     onClick={() =>
                       commitField(
                         "execution_workspace_default_mode",
@@ -796,12 +855,7 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
                         })!,
                       )}
                   >
-                    <span
-                      className={cn(
-                        "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
-                        executionWorkspaceDefaultMode === "isolated" ? "translate-x-4.5" : "translate-x-0.5",
-                      )}
-                    />
+                    <span className="ui-new-issue-toggle-thumb" />
                   </button>
                 </div>
 
@@ -950,10 +1004,9 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
             )}
           </div>
         </div>
-          </>
-        )}
+        </div>
+      )}
 
-      </div>
     </div>
   );
 }

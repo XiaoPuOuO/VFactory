@@ -42,6 +42,8 @@ export const createIssueSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
   goalId: z.string().uuid().optional().nullable(),
   parentId: z.string().uuid().optional().nullable(),
+  /** 若由聊天室建立，完成時會主動回報至該聊天室。Agent 可從 PAPERCLIP_CHAT_ROOM_ID 帶入。 */
+  sourceChatRoomId: z.string().uuid().optional().nullable(),
   title: z.string().min(1),
   description: z.string().optional().nullable(),
   status: z.enum(ISSUE_STATUSES).optional().default("backlog"),

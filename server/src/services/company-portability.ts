@@ -14,7 +14,7 @@ import type {
   CompanyPortabilityPreviewAgentPlan,
   CompanyPortabilityPreviewResult,
 } from "@paperclipai/shared";
-import { normalizeAgentUrlKey, portabilityManifestSchema } from "@paperclipai/shared";
+import { DEFAULT_OWNER_GRANTS, normalizeAgentUrlKey, portabilityManifestSchema } from "@paperclipai/shared";
 import { notFound, unprocessable } from "../errors.js";
 import { accessService } from "./access.js";
 import { agentService } from "./agents.js";
@@ -70,7 +70,15 @@ const ADAPTER_DEFAULT_RULES_BY_TYPE: Record<string, Array<{ path: string[]; valu
     { path: ["timeoutSec"], value: 0 },
     { path: ["graceSec"], value: 15 },
   ],
+  codex_remote: [
+    { path: ["timeoutSec"], value: 0 },
+    { path: ["graceSec"], value: 15 },
+  ],
   gemini_local: [
+    { path: ["timeoutSec"], value: 0 },
+    { path: ["graceSec"], value: 15 },
+  ],
+  gemini_remote: [
     { path: ["timeoutSec"], value: 0 },
     { path: ["graceSec"], value: 15 },
   ],
@@ -83,6 +91,11 @@ const ADAPTER_DEFAULT_RULES_BY_TYPE: Record<string, Array<{ path: string[]; valu
     { path: ["graceSec"], value: 15 },
   ],
   claude_local: [
+    { path: ["timeoutSec"], value: 0 },
+    { path: ["graceSec"], value: 15 },
+    { path: ["maxTurnsPerRun"], value: 300 },
+  ],
+  claude_remote: [
     { path: ["timeoutSec"], value: 0 },
     { path: ["graceSec"], value: 15 },
     { path: ["maxTurnsPerRun"], value: 300 },
@@ -834,6 +847,7 @@ export function companyPortabilityService(db: Db) {
   async function importBundle(
     input: CompanyPortabilityImport,
     actorUserId: string | null | undefined,
+    tenantId?: string,
   ): Promise<CompanyPortabilityImportResult> {
     const plan = await buildPreview(input);
     if (plan.preview.errors.length > 0) {
@@ -848,12 +862,14 @@ export function companyPortabilityService(db: Db) {
     let companyAction: "created" | "updated" | "unchanged" = "unchanged";
 
     if (input.target.mode === "new_company") {
+      if (!tenantId) throw unprocessable("Tenant context required to create company during import");
       const companyName =
         asString(input.target.newCompanyName) ??
         sourceManifest.company?.name ??
         sourceManifest.source?.companyName ??
         "Imported Company";
       const created = await companies.create({
+        tenantId,
         name: companyName,
         description: include.company ? (sourceManifest.company?.description ?? null) : null,
         brandColor: include.company ? (sourceManifest.company?.brandColor ?? null) : null,
@@ -861,7 +877,9 @@ export function companyPortabilityService(db: Db) {
           ? (sourceManifest.company?.requireBoardApprovalForNewAgents ?? true)
           : true,
       });
-      await access.ensureMembership(created.id, "user", actorUserId ?? "board", "owner", "active");
+      const creatorUserId = actorUserId ?? "board";
+      await access.ensureMembership(created.id, "user", creatorUserId, "owner", "active");
+      await access.setPrincipalGrants(created.id, "user", creatorUserId, [...DEFAULT_OWNER_GRANTS], null);
       targetCompany = created;
       companyAction = "created";
     } else {

@@ -1,0 +1,165 @@
+/**
+ * Auth 頁面 — 原生 CSS（無 Tailwind）
+ */
+.auth-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  background: var(--background);
+}
+
+.auth-loading-wrap {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-loading-wrap p {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.auth-form-pane {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+@media (min-width: 768px) {
+  .auth-form-pane {
+    width: 50%;
+  }
+}
+
+.auth-form-inner {
+  width: 100%;
+  max-width: 28rem;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: auto;
+  margin-bottom: auto;
+  padding: 2rem 2rem 3rem;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.auth-brand svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+}
+
+.auth-brand span {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.auth-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.auth-desc {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.auth-google-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.auth-google-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.auth-divider {
+  margin: 1rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.auth-form {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-form-group label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin-bottom: 0.25rem;
+}
+
+.auth-form-group input {
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.auth-form-group input:focus {
+  box-shadow: 0 0 0 1px var(--ring);
+}
+
+.auth-form-group input::placeholder {
+  color: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+}
+
+.auth-form-error {
+  font-size: 0.75rem;
+  color: var(--destructive);
+}
+
+.auth-form-submit {
+  width: 100%;
+}
+
+.auth-form-toggle-wrap {
+  margin-top: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.auth-form-toggle-wrap button {
+  font-weight: 500;
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-ascii-pane {
+  display: none;
+  width: 50%;
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .auth-ascii-pane {
+    display: block;
+  }
+}

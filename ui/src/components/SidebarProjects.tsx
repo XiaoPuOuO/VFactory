@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Plus } from "lucide-react";
@@ -15,10 +16,10 @@ import { CSS } from "@dnd-kit/utilities";
 import { useCompany } from "../context/CompanyContext";
 import { useDialog } from "../context/DialogContext";
 import { useSidebar } from "../context/SidebarContext";
-import { authApi } from "../api/auth";
+import { authApi, isAuthSession } from "../api/auth";
 import { projectsApi } from "../api/projects";
 import { queryKeys } from "../lib/queryKeys";
-import { cn, projectRouteRef } from "../lib/utils";
+import { projectRouteRef } from "../lib/utils";
 import { useProjectOrder } from "../hooks/useProjectOrder";
 import {
   Collapsible,
@@ -56,8 +57,8 @@ function SortableProjectItem({
         transform: CSS.Transform.toString(transform),
         transition,
         zIndex: isDragging ? 10 : undefined,
+        opacity: isDragging ? 0.8 : 1,
       }}
-      className={cn(isDragging && "opacity-80")}
       {...attributes}
       {...listeners}
     >
@@ -66,24 +67,20 @@ function SortableProjectItem({
         onClick={() => {
           if (isMobile) setSidebarOpen(false);
         }}
-        className={cn(
-          "flex items-center gap-2.5 px-3 py-1.5 text-[13px] font-medium transition-colors",
-          activeProjectRef === routeRef || activeProjectRef === project.id
-            ? "bg-accent text-foreground"
-            : "text-foreground/80 hover:bg-accent/50 hover:text-foreground",
-        )}
+        className={["board-sidebar-project-link", (activeProjectRef === routeRef || activeProjectRef === project.id) && "active"].filter(Boolean).join(" ")}
       >
         <span
-          className="shrink-0 h-3.5 w-3.5 rounded-sm"
+          className="board-sidebar-project-dot"
           style={{ backgroundColor: project.color ?? "#6366f1" }}
         />
-        <span className="flex-1 truncate">{project.name}</span>
+        <span className="board-sidebar-project-name">{project.name}</span>
       </NavLink>
     </div>
   );
 }
 
 export function SidebarProjects() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const { selectedCompanyId } = useCompany();
   const { openNewProject } = useDialog();
@@ -100,7 +97,7 @@ export function SidebarProjects() {
     queryFn: () => authApi.getSession(),
   });
 
-  const currentUserId = session?.user?.id ?? session?.session?.userId ?? null;
+  const currentUserId = isAuthSession(session) ? session.user?.id ?? session.session?.userId ?? null : null;
 
   const visibleProjects = useMemo(
     () => (projects ?? []).filter((project: Project) => !project.archivedAt),
@@ -137,28 +134,22 @@ export function SidebarProjects() {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="group">
-        <div className="flex items-center px-3 py-1.5">
-          <CollapsibleTrigger className="flex items-center gap-1 flex-1 min-w-0">
-            <ChevronRight
-              className={cn(
-                "h-3 w-3 text-muted-foreground/60 transition-transform opacity-0 group-hover:opacity-100",
-                open && "rotate-90"
-              )}
-            />
-            <span className="text-[10px] font-medium uppercase tracking-widest font-mono text-muted-foreground/60">
-              Projects
-            </span>
+      <div className={["board-sidebar-collapsible-group", open && "open"].filter(Boolean).join(" ")}>
+        <div className="board-sidebar-collapsible-row">
+          <CollapsibleTrigger className="board-sidebar-collapsible-trigger">
+            <ChevronRight className="board-sidebar-collapsible-chevron" />
+            <span className="board-sidebar-collapsible-label">{t("nav.projects")}</span>
           </CollapsibleTrigger>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               openNewProject();
             }}
-            className="flex items-center justify-center h-4 w-4 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent/50 transition-colors"
-            aria-label="New project"
+            className="board-sidebar-collapsible-add-btn"
+            aria-label={t("nav.newProject")}
           >
-            <Plus className="h-3 w-3" />
+            <Plus />
           </button>
         </div>
       </div>
@@ -173,7 +164,7 @@ export function SidebarProjects() {
             items={orderedProjects.map((project) => project.id)}
             strategy={verticalListSortingStrategy}
           >
-            <div className="flex flex-col gap-0.5 mt-0.5">
+            <div className="board-sidebar-section-children">
               {orderedProjects.map((project: Project) => (
                 <SortableProjectItem
                   key={project.id}

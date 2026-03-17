@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { projectsApi } from "../api/projects";
 import { useCompany } from "../context/CompanyContext";
@@ -12,15 +13,17 @@ import { PageSkeleton } from "../components/PageSkeleton";
 import { formatDate, projectUrl } from "../lib/utils";
 import { Button } from "@/components/ui/button";
 import { Hexagon, Plus } from "lucide-react";
+import "./Projects.css";
 
 export function Projects() {
+  const { t } = useTranslation(["nav", "project"]);
   const { selectedCompanyId } = useCompany();
   const { openNewProject } = useDialog();
   const { setBreadcrumbs } = useBreadcrumbs();
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Projects" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("nav:projects") }]);
+  }, [setBreadcrumbs, t]);
 
   const { data: projects, isLoading, error } = useQuery({
     queryKey: queryKeys.projects.list(selectedCompanyId!),
@@ -29,7 +32,7 @@ export function Projects() {
   });
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={Hexagon} message="Select a company to view projects." />;
+    return <EmptyState icon={Hexagon} message={t("project:selectCompanyToViewProjects")} />;
   }
 
   if (isLoading) {
@@ -37,15 +40,15 @@ export function Projects() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-end">
+    <div className="projects-page">
+      <div className="projects-header">
         <Button size="sm" variant="outline" onClick={openNewProject}>
-          <Plus className="h-4 w-4 mr-1" />
+          <Plus className="projects-btn-icon" />
           Add Project
         </Button>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
+      {error && <p className="board-page-error">{error.message}</p>}
 
       {projects && projects.length === 0 && (
         <EmptyState
@@ -57,7 +60,7 @@ export function Projects() {
       )}
 
       {projects && projects.length > 0 && (
-        <div className="border border-border">
+        <div className="projects-list">
           {projects.map((project) => (
             <EntityRow
               key={project.id}
@@ -65,9 +68,9 @@ export function Projects() {
               subtitle={project.description ?? undefined}
               to={projectUrl(project)}
               trailing={
-                <div className="flex items-center gap-3">
+                <div className="projects-list-meta">
                   {project.targetDate && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="projects-list-date">
                       {formatDate(project.targetDate)}
                     </span>
                   )}

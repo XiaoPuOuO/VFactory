@@ -1,0 +1,581 @@
+/**
+ * InstanceGroupManagement 頁面 — 此站設定 > 群組管理
+ */
+.instance-group-management-page {
+  max-width: 64rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.instance-group-management-loading,
+.instance-group-management-error {
+  font-size: 0.875rem;
+}
+
+.instance-group-management-error {
+  color: var(--destructive);
+}
+
+.instance-group-management-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.instance-group-management-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.instance-group-management-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.instance-group-management-title-wrap svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.instance-group-management-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.instance-group-management-desc {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.instance-group-management-all-perms-card {
+  margin-bottom: 0.25rem;
+}
+
+.instance-group-management-all-perms-content {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.instance-group-management-all-perms-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.instance-group-management-all-perms-desc {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+
+.instance-group-management-all-perms-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.instance-group-management-filter-trigger {
+  min-width: 8rem;
+}
+
+.instance-group-management-all-perms-table-wrap {
+  max-height: 20rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.instance-group-management-all-perms-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.instance-group-management-all-perms-table th,
+.instance-group-management-all-perms-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.instance-group-management-all-perms-table th {
+  font-weight: 600;
+  background: var(--muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.instance-group-management-all-perms-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.instance-group-management-all-perms-key {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.instance-group-management-default-card {
+  margin-bottom: 0.25rem;
+}
+
+.instance-group-management-default-content {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.instance-group-management-default-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.instance-group-management-default-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.instance-group-management-default-input {
+  max-width: 12rem;
+}
+
+.instance-group-management-default-hint {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+.instance-group-management-search-wrap {
+  display: flex;
+  align-items: center;
+  max-width: 20rem;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  background: var(--background);
+  overflow: hidden;
+}
+
+.instance-group-management-search-wrap:focus-within {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+
+.instance-group-management-search-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.25rem;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.instance-group-management-search-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.instance-group-management-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 2.25rem;
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  border: none;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.instance-group-management-search-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* 管理權限 modal 重新設計：較寬版面、說明區、已選摘要、表格樣式 */
+.instance-group-perms-modal-content {
+  max-width: 42rem;
+  width: calc(100vw - 2rem);
+}
+
+.instance-group-perms-modal-header {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+
+.instance-group-perms-modal-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.instance-group-perms-modal-desc {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.instance-group-perms-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 0.75rem;
+}
+
+.instance-group-perms-summary {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+
+.instance-group-perms-modal-footer {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+}
+
+.instance-group-perms-search-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  max-width: 20rem;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  background: var(--background);
+  overflow: hidden;
+}
+
+.instance-group-perms-search-wrap:focus-within {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+
+.instance-group-perms-search-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.25rem;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.instance-group-perms-search-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.instance-group-perms-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 2.25rem;
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  border: none;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.instance-group-perms-search-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.instance-group-perms-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.instance-group-perms-table-wrap {
+  max-height: 20rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.instance-group-perms-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.instance-group-perms-table th,
+.instance-group-perms-table td {
+  padding: 0.625rem 0.875rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.instance-group-perms-table th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.instance-group-perms-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.instance-group-perms-table tbody tr:hover {
+  background: color-mix(in oklch, var(--accent) 40%, transparent);
+}
+
+.instance-group-perms-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.instance-group-perms-col-check {
+  width: 2.5rem;
+  vertical-align: middle;
+}
+
+.instance-group-perms-table .instance-group-perms-col-check input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.instance-group-perms-add-amount {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.instance-group-perms-add-amount .instance-group-perms-amount-input {
+  width: 4rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  border-radius: 6px;
+  border: 1px solid var(--input);
+  background: var(--background);
+}
+
+.instance-group-perms-add-amount .instance-group-perms-amount-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+/* 群組列表表格 */
+.instance-group-management-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 28rem;
+}
+
+.instance-group-management-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.instance-group-management-table th,
+.instance-group-management-table td {
+  padding: 0.625rem 0.875rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.instance-group-management-table th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.instance-group-management-table tbody tr:hover {
+  background: color-mix(in oklch, var(--accent) 30%, transparent);
+}
+
+.instance-group-management-table-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.instance-group-management-table-display-name,
+.instance-group-management-table-inherits {
+  color: var(--muted-foreground);
+}
+
+.instance-group-management-perm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.instance-group-management-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.instance-group-management-card-content {
+  padding: 1rem;
+}
+
+.instance-group-management-card-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.instance-group-management-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.instance-group-management-card-name {
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.instance-group-management-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.instance-group-management-admin-badge svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.instance-group-management-perms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.instance-group-management-perms-empty {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+.instance-group-management-perm-tag {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.instance-group-management-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.instance-group-management-delete-btn {
+  color: var(--destructive);
+}
+
+.instance-group-management-delete-btn:hover {
+  background: color-mix(in oklab, var(--destructive) 15%, transparent);
+  color: var(--destructive);
+}
+
+.instance-group-management-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.instance-group-management-confirm-text {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  margin-right: 0.25rem;
+}
+
+/* Dialogs */
+.instance-group-dialog-wide {
+  max-width: 32rem;
+}
+
+.instance-group-dialog .instance-group-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.instance-group-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.instance-group-dialog-hint {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+
+.instance-group-inherit-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-height: 10rem;
+  overflow: auto;
+  padding: 0.25rem 0;
+}
+
+.instance-group-inherit-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.instance-group-inherit-checkbox input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+

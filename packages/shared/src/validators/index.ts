@@ -1,9 +1,41 @@
+export { tenantSlugSchema, type TenantSlug } from "./tenant.js";
 export {
   createCompanySchema,
   updateCompanySchema,
+  normalizeWorkingDirectory,
   type CreateCompany,
   type UpdateCompany,
 } from "./company.js";
+export {
+  createInstanceGroupSchema,
+  updateInstanceGroupSchema,
+  setInstanceGroupPermissionsSchema,
+  setDefaultGroupSchema,
+  type CreateInstanceGroup,
+  type UpdateInstanceGroup,
+  type SetInstanceGroupPermissions,
+  type SetDefaultGroup,
+} from "./instance-group.js";
+
+export {
+  setInstanceUserGroupSchema,
+  banInstanceUserSchema,
+  updateInstanceUserNameSchema,
+  type SetInstanceUserGroup,
+  type BanInstanceUser,
+  type UpdateInstanceUserName,
+} from "./instance-user.js";
+
+export {
+  updateMeDeveloperModeSchema,
+  type UpdateMeDeveloperMode,
+} from "./me.js";
+
+export {
+  setDefaultCompanyPathSchema,
+  type SetDefaultCompanyPath,
+} from "./instance-settings.js";
+
 export {
   portabilityIncludeSchema,
   portabilitySecretRequirementSchema,
@@ -124,6 +156,21 @@ export {
 } from "./asset.js";
 
 export {
+  createChatRoomSchema,
+  MAX_GROUP_AGENT_COUNT,
+  addChatMessageSchema,
+  updateChatListPreferencesSchema,
+  type CreateChatRoom,
+  type AddChatMessage,
+  type UpdateChatListPreferences,
+} from "./chat.js";
+
+export {
+  addAgentMemorySchema,
+  type AddAgentMemory,
+} from "./agent-memory.js";
+
+export {
   createCompanyInviteSchema,
   createOpenClawInvitePromptSchema,
   acceptInviteSchema,
@@ -139,3 +186,12 @@ export {
   type UpdateMemberPermissions,
   type UpdateUserCompanyAccess,
 } from "./access.js";
+
+export {
+  createScheduleSchema,
+  updateScheduleSchema,
+  listSchedulesQuerySchema,
+  type CreateSchedule,
+  type UpdateSchedule,
+  type ListSchedulesQuery,
+} from "./schedule.js";

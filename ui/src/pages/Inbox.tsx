@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { approvalsApi } from "../api/approvals";
@@ -19,7 +20,7 @@ import { IssueRow } from "../components/IssueRow";
 import { PriorityIcon } from "../components/PriorityIcon";
 import { StatusIcon } from "../components/StatusIcon";
 import { StatusBadge } from "../components/StatusBadge";
-import { timeAgo } from "../lib/timeAgo";
+import { formatRelativeTime } from "../lib/formatRelativeTime";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
@@ -49,6 +50,8 @@ import {
   saveLastInboxTab,
 } from "../lib/inbox";
 import { useDismissedInboxItems } from "../hooks/useInboxBadge";
+import "../styles/issues-list.css";
+import "./Inbox.css";
 
 type InboxCategoryFilter =
   | "everything"
@@ -65,11 +68,11 @@ type SectionKey =
   | "failed_runs"
   | "alerts";
 
-const RUN_SOURCE_LABELS: Record<string, string> = {
-  timer: "Scheduled",
-  assignment: "Assignment",
-  on_demand: "Manual",
-  automation: "Automation",
+const RUN_SOURCE_KEYS: Record<string, string> = {
+  timer: "inbox.scheduled",
+  assignment: "inbox.assignment",
+  on_demand: "inbox.manual",
+  automation: "inbox.automation",
 };
 
 function firstNonEmptyLine(value: string | null | undefined): string | null {
@@ -78,8 +81,11 @@ function firstNonEmptyLine(value: string | null | undefined): string | null {
   return line ?? null;
 }
 
-function runFailureMessage(run: HeartbeatRun): string {
-  return firstNonEmptyLine(run.error) ?? firstNonEmptyLine(run.stderrExcerpt) ?? "Run exited with an error.";
+function runFailureMessage(run: HeartbeatRun, t: (key: string) => string): string {
+  const raw = firstNonEmptyLine(run.error) ?? firstNonEmptyLine(run.stderrExcerpt) ?? null;
+  if (!raw) return t("inbox.runExitedError");
+  if (raw.includes("Process lost") && raw.includes("server may have restarted")) return t("inbox.processLost");
+  return raw;
 }
 
 function readIssueIdFromRun(run: HeartbeatRun): string | null {
@@ -108,12 +114,13 @@ function FailedRunCard({
   issueLinkState: unknown;
   onDismiss: () => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const issueId = readIssueIdFromRun(run);
   const issue = issueId ? issueById.get(issueId) ?? null : null;
-  const sourceLabel = RUN_SOURCE_LABELS[run.invocationSource] ?? "Manual";
-  const displayError = runFailureMessage(run);
+  const sourceLabel = t(RUN_SOURCE_KEYS[run.invocationSource] ?? "inbox.manual");
+  const displayError = runFailureMessage(run, t);
 
   const retryRun = useMutation({
     mutationFn: async () => {
@@ -143,89 +150,81 @@ function FailedRunCard({
   });
 
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-red-500/30 bg-gradient-to-br from-red-500/10 via-card to-card p-4">
-      <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-red-500/10 blur-2xl" />
+    <div className="inbox-failed-run-card">
       <button
         type="button"
+        className="inbox-failed-run-dismiss"
         onClick={onDismiss}
-        className="absolute right-2 top-2 z-10 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
-        aria-label="Dismiss"
+        aria-label={t("inbox.dismiss")}
       >
-        <X className="h-4 w-4" />
+        <X />
       </button>
-      <div className="relative space-y-3">
+      <div className="inbox-failed-run-content">
         {issue ? (
           <Link
             to={`/issues/${issue.identifier ?? issue.id}`}
             state={issueLinkState}
-            className="block truncate text-sm font-medium transition-colors hover:text-foreground no-underline text-inherit"
+            className="inbox-failed-run-link"
           >
-            <span className="font-mono text-muted-foreground mr-1.5">
+            <span className="inbox-failed-run-link-id">
               {issue.identifier ?? issue.id.slice(0, 8)}
             </span>
             {issue.title}
           </Link>
         ) : (
-          <span className="block text-sm text-muted-foreground">
-            {run.errorCode ? `Error code: ${run.errorCode}` : "No linked issue"}
+          <span className="inbox-failed-run-no-issue">
+            {run.errorCode ? t("inbox.errorCode", { code: run.errorCode }) : t("inbox.noLinkedIssue")}
           </span>
         )}
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-red-500/20 p-1.5">
-                <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+        <div className="inbox-failed-run-row">
+          <div className="inbox-failed-run-meta-wrap">
+            <div className="inbox-failed-run-meta-line">
+              <span className="inbox-failed-run-meta-icon">
+                <XCircle />
               </span>
               {linkedAgentName ? (
                 <Identity name={linkedAgentName} size="sm" />
               ) : (
-                <span className="text-sm font-medium">Agent {run.agentId.slice(0, 8)}</span>
+                <span className="inbox-join-title">{t("inbox.agentIdShort", { id: run.agentId.slice(0, 8) })}</span>
               )}
               <StatusBadge status={run.status} />
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {sourceLabel} run failed {timeAgo(run.createdAt)}
+            <p className="inbox-failed-run-meta-time">
+              {t("inbox.runFailedAgo", { source: sourceLabel, time: formatRelativeTime(t, run.createdAt) })}
             </p>
           </div>
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+          <div className="inbox-failed-run-actions">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 shrink-0 px-2.5"
               onClick={() => retryRun.mutate()}
               disabled={retryRun.isPending}
             >
-              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-              {retryRun.isPending ? "Retrying…" : "Retry"}
+              <RotateCcw />
+              {retryRun.isPending ? t("inbox.retrying") : t("inbox.retry")}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 shrink-0 px-2.5"
-              asChild
-            >
+            <Button type="button" variant="outline" size="sm" asChild>
               <Link to={`/agents/${run.agentId}/runs/${run.id}`}>
-                Open run
-                <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+                {t("inbox.openRun")}
+                <ArrowUpRight />
               </Link>
             </Button>
           </div>
         </div>
 
-        <div className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm">
+        <div className="inbox-failed-run-error-box">
           {displayError}
         </div>
 
-        <div className="text-xs">
-          <span className="font-mono text-muted-foreground">run {run.id.slice(0, 8)}</span>
+        <div className="inbox-failed-run-id">
+          <span>run {run.id.slice(0, 8)}</span>
         </div>
 
         {retryRun.isError && (
-          <div className="text-xs text-destructive">
-            {retryRun.error instanceof Error ? retryRun.error.message : "Failed to retry run"}
+          <div className="inbox-failed-run-retry-error">
+            {retryRun.error instanceof Error ? retryRun.error.message : t("inbox.failedToRetryRun")}
           </div>
         )}
       </div>
@@ -234,6 +233,7 @@ function FailedRunCard({
 }
 
 export function Inbox() {
+  const { t } = useTranslation();
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const navigate = useNavigate();
@@ -250,10 +250,10 @@ export function Inbox() {
   const issueLinkState = useMemo(
     () =>
       createIssueDetailLocationState(
-        "Inbox",
+        t("nav.inbox"),
         `${location.pathname}${location.search}${location.hash}`,
       ),
-    [location.pathname, location.search, location.hash],
+    [location.pathname, location.search, location.hash, t],
   );
 
   const { data: agents } = useQuery({
@@ -263,8 +263,8 @@ export function Inbox() {
   });
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Inbox" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("nav.inbox") }]);
+  }, [setBreadcrumbs, t]);
 
   useEffect(() => {
     saveLastInboxTab(tab);
@@ -555,18 +555,15 @@ export function Inbox() {
   const canMarkAllRead = unreadIssueIds.length > 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="inbox-page">
+      <div className="inbox-header">
+        <div className="inbox-header-left">
           <Tabs value={tab} onValueChange={(value) => navigate(`/inbox/${value}`)}>
             <PageTabBar
               items={[
-                {
-                  value: "recent",
-                  label: "Recent",
-                },
-                { value: "unread", label: "Unread" },
-                { value: "all", label: "All" },
+                { value: "recent", label: t("inbox.recent") },
+                { value: "unread", label: t("inbox.unread") },
+                { value: "all", label: t("inbox.all") },
               ]}
             />
           </Tabs>
@@ -576,31 +573,30 @@ export function Inbox() {
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 shrink-0"
               onClick={() => markAllReadMutation.mutate(unreadIssueIds)}
               disabled={markAllReadMutation.isPending}
             >
-              {markAllReadMutation.isPending ? "Marking…" : "Mark all as read"}
+              {markAllReadMutation.isPending ? t("inbox.marking") : t("inbox.markAllAsRead")}
             </Button>
           )}
         </div>
 
         {tab === "all" && (
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div className="inbox-header-right">
             <Select
               value={allCategoryFilter}
               onValueChange={(value) => setAllCategoryFilter(value as InboxCategoryFilter)}
             >
-              <SelectTrigger className="h-8 w-[170px] text-xs">
-                <SelectValue placeholder="Category" />
+              <SelectTrigger className="inbox-select-trigger">
+                <SelectValue placeholder={t("inbox.category")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="everything">All categories</SelectItem>
-                <SelectItem value="issues_i_touched">My recent issues</SelectItem>
-                <SelectItem value="join_requests">Join requests</SelectItem>
-                <SelectItem value="approvals">Approvals</SelectItem>
-                <SelectItem value="failed_runs">Failed runs</SelectItem>
-                <SelectItem value="alerts">Alerts</SelectItem>
+                <SelectItem value="everything">{t("inbox.allCategories")}</SelectItem>
+                <SelectItem value="issues_i_touched">{t("inbox.myRecentIssues")}</SelectItem>
+                <SelectItem value="join_requests">{t("inbox.joinRequests")}</SelectItem>
+                <SelectItem value="approvals">{t("inbox.approvals")}</SelectItem>
+                <SelectItem value="failed_runs">{t("inbox.failedRunsCat")}</SelectItem>
+                <SelectItem value="alerts">{t("inbox.alerts")}</SelectItem>
               </SelectContent>
             </Select>
 
@@ -609,13 +605,13 @@ export function Inbox() {
                 value={allApprovalFilter}
                 onValueChange={(value) => setAllApprovalFilter(value as InboxApprovalFilter)}
               >
-                <SelectTrigger className="h-8 w-[170px] text-xs">
-                  <SelectValue placeholder="Approval status" />
+                <SelectTrigger className="inbox-select-trigger">
+                  <SelectValue placeholder={t("inbox.approvalStatus")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All approval statuses</SelectItem>
-                  <SelectItem value="actionable">Needs action</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="all">{t("inbox.allApprovalStatuses")}</SelectItem>
+                  <SelectItem value="actionable">{t("inbox.needsAction")}</SelectItem>
+                  <SelectItem value="resolved">{t("inbox.resolved")}</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -623,8 +619,8 @@ export function Inbox() {
         )}
       </div>
 
-      {approvalsError && <p className="text-sm text-destructive">{approvalsError.message}</p>}
-      {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+      {approvalsError && <p className="inbox-errors">{approvalsError.message}</p>}
+      {actionError && <p className="inbox-errors">{actionError}</p>}
 
       {!allLoaded && visibleSections.length === 0 && (
         <PageSkeleton variant="inbox" />
@@ -635,10 +631,10 @@ export function Inbox() {
           icon={InboxIcon}
           message={
             tab === "unread"
-              ? "No new inbox items."
+              ? t("inbox.noNewInboxItems")
               : tab === "recent"
-                ? "No recent inbox items."
-                : "No inbox items match these filters."
+                ? t("inbox.noRecentInboxItems")
+                : t("inbox.noInboxItemsMatch")
           }
         />
       )}
@@ -646,11 +642,11 @@ export function Inbox() {
       {showApprovalsSection && (
         <>
           {showSeparatorBefore("approvals") && <Separator />}
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              {tab === "unread" ? "Approvals Needing Action" : "Approvals"}
+          <div className="inbox-section">
+            <h3 className="inbox-section-title">
+              {tab === "unread" ? t("inbox.approvalsNeedingAction") : t("inbox.approvals")}
             </h3>
-            <div className="grid gap-3">
+            <div className="inbox-grid">
               {approvalsToRender.map((approval) => (
                 <ApprovalCard
                   key={approval.id}
@@ -674,33 +670,33 @@ export function Inbox() {
       {showJoinRequestsSection && (
         <>
           {showSeparatorBefore("join_requests") && <Separator />}
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Join Requests
+          <div className="inbox-section">
+            <h3 className="inbox-section-title">
+              {t("inbox.joinRequests")}
             </h3>
-            <div className="grid gap-3">
+            <div className="inbox-grid">
               {joinRequests.map((joinRequest) => (
-                <div key={joinRequest.id} className="rounded-xl border border-border bg-card p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">
+                <div key={joinRequest.id} className="inbox-join-card">
+                  <div className="inbox-join-inner">
+                    <div className="inbox-join-body">
+                      <p className="inbox-join-title">
                         {joinRequest.requestType === "human"
                           ? "Human join request"
                           : `Agent join request${joinRequest.agentName ? `: ${joinRequest.agentName}` : ""}`}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        requested {timeAgo(joinRequest.createdAt)} from IP {joinRequest.requestIp}
+                      <p className="inbox-join-meta">
+                        {t("inbox.requestedAgoFromIp", { time: formatRelativeTime(t, joinRequest.createdAt), ip: joinRequest.requestIp })}
                       </p>
                       {joinRequest.requestEmailSnapshot && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="inbox-join-meta">
                           email: {joinRequest.requestEmailSnapshot}
                         </p>
                       )}
                       {joinRequest.adapterType && (
-                        <p className="text-xs text-muted-foreground">adapter: {joinRequest.adapterType}</p>
+                        <p className="inbox-join-meta">adapter: {joinRequest.adapterType}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="inbox-join-actions">
                       <Button
                         size="sm"
                         variant="outline"
@@ -728,11 +724,11 @@ export function Inbox() {
       {showFailedRunsSection && (
         <>
           {showSeparatorBefore("failed_runs") && <Separator />}
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Failed Runs
+          <div className="inbox-section">
+            <h3 className="inbox-section-title">
+              {t("inbox.failedRuns")}
             </h3>
-            <div className="grid gap-3">
+            <div className="inbox-grid">
               {failedRuns.map((run) => (
                 <FailedRunCard
                   key={run.id}
@@ -751,53 +747,46 @@ export function Inbox() {
       {showAlertsSection && (
         <>
           {showSeparatorBefore("alerts") && <Separator />}
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="inbox-section">
+            <h3 className="inbox-section-title">
               Alerts
             </h3>
-            <div className="divide-y divide-border border border-border">
+            <div className="inbox-alerts-list">
               {showAggregateAgentError && (
-                <div className="group/alert relative flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50">
-                  <Link
-                    to="/agents"
-                    className="flex flex-1 cursor-pointer items-center gap-3 no-underline text-inherit"
-                  >
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-                    <span className="text-sm">
-                      <span className="font-medium">{dashboard!.agents.error}</span>{" "}
+                <div className="inbox-alert-row">
+                  <Link to="/agents" className="inbox-alert-link">
+                    <AlertTriangle className="inbox-alert-icon red" />
+                    <span className="inbox-alert-text">
+                      <strong>{dashboard!.agents.error}</strong>{" "}
                       {dashboard!.agents.error === 1 ? "agent has" : "agents have"} errors
                     </span>
                   </Link>
                   <button
                     type="button"
+                    className="inbox-alert-dismiss"
                     onClick={() => dismiss("alert:agent-errors")}
-                    className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/alert:opacity-100"
                     aria-label="Dismiss"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X />
                   </button>
                 </div>
               )}
               {showBudgetAlert && (
-                <div className="group/alert relative flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50">
-                  <Link
-                    to="/costs"
-                    className="flex flex-1 cursor-pointer items-center gap-3 no-underline text-inherit"
-                  >
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-400" />
-                    <span className="text-sm">
-                      Budget at{" "}
-                      <span className="font-medium">{dashboard!.costs.monthUtilizationPercent}%</span>{" "}
+                <div className="inbox-alert-row">
+                  <Link to="/costs" className="inbox-alert-link">
+                    <AlertTriangle className="inbox-alert-icon yellow" />
+                    <span className="inbox-alert-text">
+                      Budget at <strong>{dashboard!.costs.monthUtilizationPercent}%</strong>{" "}
                       utilization this month
                     </span>
                   </Link>
                   <button
                     type="button"
+                    className="inbox-alert-dismiss"
                     onClick={() => dismiss("alert:budget")}
-                    className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/alert:opacity-100"
                     aria-label="Dismiss"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X />
                   </button>
                 </div>
               )}
@@ -809,8 +798,8 @@ export function Inbox() {
       {showTouchedSection && (
         <>
           {showSeparatorBefore("issues_i_touched") && <Separator />}
-          <div>
-            <div>
+          <div className="inbox-section inbox-issues-wrap">
+            <div className="issues-list">
               {(tab === "unread" ? unreadTouchedIssues : touchedIssues).map((issue) => {
                 const isUnread = issue.isUnreadForMe && !fadingOutIssues.has(issue.id);
                 const isFading = fadingOutIssues.has(issue.id);
@@ -821,39 +810,34 @@ export function Inbox() {
                     issueLinkState={issueLinkState}
                     desktopMetaLeading={(
                       <>
-                        <span className="hidden sm:inline-flex">
+                        <span className="issues-row-meta-icon">
                           <PriorityIcon priority={issue.priority} />
                         </span>
-                        <span className="hidden shrink-0 sm:inline-flex">
+                        <span className="issues-row-meta-icon">
                           <StatusIcon status={issue.status} />
                         </span>
-                        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                        <span className="issues-row-id">
                           {issue.identifier ?? issue.id.slice(0, 8)}
                         </span>
                         {liveIssueIds.has(issue.id) && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-1.5 py-0.5 sm:gap-1.5 sm:px-2">
-                            <span className="relative flex h-2 w-2">
-                              <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-blue-400 opacity-75" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
-                            </span>
-                            <span className="hidden text-[11px] font-medium text-blue-600 dark:text-blue-400 sm:inline">
-                              Live
-                            </span>
+                          <span className="issues-row-live">
+                            <span className="issues-row-live-dot" />
+                            <span className="issues-row-live-text">Live</span>
                           </span>
                         )}
                       </>
                     )}
                     mobileMeta={
                       issue.lastExternalCommentAt
-                        ? `commented ${timeAgo(issue.lastExternalCommentAt)}`
-                        : `updated ${timeAgo(issue.updatedAt)}`
+                        ? t("inbox.commentedAgo", { time: formatRelativeTime(t, issue.lastExternalCommentAt) })
+                        : t("inbox.updatedAgo", { time: formatRelativeTime(t, issue.updatedAt) })
                     }
                     unreadState={isUnread ? "visible" : isFading ? "fading" : "hidden"}
                     onMarkRead={() => markReadMutation.mutate(issue.id)}
                     trailingMeta={
                       issue.lastExternalCommentAt
-                        ? `commented ${timeAgo(issue.lastExternalCommentAt)}`
-                        : `updated ${timeAgo(issue.updatedAt)}`
+                        ? t("inbox.commentedAgo", { time: formatRelativeTime(t, issue.lastExternalCommentAt) })
+                        : t("inbox.updatedAgo", { time: formatRelativeTime(t, issue.updatedAt) })
                     }
                   />
                 );

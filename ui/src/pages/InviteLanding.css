@@ -1,0 +1,165 @@
+/* InviteLanding page — invite token / join / bootstrap flows */
+.invite-landing-root {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 36rem;
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.invite-landing-message {
+  font-size: 0.875rem;
+}
+
+.invite-landing-message.error {
+  color: var(--destructive);
+}
+
+.invite-landing-message.muted {
+  color: var(--muted-foreground);
+}
+
+.invite-landing-card {
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 1.5rem;
+}
+
+.invite-landing-card h1 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.invite-landing-card h1.large {
+  font-size: 1.25rem;
+}
+
+.invite-landing-card-desc {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.invite-landing-card-actions {
+  margin-top: 1rem;
+}
+
+.invite-landing-block {
+  margin-top: 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 30%, transparent);
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.invite-landing-block + .invite-landing-block {
+  margin-top: 0.75rem;
+}
+
+.invite-landing-block-title {
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.invite-landing-mono {
+  font-family: ui-monospace, monospace;
+}
+
+.invite-landing-break {
+  word-break: break-all;
+}
+
+.invite-landing-block-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.invite-landing-diag-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.invite-landing-diag-item[data-level="warn"] p:first-child {
+  color: #b45309;
+}
+
+.dark .invite-landing-diag-item[data-level="warn"] p:first-child {
+  color: #fbbf24;
+}
+
+.invite-landing-join-tabs {
+  margin-top: 1.25rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.invite-landing-join-tab {
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.invite-landing-join-tab.active {
+  border-color: var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.invite-landing-form {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.invite-landing-label {
+  display: block;
+  font-size: 0.875rem;
+}
+
+.invite-landing-label-caption {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--muted-foreground);
+}
+
+.invite-landing-input {
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.invite-landing-auth-note {
+  margin-top: 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 30%, transparent);
+  padding: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.invite-landing-auth-note-actions {
+  margin-top: 0.5rem;
+}
+
+.invite-landing-error {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.invite-landing-submit {
+  margin-top: 1.25rem;
+}

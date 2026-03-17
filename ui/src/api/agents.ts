@@ -1,5 +1,6 @@
 import type {
   Agent,
+  AgentChatMemory,
   AdapterEnvironmentTestResult,
   AgentKeyCreated,
   AgentRuntimeState,
@@ -144,4 +145,10 @@ export const agentsApi = {
   ) => api.post<HeartbeatRun | { status: "skipped" }>(agentPath(id, companyId, "/wakeup"), data),
   loginWithClaude: (id: string, companyId?: string) =>
     api.post<ClaudeLoginResult>(agentPath(id, companyId, "/claude-login"), {}),
+  listMemories: (companyId: string, agentId: string) =>
+    api.get<AgentChatMemory[]>(`/companies/${encodeURIComponent(companyId)}/agents/${encodeURIComponent(agentId)}/memories`),
+  deleteMemory: (companyId: string, agentId: string, memoryId: string) =>
+    api.delete(`/companies/${encodeURIComponent(companyId)}/agents/${encodeURIComponent(agentId)}/memories/${encodeURIComponent(memoryId)}`),
+  deleteAllMemories: (companyId: string, agentId: string) =>
+    api.delete(`/companies/${encodeURIComponent(companyId)}/agents/${encodeURIComponent(agentId)}/memories`),
 };

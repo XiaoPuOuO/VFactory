@@ -174,7 +174,7 @@ export const InlineEntitySelector = forwardRef<HTMLButtonElement, InlineEntitySe
               }
             }}
           />
-          <div className="max-h-56 overflow-y-auto overscroll-contain py-1 touch-pan-y">
+          <div className="inline-entity-selector-list">
             {filteredOptions.length === 0 ? (
               <p className="px-2 py-2 text-xs text-muted-foreground">{emptyMessage}</p>
             ) : (

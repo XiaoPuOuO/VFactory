@@ -9,6 +9,7 @@ import {
   type CSSProperties,
   type DragEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   CodeMirrorEditor,
   MDXEditor,
@@ -28,7 +29,6 @@ import {
   type RealmPlugin,
 } from "@mdxeditor/editor";
 import { buildProjectMentionHref, parseProjectMentionHref } from "@paperclipai/shared";
-import { cn } from "../lib/utils";
 
 /* ---- Mention types ---- */
 
@@ -53,7 +53,7 @@ interface MarkdownEditorProps {
   bordered?: boolean;
   /** List of mentionable entities. Enables @-mention autocomplete. */
   mentions?: MentionOption[];
-  /** Called on Cmd/Ctrl+Enter */
+  /** Enter 發送；Shift+Enter 換行。未提供時 Enter 為預設換行。 */
   onSubmit?: () => void;
 }
 
@@ -65,8 +65,10 @@ export interface MarkdownEditorRef {
 
 interface MentionState {
   query: string;
-  top: number;
-  left: number;
+  /** 用於 dropdown 定位（viewport 座標） */
+  rectTop: number;
+  rectBottom: number;
+  rectLeft: number;
   textNode: Text;
   atPos: number;
   endPos: number;
@@ -129,17 +131,16 @@ function detectMention(container: HTMLElement): MentionState | null {
 
   const query = text.slice(atPos + 1, offset);
 
-  // Get position relative to container
   const tempRange = document.createRange();
   tempRange.setStart(textNode, atPos);
   tempRange.setEnd(textNode, atPos + 1);
   const rect = tempRange.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
 
   return {
     query,
-    top: rect.bottom - containerRect.top,
-    left: rect.left - containerRect.left,
+    rectTop: rect.top,
+    rectBottom: rect.bottom,
+    rectLeft: rect.left,
     textNode: textNode as Text,
     atPos,
     endPos: offset,
@@ -478,22 +479,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   return (
     <div
       ref={containerRef}
-      className={cn(
-        "relative paperclip-mdxeditor-scope",
-        bordered ? "rounded-md border border-border bg-transparent" : "bg-transparent",
-        isDragOver && "ring-1 ring-primary/60 bg-accent/20",
-        className,
-      )}
+      className={[
+        "paperclip-mdxeditor-scope",
+        bordered ? "bordered" : "",
+        isDragOver ? "is-drag-over" : "",
+        className ?? "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       onKeyDownCapture={(e) => {
-        // Cmd/Ctrl+Enter to submit
-        if (onSubmit && e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-          e.preventDefault();
-          e.stopPropagation();
-          onSubmit();
-          return;
-        }
-
-        // Mention keyboard handling
+        // Mention keyboard handling（Enter/Tab 在 popup 開啟時用來選擇項目）
         if (mentionActive) {
           // Space dismisses the popup (let the character be typed normally)
           if (e.key === " ") {
@@ -531,6 +526,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
             }
           }
         }
+
+        // Enter 發送；Shift+Enter 換行（僅在提供 onSubmit 時）
+        if (onSubmit && e.key === "Enter") {
+          if (e.shiftKey) {
+            // Shift+Enter：不攔截，讓編輯器插入換行
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          onSubmit();
+        }
       }}
       onDragEnter={(evt) => {
         if (!canDropImage || !hasFilePayload(evt)) return;
@@ -561,64 +567,84 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
           onChange(next);
         }}
         onBlur={() => onBlur?.()}
-        className={cn("paperclip-mdxeditor", !bordered && "paperclip-mdxeditor--borderless")}
-        contentEditableClassName={cn(
-          "paperclip-mdxeditor-content focus:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:list-item",
-          contentClassName,
-        )}
+        className={`paperclip-mdxeditor${!bordered ? " paperclip-mdxeditor--borderless" : ""}`}
+        contentEditableClassName={contentClassName ? `paperclip-mdxeditor-content ${contentClassName}` : "paperclip-mdxeditor-content"}
         plugins={plugins}
       />
 
-      {/* Mention dropdown */}
-      {mentionActive && filteredMentions.length > 0 && (
-        <div
-          className="absolute z-50 min-w-[180px] max-h-[200px] overflow-y-auto rounded-md border border-border bg-popover shadow-md"
-          style={{ top: mentionState.top + 4, left: mentionState.left }}
-        >
-          {filteredMentions.map((option, i) => (
-            <button
-              key={option.id}
-              className={cn(
-                "flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-accent/50 transition-colors",
-                i === mentionIndex && "bg-accent",
-              )}
-              onMouseDown={(e) => {
-                e.preventDefault(); // prevent blur
-                selectMention(option);
-              }}
-              onMouseEnter={() => setMentionIndex(i)}
-            >
-              {option.kind === "project" && option.projectId ? (
-                <span
-                  className="inline-flex h-2 w-2 rounded-full border border-border/50"
-                  style={{ backgroundColor: option.projectColor ?? "#64748b" }}
-                />
-              ) : (
-                <span className="text-muted-foreground">@</span>
-              )}
-              <span>{option.name}</span>
-              {option.kind === "project" && option.projectId && (
-                <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Project
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Mention dropdown：高度隨內容；顯示在上方時用 bottom 錨在輸入框上緣，只留 GAP，避免留白與「太高」 */}
+      {mentionActive && filteredMentions.length > 0 && (() => {
+        const PAD = 8;
+        const GAP = 6;
+        const MAX_H = 200;
+        const MIN_W = 180;
+        const { rectLeft } = mentionState;
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        const useContainer = containerRect && containerRect.height > 0;
+        const anchorBottom = useContainer ? containerRect.bottom : mentionState.rectBottom;
+        const anchorTop = useContainer ? containerRect.top : mentionState.rectTop;
+        const preferredBelow = anchorBottom + GAP;
+        const fitsBelow = preferredBelow + MAX_H <= window.innerHeight - PAD;
+        const showAbove = !fitsBelow && anchorTop - GAP >= PAD;
+
+        let left = rectLeft;
+        if (left + MIN_W > window.innerWidth - PAD) {
+          left = window.innerWidth - PAD - MIN_W;
+        }
+        if (left < PAD) left = PAD;
+
+        const style: CSSProperties = { left };
+        if (showAbove) {
+          style.bottom = window.innerHeight - anchorTop + GAP;
+        } else {
+          style.top = fitsBelow ? preferredBelow : Math.min(preferredBelow, window.innerHeight - PAD - MAX_H);
+        }
+
+        const dropdown = (
+          <div
+            className="ui-mde-mention-dropdown"
+            style={style}
+          >
+            {filteredMentions.map((option, i) => (
+              <button
+                key={option.id}
+                type="button"
+                className="ui-mde-mention-item"
+                data-selected={i === mentionIndex ? "" : undefined}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  selectMention(option);
+                }}
+                onMouseEnter={() => setMentionIndex(i)}
+              >
+                {option.kind === "project" && option.projectId ? (
+                  <span
+                    className="ui-mde-mention-dot"
+                    style={{ backgroundColor: option.projectColor ?? "#64748b" }}
+                  />
+                ) : (
+                  <span className="ui-mde-mention-at">@</span>
+                )}
+                <span>{option.name}</span>
+                {option.kind === "project" && option.projectId && (
+                  <span className="ui-mde-mention-label">
+                    Project
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        );
+        return createPortal(dropdown, document.body);
+      })()}
 
       {isDragOver && canDropImage && (
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-1 z-40 flex items-center justify-center rounded-md border border-dashed border-primary/80 bg-primary/10 text-xs font-medium text-primary",
-            !bordered && "inset-0 rounded-sm",
-          )}
-        >
+        <div className="ui-mde-drop-overlay">
           Drop image to upload
         </div>
       )}
       {uploadError && (
-        <p className="px-3 pb-2 text-xs text-destructive">{uploadError}</p>
+        <p className="ui-mde-upload-error">{uploadError}</p>
       )}
     </div>
   );

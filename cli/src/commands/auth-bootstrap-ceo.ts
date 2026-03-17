@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
+import path from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+import { config as loadDotenv } from "dotenv";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { createDb, instanceUserRoles, invites } from "@paperclipai/db";
+import { authUsers, createDb, invites } from "@paperclipai/db";
 import { loadPaperclipEnvFile } from "../config/env.js";
 import { readConfig, resolveConfigPath } from "../config/store.js";
 
@@ -56,20 +58,28 @@ export async function bootstrapCeoInvite(opts: {
   const configPath = resolveConfigPath(opts.config);
   loadPaperclipEnvFile(configPath);
   const config = readConfig(configPath);
-  if (!config) {
-    p.log.error(`No config found at ${configPath}. Run ${pc.cyan("paperclip onboard")} first.`);
-    return;
-  }
 
-  if (config.server.deploymentMode !== "authenticated") {
-    p.log.info("Deployment mode is local_trusted. Bootstrap CEO invite is only required for authenticated mode.");
+  if (!config) {
+    loadDotenv({ path: path.resolve(process.cwd(), ".env"), override: false, quiet: true });
+    const dbUrlFromEnv = opts.dbUrl ?? process.env.DATABASE_URL;
+    if (!dbUrlFromEnv) {
+      p.log.error(`No config found at ${configPath}. Run ${pc.cyan("paperclip onboard")} first, or set DATABASE_URL (e.g. from repo .env).`);
+      return;
+    }
+    const deploymentMode = process.env.PAPERCLIP_DEPLOYMENT_MODE ?? process.env.DEPLOYMENT_MODE;
+    if (deploymentMode === "local_trusted" || deploymentMode === "local_implicit") {
+      p.log.info("Bootstrap CEO invite is only required for authenticated mode.");
+      return;
+    }
+  } else if (config.server.deploymentMode !== "authenticated") {
+    p.log.info("Bootstrap CEO invite is only required for authenticated mode.");
     return;
   }
 
   const dbUrl = resolveDbUrl(configPath, opts.dbUrl);
   if (!dbUrl) {
     p.log.error(
-      "Could not resolve database connection for bootstrap.",
+      "Could not resolve database connection for bootstrap. Set DATABASE_URL or run from a repo with .paperclip/config.json.",
     );
     return;
   }
@@ -83,12 +93,12 @@ export async function bootstrapCeoInvite(opts: {
   try {
     const existingAdminCount = await db
       .select()
-      .from(instanceUserRoles)
-      .where(eq(instanceUserRoles.role, "instance_admin"))
+      .from(authUsers)
+      .where(eq(authUsers.group, "admin"))
       .then((rows) => rows.length);
 
     if (existingAdminCount > 0 && !opts.force) {
-      p.log.info("Instance already has an admin user. Use --force to generate a new bootstrap invite.");
+      p.log.info("Instance already has an admin group user. Use --force to generate a new bootstrap invite.");
       return;
     }
 

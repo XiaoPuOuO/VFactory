@@ -1,5 +1,6 @@
+import { eq } from "drizzle-orm";
 import { createDb } from "./client.js";
-import { companies, agents, goals, projects, issues } from "./schema/index.js";
+import { tenants, companies, agents, goals, projects, issues } from "./schema/index.js";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
@@ -8,9 +9,23 @@ const db = createDb(url);
 
 console.log("Seeding database...");
 
+const [tenant] = await db
+  .insert(tenants)
+  .values({ slug: "default", name: "Default", status: "active" })
+  .onConflictDoNothing({ target: tenants.slug })
+  .returning();
+
+let tenantId: string | undefined = tenant?.id;
+if (!tenantId) {
+  const [row] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, "default")).limit(1);
+  tenantId = row?.id;
+}
+if (!tenantId) throw new Error("No default tenant for seed");
+
 const [company] = await db
   .insert(companies)
   .values({
+    tenantId,
     name: "Paperclip Demo Co",
     description: "A demo autonomous company",
     status: "active",

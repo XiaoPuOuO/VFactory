@@ -1,0 +1,22 @@
+/**
+ * MyIssues 頁面 — 原生 CSS（無 Tailwind）
+ */
+.my-issues-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.my-issues-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.my-issues-list {
+  border: 1px solid var(--border);
+}
+
+.my-issues-row-meta {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}

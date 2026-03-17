@@ -41,7 +41,8 @@ if (tailscaleAuth) {
   env.HOST = "0.0.0.0";
   console.log("[paperclip] dev mode: authenticated/private (tailscale-friendly) on 0.0.0.0");
 } else {
-  console.log("[paperclip] dev mode: local_trusted (default)");
+  env.PAPERCLIP_DEPLOYMENT_MODE = "authenticated";
+  console.log("[paperclip] dev mode: authenticated");
 }
 
 const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -58,6 +59,7 @@ async function runPnpm(args, options = {}) {
     const child = spawn(pnpmBin, args, {
       stdio: options.stdio ?? ["ignore", "pipe", "pipe"],
       env: options.env ?? process.env,
+      cwd: options.cwd,
       shell: process.platform === "win32",
     });
 
@@ -93,7 +95,7 @@ async function maybePreflightMigrations() {
 
   const status = await runPnpm(
     ["--filter", "@paperclipai/db", "exec", "tsx", "src/migration-status.ts", "--json"],
-    { env },
+    { env, cwd: process.cwd() },
   );
   if (status.code !== 0) {
     process.stderr.write(status.stderr || status.stdout);

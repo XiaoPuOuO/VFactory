@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Plus } from "lucide-react";
@@ -8,7 +9,7 @@ import { useSidebar } from "../context/SidebarContext";
 import { agentsApi } from "../api/agents";
 import { heartbeatsApi } from "../api/heartbeats";
 import { queryKeys } from "../lib/queryKeys";
-import { cn, agentRouteRef, agentUrl } from "../lib/utils";
+import { agentRouteRef, agentUrl } from "../lib/utils";
 import { getAgentModelId, getModelOptionsFromAgents } from "../lib/agent-utils";
 import { AgentIcon } from "./AgentIconPicker";
 import {
@@ -69,6 +70,7 @@ function SidebarAgentNode({
   isMobile: boolean;
   setSidebarOpen: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const { agent, children } = node;
   const hasChildren = children.length > 0;
   const isExpanded = !collapsedIds.has(agent.id);
@@ -76,58 +78,48 @@ function SidebarAgentNode({
   const isActive = activeAgentId === agentRouteRef(agent);
 
   return (
-    <div className="flex flex-col gap-0">
+    <div className="board-sidebar-agent-node">
       <div
-        className="flex items-center gap-0.5 min-w-0 text-[13px] font-medium transition-colors"
+        className="board-sidebar-agent-row"
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
         {hasChildren ? (
           <button
             type="button"
-            className="flex items-center justify-center h-6 w-5 shrink-0 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent/30"
+            className={["board-sidebar-agent-toggle", isExpanded && "open"].filter(Boolean).join(" ")}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onToggle(agent.id);
             }}
-            aria-label={isExpanded ? "Collapse sub-agents" : "Expand sub-agents"}
+            aria-label={isExpanded ? t("nav.collapseSubAgents") : t("nav.expandSubAgents")}
           >
-            <ChevronRight
-              className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-90")}
-            />
+            <ChevronRight />
           </button>
         ) : (
-          <span className="w-5 shrink-0" aria-hidden />
+          <span className="board-sidebar-agent-spacer" aria-hidden />
         )}
         <NavLink
           to={agentUrl(agent)}
           onClick={() => {
             if (isMobile) setSidebarOpen(false);
           }}
-          className={cn(
-            "flex items-center gap-2.5 flex-1 min-w-0 py-1.5 pr-3 rounded-md transition-colors",
-            isActive
-              ? "bg-accent text-foreground"
-              : "text-foreground/80 hover:bg-accent/50 hover:text-foreground"
-          )}
+          className={["board-sidebar-agent-link", isActive && "active"].filter(Boolean).join(" ")}
         >
-          <AgentIcon icon={agent.icon} className="shrink-0 h-3.5 w-3.5 text-muted-foreground" />
-          <span className="flex-1 truncate">{agent.name}</span>
+          <AgentIcon icon={agent.icon} className="board-sidebar-agent-link-icon" />
+          <span className="board-sidebar-agent-link-name">{agent.name}</span>
           {runCount > 0 && (
-            <span className="ml-auto flex items-center gap-1.5 shrink-0">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
-              </span>
-              <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400">
-                {runCount} live
+            <span className="board-sidebar-agent-live">
+              <span className="board-sidebar-agent-live-dot" />
+              <span className="board-sidebar-agent-live-count">
+                {t("nav.liveCount", { count: runCount })}
               </span>
             </span>
           )}
         </NavLink>
       </div>
       {hasChildren && isExpanded && (
-        <div className="flex flex-col gap-0">
+        <div className="board-sidebar-agent-children">
           {children.map((child) => (
             <SidebarAgentNode
               key={child.agent.id}
@@ -148,6 +140,7 @@ function SidebarAgentNode({
 }
 
 export function SidebarAgents() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const { selectedCompanyId } = useCompany();
@@ -209,18 +202,11 @@ export function SidebarAgents() {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="group">
-        <div className="flex items-center px-3 py-1.5">
-          <CollapsibleTrigger className="flex items-center gap-1 flex-1 min-w-0">
-            <ChevronRight
-              className={cn(
-                "h-3 w-3 text-muted-foreground/60 transition-transform opacity-0 group-hover:opacity-100",
-                open && "rotate-90"
-              )}
-            />
-            <span className="text-[10px] font-medium uppercase tracking-widest font-mono text-muted-foreground/60">
-              Agents
-            </span>
+      <div className={["board-sidebar-collapsible-group", open && "open"].filter(Boolean).join(" ")}>
+        <div className="board-sidebar-collapsible-row">
+          <CollapsibleTrigger className="board-sidebar-collapsible-trigger">
+            <ChevronRight className="board-sidebar-collapsible-chevron" />
+            <span className="board-sidebar-collapsible-label">{t("nav.agents")}</span>
           </CollapsibleTrigger>
           <Popover>
             <PopoverTrigger
@@ -228,25 +214,18 @@ export function SidebarAgents() {
               onClick={(e) => e.stopPropagation()}
             >
               <button
-                className={cn(
-                  "flex items-center justify-center h-4 w-4 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent/50 transition-colors",
-                  modelFilter !== null && "text-foreground"
-                )}
+                type="button"
+                className={["board-sidebar-popover-trigger", modelFilter !== null && "active"].filter(Boolean).join(" ")}
                 aria-label="Filter by model"
               >
-                <Filter className="h-3 w-3" />
+                <Filter />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-48 p-1" align="start" side="right">
-              <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Model
-              </div>
+            <PopoverContent className="board-sidebar-popover-content" align="start" side="right">
+              <div className="board-sidebar-popover-title">Model</div>
               <Link
                 to="/agents/all"
-                className={cn(
-                  "block px-2 py-1.5 text-xs rounded hover:bg-accent/50 transition-colors",
-                  modelFilter === null && "bg-accent"
-                )}
+                className={["board-sidebar-popover-item", modelFilter === null && "active"].filter(Boolean).join(" ")}
               >
                 All models
               </Link>
@@ -256,10 +235,8 @@ export function SidebarAgents() {
                   <Link
                     key={opt.id === "" ? "__default__" : opt.id}
                     to={to}
-                    className={cn(
-                      "block px-2 py-1.5 text-xs rounded hover:bg-accent/50 transition-colors truncate",
-                      modelFilter === opt.id && "bg-accent"
-                    )}
+                    className={["board-sidebar-popover-item", modelFilter === opt.id && "active"].filter(Boolean).join(" ")}
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                   >
                     {opt.label}
                   </Link>
@@ -268,20 +245,21 @@ export function SidebarAgents() {
             </PopoverContent>
           </Popover>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               openNewAgent();
             }}
-            className="flex items-center justify-center h-4 w-4 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent/50 transition-colors"
+            className="board-sidebar-collapsible-add-btn"
             aria-label="New agent"
           >
-            <Plus className="h-3 w-3" />
+            <Plus />
           </button>
         </div>
       </div>
 
       <CollapsibleContent>
-        <div className="flex flex-col gap-0.5 mt-0.5">
+        <div className="board-sidebar-section-children">
           {agentTree.map((node) => (
             <SidebarAgentNode
               key={node.agent.id}

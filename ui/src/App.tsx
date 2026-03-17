@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -16,37 +17,50 @@ import { Issues } from "./pages/Issues";
 import { IssueDetail } from "./pages/IssueDetail";
 import { Goals } from "./pages/Goals";
 import { GoalDetail } from "./pages/GoalDetail";
+import { Schedules } from "./pages/Schedules";
 import { Approvals } from "./pages/Approvals";
 import { ApprovalDetail } from "./pages/ApprovalDetail";
 import { Costs } from "./pages/Costs";
 import { Activity } from "./pages/Activity";
 import { Inbox } from "./pages/Inbox";
+import { Chat } from "./pages/Chat";
+import { ChatEmpty } from "./pages/ChatEmpty";
+import { ChatRoom } from "./pages/ChatRoom";
 import { CompanySettings } from "./pages/CompanySettings";
+import { Account } from "./pages/Account";
 import { DesignGuide } from "./pages/DesignGuide";
 import { InstanceSettings } from "./pages/InstanceSettings";
+import { DefaultCompanyPathSettings } from "./pages/DefaultCompanyPathSettings";
+import { ArchiveCompanySettings } from "./pages/ArchiveCompanySettings";
+import { InstanceCompanyManagement } from "./pages/InstanceCompanyManagement";
+import { InstanceGroupManagement } from "./pages/InstanceGroupManagement";
+import { InstanceUserManagement } from "./pages/InstanceUserManagement";
 import { RunTranscriptUxLab } from "./pages/RunTranscriptUxLab";
 import { OrgChart } from "./pages/OrgChart";
+import { GoalMap } from "./pages/GoalMap";
 import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
 import { BoardClaimPage } from "./pages/BoardClaim";
 import { InviteLandingPage } from "./pages/InviteLanding";
+import { Landing } from "./pages/Landing";
+import { TenantSelectPage } from "./pages/TenantSelect";
 import { NotFoundPage } from "./pages/NotFound";
 import { queryKeys } from "./lib/queryKeys";
+import { getTenantSlug } from "./api/client";
 import { useCompany } from "./context/CompanyContext";
 import { useDialog } from "./context/DialogContext";
 import { loadLastInboxTab } from "./lib/inbox";
 
 function BootstrapPendingPage({ hasActiveInvite = false }: { hasActiveInvite?: boolean }) {
+  const { t } = useTranslation();
   return (
-    <div className="mx-auto max-w-xl py-10">
-      <div className="rounded-lg border border-border bg-card p-6">
-        <h1 className="text-xl font-semibold">Instance setup required</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {hasActiveInvite
-            ? "No instance admin exists yet. A bootstrap invite is already active. Check your Paperclip startup logs for the first admin invite URL, or run this command to rotate it:"
-            : "No instance admin exists yet. Run this command in your Paperclip environment to generate the first admin invite URL:"}
+    <div className="app-gate-wrap">
+      <div className="app-gate-card">
+        <h1 className="app-gate-title">{t("app.instanceSetupRequired")}</h1>
+        <p className="app-gate-desc">
+          {hasActiveInvite ? t("app.bootstrapPendingHasInvite") : t("app.bootstrapPendingNoInvite")}
         </p>
-        <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-muted/30 p-3 text-xs">
+        <pre className="app-gate-pre">
 {`pnpm paperclipai auth bootstrap-ceo`}
         </pre>
       </div>
@@ -55,6 +69,7 @@ function BootstrapPendingPage({ hasActiveInvite = false }: { hasActiveInvite?: b
 }
 
 function CloudAccessGate() {
+  const { t } = useTranslation();
   const location = useLocation();
   const healthQuery = useQuery({
     queryKey: queryKeys.health,
@@ -62,7 +77,7 @@ function CloudAccessGate() {
     retry: false,
     refetchInterval: (query) => {
       const data = query.state.data as
-        | { deploymentMode?: "local_trusted" | "authenticated"; bootstrapStatus?: "ready" | "bootstrap_pending" }
+        | { deploymentMode?: "authenticated"; bootstrapStatus?: "ready" | "bootstrap_pending" }
         | undefined;
       return data?.deploymentMode === "authenticated" && data.bootstrapStatus === "bootstrap_pending"
         ? 2000
@@ -71,22 +86,24 @@ function CloudAccessGate() {
     refetchIntervalInBackground: true,
   });
 
-  const isAuthenticatedMode = healthQuery.data?.deploymentMode === "authenticated";
+  const deploymentMode = healthQuery.data?.deploymentMode;
+  const isAuthenticatedMode = deploymentMode === "authenticated";
+  const requireLogin = deploymentMode === "authenticated";
   const sessionQuery = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
-    enabled: isAuthenticatedMode,
+    enabled: requireLogin,
     retry: false,
   });
 
-  if (healthQuery.isLoading || (isAuthenticatedMode && sessionQuery.isLoading)) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Loading...</div>;
+  if (healthQuery.isLoading || (requireLogin && sessionQuery.isLoading)) {
+    return <div className="app-gate-wrap app-gate-message">{t("app.loading")}</div>;
   }
 
   if (healthQuery.error) {
     return (
-      <div className="mx-auto max-w-xl py-10 text-sm text-destructive">
-        {healthQuery.error instanceof Error ? healthQuery.error.message : "Failed to load app state"}
+      <div className="app-gate-wrap app-gate-error">
+        {healthQuery.error instanceof Error ? healthQuery.error.message : t("app.failedToLoadAppState")}
       </div>
     );
   }
@@ -95,12 +112,54 @@ function CloudAccessGate() {
     return <BootstrapPendingPage hasActiveInvite={healthQuery.data.bootstrapInviteActive} />;
   }
 
-  if (isAuthenticatedMode && !sessionQuery.data) {
-    const next = encodeURIComponent(`${location.pathname}${location.search}`);
-    return <Navigate to={`/auth?next=${next}`} replace />;
+  const sessionData = sessionQuery.data;
+  const isBanned =
+    sessionData &&
+    typeof sessionData === "object" &&
+    "banned" in sessionData &&
+    (sessionData as { banned: boolean }).banned === true;
+  const hasValidSession =
+    sessionData &&
+    typeof sessionData === "object" &&
+    "session" in sessionData &&
+    typeof (sessionData as { session: unknown }).session === "object";
+
+  if (requireLogin && isBanned) {
+    return (
+      <AccountBannedPage
+        reason={(sessionData as { reason: string }).reason ?? ""}
+        bannedUntil={(sessionData as { bannedUntil: string | null }).bannedUntil ?? null}
+      />
+    );
+  }
+
+  if (requireLogin && !hasValidSession) {
+    return <Navigate to="/landing" replace />;
   }
 
   return <Outlet />;
+}
+
+function AccountBannedPage({ reason, bannedUntil }: { reason: string; bannedUntil: string | null }) {
+  const { t } = useTranslation();
+  return (
+    <div className="app-gate-wrap">
+      <div className="app-gate-card">
+        <h1 className="app-gate-title">{t("instance.accountBannedTitle")}</h1>
+        <p className="app-gate-desc">{t("instance.accountBannedMessage")}</p>
+        {reason && (
+          <div className="app-gate-banned-reason">
+            <strong>{t("instance.banReason")}:</strong> {reason}
+          </div>
+        )}
+        {bannedUntil && (
+          <p className="app-gate-desc">
+            {t("instance.banDuration")}: {new Date(bannedUntil).toLocaleString()}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function boardRoutes() {
@@ -114,6 +173,7 @@ function boardRoutes() {
       <Route path="settings" element={<LegacySettingsRedirect />} />
       <Route path="settings/*" element={<LegacySettingsRedirect />} />
       <Route path="org" element={<OrgChart />} />
+      <Route path="goal-map" element={<GoalMap />} />
       <Route path="agents" element={<Navigate to="/agents/all" replace />} />
       <Route path="agents/all" element={<Agents />} />
       <Route path="agents/active" element={<Agents />} />
@@ -138,6 +198,7 @@ function boardRoutes() {
       <Route path="issues/:issueId" element={<IssueDetail />} />
       <Route path="goals" element={<Goals />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />
+      <Route path="schedules" element={<Schedules />} />
       <Route path="approvals" element={<Navigate to="/approvals/pending" replace />} />
       <Route path="approvals/pending" element={<Approvals />} />
       <Route path="approvals/all" element={<Approvals />} />
@@ -149,6 +210,11 @@ function boardRoutes() {
       <Route path="inbox/unread" element={<Inbox />} />
       <Route path="inbox/all" element={<Inbox />} />
       <Route path="inbox/new" element={<Navigate to="/inbox/recent" replace />} />
+      <Route path="chat" element={<Chat />}>
+        <Route index element={<ChatEmpty />} />
+        <Route path=":roomId" element={<ChatRoom />} />
+      </Route>
+      <Route path="account" element={<Account />} />
       <Route path="design-guide" element={<DesignGuide />} />
       <Route path="tests/ux/runs" element={<RunTranscriptUxLab />} />
       <Route path="*" element={<NotFoundPage scope="board" />} />
@@ -170,6 +236,11 @@ function OnboardingRoutePage() {
   const { onboardingOpen, openOnboarding } = useDialog();
   const { companyPrefix } = useParams<{ companyPrefix?: string }>();
   const opened = useRef(false);
+
+  if (!getTenantSlug()) {
+    return <Navigate to="/tenant-select" replace />;
+  }
+
   const matchedCompany = companyPrefix
     ? companies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase()) ?? null
     : null;
@@ -184,23 +255,24 @@ function OnboardingRoutePage() {
     openOnboarding();
   }, [companyPrefix, loading, matchedCompany, onboardingOpen, openOnboarding]);
 
+  const { t } = useTranslation();
   const title = matchedCompany
-    ? `Add another agent to ${matchedCompany.name}`
+    ? t("app.onboardingTitleAddAgent", { name: matchedCompany.name })
     : companies.length > 0
-      ? "Create another company"
-      : "Create your first company";
+      ? t("app.onboardingTitleAnotherCompany")
+      : t("app.onboardingTitleFirst");
   const description = matchedCompany
-    ? "Run onboarding again to add an agent and a starter task for this company."
+    ? t("app.onboardingDescAddAgent")
     : companies.length > 0
-      ? "Run onboarding again to create another company and seed its first agent."
-      : "Get started by creating a company and your first agent.";
+      ? t("app.onboardingDescAnotherCompany")
+      : t("app.onboardingDescFirst");
 
   return (
-    <div className="mx-auto max-w-xl py-10">
-      <div className="rounded-lg border border-border bg-card p-6">
-        <h1 className="text-xl font-semibold">{title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-        <div className="mt-4">
+    <div className="app-gate-wrap">
+      <div className="app-gate-card">
+        <h1 className="app-gate-title">{title}</h1>
+        <p className="app-gate-desc">{description}</p>
+        <div className="app-gate-actions">
           <Button
             onClick={() =>
               matchedCompany
@@ -208,7 +280,7 @@ function OnboardingRoutePage() {
                 : openOnboarding()
             }
           >
-            {matchedCompany ? "Add Agent" : "Start Onboarding"}
+            {matchedCompany ? t("app.addAgent") : t("app.startOnboarding")}
           </Button>
         </div>
       </div>
@@ -217,11 +289,16 @@ function OnboardingRoutePage() {
 }
 
 function CompanyRootRedirect() {
+  const { t } = useTranslation();
   const { companies, selectedCompany, loading } = useCompany();
   const { onboardingOpen } = useDialog();
 
+  if (!getTenantSlug()) {
+    return <Navigate to="/tenant-select" replace />;
+  }
+
   if (loading) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Loading...</div>;
+    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">{t("app.loading")}</div>;
   }
 
   // Keep the first-run onboarding mounted until it completes.
@@ -238,11 +315,16 @@ function CompanyRootRedirect() {
 }
 
 function UnprefixedBoardRedirect() {
+  const { t } = useTranslation();
   const location = useLocation();
   const { companies, selectedCompany, loading } = useCompany();
 
+  if (!getTenantSlug()) {
+    return <Navigate to="/tenant-select" replace />;
+  }
+
   if (loading) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Loading...</div>;
+    return <div className="app-gate-wrap app-gate-message">{t("app.loading")}</div>;
   }
 
   const targetCompany = selectedCompany ?? companies[0] ?? null;
@@ -259,6 +341,7 @@ function UnprefixedBoardRedirect() {
 }
 
 function NoCompaniesStartPage({ autoOpen = true }: { autoOpen?: boolean }) {
+  const { t } = useTranslation();
   const { openOnboarding } = useDialog();
   const opened = useRef(false);
 
@@ -270,14 +353,14 @@ function NoCompaniesStartPage({ autoOpen = true }: { autoOpen?: boolean }) {
   }, [autoOpen, openOnboarding]);
 
   return (
-    <div className="mx-auto max-w-xl py-10">
-      <div className="rounded-lg border border-border bg-card p-6">
-        <h1 className="text-xl font-semibold">Create your first company</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Get started by creating a company.
+    <div className="app-gate-wrap">
+      <div className="app-gate-card">
+        <h1 className="app-gate-title">{t("app.createFirstCompany")}</h1>
+        <p className="app-gate-desc">
+          {t("app.createFirstCompanyDesc")}
         </p>
-        <div className="mt-4">
-          <Button onClick={() => openOnboarding()}>New Company</Button>
+        <div className="app-gate-actions">
+          <Button onClick={() => openOnboarding()}>{t("app.newCompany")}</Button>
         </div>
       </div>
     </div>
@@ -291,13 +374,30 @@ export function App() {
         <Route path="auth" element={<AuthPage />} />
         <Route path="board-claim/:token" element={<BoardClaimPage />} />
         <Route path="invite/:token" element={<InviteLandingPage />} />
+        <Route path="landing" element={<Landing />} />
 
         <Route element={<CloudAccessGate />}>
           <Route index element={<CompanyRootRedirect />} />
+          <Route path="tenant-select" element={<TenantSelectPage />} />
           <Route path="onboarding" element={<OnboardingRoutePage />} />
           <Route path="instance" element={<Navigate to="/instance/settings" replace />} />
           <Route path="instance/settings" element={<Layout />}>
             <Route index element={<InstanceSettings />} />
+          </Route>
+          <Route path="instance/default-company-path" element={<Layout />}>
+            <Route index element={<DefaultCompanyPathSettings />} />
+          </Route>
+          <Route path="instance/archive-company" element={<Layout />}>
+            <Route index element={<ArchiveCompanySettings />} />
+          </Route>
+          <Route path="instance/companies" element={<Layout />}>
+            <Route index element={<InstanceCompanyManagement />} />
+          </Route>
+          <Route path="instance/groups" element={<Layout />}>
+            <Route index element={<InstanceGroupManagement />} />
+          </Route>
+          <Route path="instance/users" element={<Layout />}>
+            <Route index element={<InstanceUserManagement />} />
           </Route>
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
           <Route path="issues" element={<UnprefixedBoardRedirect />} />
@@ -315,7 +415,13 @@ export function App() {
           <Route path="projects/:projectId/issues" element={<UnprefixedBoardRedirect />} />
           <Route path="projects/:projectId/issues/:filter" element={<UnprefixedBoardRedirect />} />
           <Route path="projects/:projectId/configuration" element={<UnprefixedBoardRedirect />} />
+          <Route path="chat" element={<UnprefixedBoardRedirect />} />
+          <Route path="chat/:roomId" element={<UnprefixedBoardRedirect />} />
+          <Route path="schedules" element={<UnprefixedBoardRedirect />} />
           <Route path="tests/ux/runs" element={<UnprefixedBoardRedirect />} />
+          <Route path="account" element={<Layout />}>
+            <Route index element={<Account />} />
+          </Route>
           <Route path=":companyPrefix" element={<Layout />}>
             {boardRoutes()}
           </Route>

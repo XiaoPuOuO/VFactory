@@ -3,6 +3,22 @@ export type AuthSession = {
   user: { id: string; email: string | null; name: string | null };
 };
 
+export type AuthSessionResult =
+  | AuthSession
+  | null
+  | { banned: true; reason: string; bannedUntil: string | null };
+
+export function isAuthSession(
+  v: AuthSessionResult | undefined,
+): v is AuthSession {
+  return v != null && typeof v === "object" && "session" in v && "user" in v;
+}
+
+export type AuthProviders = {
+  emailPassword: boolean;
+  google: boolean;
+};
+
 function toSession(value: unknown): AuthSession | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -44,13 +60,66 @@ async function authPost(path: string, body: Record<string, unknown>) {
 }
 
 export const authApi = {
-  getSession: async (): Promise<AuthSession | null> => {
+  getProviders: async (): Promise<AuthProviders> => {
+    const res = await fetch("/api/auth/providers", { credentials: "include" });
+    if (!res.ok) return { emailPassword: true, google: false };
+    const data = await res.json().catch(() => ({}));
+    return {
+      emailPassword: data.emailPassword !== false,
+      google: data.google === true,
+    };
+  },
+
+  /** 導向 Better Auth 的 Google OAuth 流程；callbackURL 為登入成功後要導向的完整 URL */
+  signInWithGoogle: async (callbackURL?: string) => {
+    const base = typeof window !== "undefined" ? window.location.origin : "";
+    const target = callbackURL ?? `${base}/`;
+    const res = await fetch("/api/auth/sign-in/social", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "google", callbackURL: target }),
+    });
+    const payload = (await res.json().catch(() => null)) as
+      | { url?: string; error?: { message?: string } | string }
+      | null;
+    if (!res.ok) {
+      const errorValue = payload?.error;
+      const message =
+        typeof errorValue === "string"
+          ? errorValue
+          : errorValue && typeof errorValue === "object"
+            ? (errorValue.message ?? `Request failed: ${res.status}`)
+            : `Request failed: ${res.status}`;
+      throw new Error(message);
+    }
+    const redirectUrl =
+      (payload && typeof payload.url === "string" ? payload.url : null) ??
+      res.headers.get("location");
+    if (!redirectUrl) {
+      throw new Error("Auth redirect URL missing");
+    }
+    if (typeof window !== "undefined") window.location.href = redirectUrl;
+  },
+
+  /** 封禁時回傳 { banned: true, reason, bannedUntil }，未登入 401 回傳 null，成功回傳 session */
+  getSession: async (): Promise<AuthSessionResult> => {
     const res = await fetch("/api/auth/get-session", {
       credentials: "include",
       headers: { Accept: "application/json" },
     });
-    if (res.status === 401) return null;
     const payload = await res.json().catch(() => null);
+    if (res.status === 401) return null;
+    if (res.status === 403 && payload && typeof payload === "object") {
+      const p = payload as { error?: string; reason?: string; bannedUntil?: string | null };
+      if (p.error === "Account banned" && (p.reason != null || p.bannedUntil != null)) {
+        return {
+          banned: true,
+          reason: typeof p.reason === "string" ? p.reason : "Your account has been suspended.",
+          bannedUntil: typeof p.bannedUntil === "string" || p.bannedUntil === null ? p.bannedUntil : null,
+        };
+      }
+    }
     if (!res.ok) {
       throw new Error(`Failed to load session (${res.status})`);
     }

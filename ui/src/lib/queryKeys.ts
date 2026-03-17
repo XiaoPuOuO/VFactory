@@ -2,6 +2,7 @@ export const queryKeys = {
   companies: {
     all: ["companies"] as const,
     detail: (id: string) => ["companies", id] as const,
+    allowedAdapterTypes: (id: string) => ["companies", id, "allowed-adapter-types"] as const,
     stats: ["companies", "stats"] as const,
   },
   agents: {
@@ -13,6 +14,8 @@ export const queryKeys = {
     configRevisions: (agentId: string) => ["agents", "config-revisions", agentId] as const,
     adapterModels: (companyId: string, adapterType: string) =>
       ["agents", companyId, "adapter-models", adapterType] as const,
+    memories: (companyId: string, agentId: string) =>
+      ["agents", "memories", companyId, agentId] as const,
   },
   issues: {
     list: (companyId: string) => ["issues", companyId] as const,
@@ -41,6 +44,12 @@ export const queryKeys = {
     list: (companyId: string) => ["goals", companyId] as const,
     detail: (id: string) => ["goals", "detail", id] as const,
   },
+  schedules: {
+    list: (companyId: string, filters?: { agentId?: string; enabled?: boolean }) =>
+      ["schedules", companyId, filters ?? null] as const,
+    detail: (companyId: string, scheduleId: string) =>
+      ["schedules", companyId, "detail", scheduleId] as const,
+  },
   approvals: {
     list: (companyId: string, status?: string) =>
       ["approvals", companyId, status] as const,
@@ -55,11 +64,25 @@ export const queryKeys = {
   },
   auth: {
     session: ["auth", "session"] as const,
+    providers: ["auth", "providers"] as const,
   },
-  instance: {
-    schedulerHeartbeats: ["instance", "scheduler-heartbeats"] as const,
+  tenants: {
+    current: ["tenants", "current"] as const,
+    me: ["tenants", "me"] as const,
   },
   health: ["health"] as const,
+  instanceGroups: {
+    all: ["instance", "groups"] as const,
+    permissionsRegistry: ["instance", "groups", "permissions"] as const,
+    defaultGroup: ["instance", "groups", "default-group"] as const,
+    detail: (id: string) => ["instance", "groups", id] as const,
+  },
+  instanceUsers: {
+    all: ["instance", "users"] as const,
+  },
+  instanceSettings: {
+    defaultCompanyPath: ["instance", "settings", "default-company-path"] as const,
+  },
   secrets: {
     list: (companyId: string) => ["secrets", companyId] as const,
     providers: (companyId: string) => ["secret-providers", companyId] as const,
@@ -75,4 +98,15 @@ export const queryKeys = {
   liveRuns: (companyId: string) => ["live-runs", companyId] as const,
   runIssues: (runId: string) => ["run-issues", runId] as const,
   org: (companyId: string) => ["org", companyId] as const,
+  chat: {
+    rooms: (companyId: string) => ["chat", "rooms", companyId] as const,
+    room: (companyId: string, roomId: string) =>
+      ["chat", "room", companyId, roomId] as const,
+    messages: (companyId: string, roomId: string) =>
+      ["chat", "messages", companyId, roomId] as const,
+    activeRuns: (companyId: string, roomId: string) =>
+      ["chat", "activeRuns", companyId, roomId] as const,
+    listPreferences: (companyId: string) =>
+      ["chat", "listPreferences", companyId] as const,
+  },
 };

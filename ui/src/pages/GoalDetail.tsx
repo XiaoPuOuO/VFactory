@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { goalsApi } from "../api/goals";
@@ -17,11 +18,13 @@ import { EntityRow } from "../components/EntityRow";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { projectUrl } from "../lib/utils";
 import { Button } from "@/components/ui/button";
+import "./GoalDetail.css";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus } from "lucide-react";
 import type { Goal, Project } from "@paperclipai/shared";
 
 export function GoalDetail() {
+  const { t } = useTranslation(["goals", "project"]);
   const { goalId } = useParams<{ goalId: string }>();
   const { selectedCompanyId, setSelectedCompanyId } = useCompany();
   const { openNewGoal } = useDialog();
@@ -93,10 +96,10 @@ export function GoalDetail() {
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: "Goals", href: "/goals" },
-      { label: goal?.title ?? goalId ?? "Goal" }
+      { label: t("pageTitle"), href: "/goals" },
+      { label: goal?.title ?? goalId ?? t("goal") }
     ]);
-  }, [setBreadcrumbs, goal, goalId]);
+  }, [setBreadcrumbs, goal, goalId, t]);
 
   useEffect(() => {
     if (goal) {
@@ -111,16 +114,14 @@ export function GoalDetail() {
   }, [goal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) return <PageSkeleton variant="detail" />;
-  if (error) return <p className="text-sm text-destructive">{error.message}</p>;
+  if (error) return <p className="goal-detail-error">{error.message}</p>;
   if (!goal) return null;
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase text-muted-foreground">
-            {goal.level}
-          </span>
+    <div className="goal-detail-page">
+      <div className="goal-detail-meta">
+        <div className="goal-detail-meta-row">
+          <span className="goal-detail-level">{goal.level}</span>
           <StatusBadge status={goal.status} />
         </div>
 
@@ -128,14 +129,14 @@ export function GoalDetail() {
           value={goal.title}
           onSave={(title) => updateGoal.mutate({ title })}
           as="h2"
-          className="text-xl font-bold"
+          className="goal-detail-title"
         />
 
         <InlineEditor
           value={goal.description ?? ""}
           onSave={(description) => updateGoal.mutate({ description })}
           as="p"
-          className="text-sm text-muted-foreground"
+          className="goal-detail-desc"
           placeholder="Add a description..."
           multiline
           imageUploadHandler={async (file) => {
@@ -148,36 +149,37 @@ export function GoalDetail() {
       <Tabs defaultValue="children">
         <TabsList>
           <TabsTrigger value="children">
-            Sub-Goals ({childGoals.length})
+            {t("subGoalsWithCount", { count: childGoals.length })}
           </TabsTrigger>
           <TabsTrigger value="projects">
-            Projects ({linkedProjects.length})
+            {t("project:projectsWithCount", { count: linkedProjects.length })}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="children" className="mt-4 space-y-3">
-          <div className="flex items-center justify-start">
+        <TabsContent value="children" className="goal-detail-tabs-content">
+          <div className="goal-detail-toolbar">
             <Button
               size="sm"
               variant="outline"
               onClick={() => openNewGoal({ parentId: goalId })}
+              className="goal-detail-toolbar-btn"
             >
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              Sub Goal
+              <Plus />
+              {t("subGoal")}
             </Button>
           </div>
           {childGoals.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No sub-goals.</p>
+            <p className="goal-detail-empty">{t("noSubGoals")}</p>
           ) : (
             <GoalTree goals={childGoals} goalLink={(g) => `/goals/${g.id}`} />
           )}
         </TabsContent>
 
-        <TabsContent value="projects" className="mt-4">
+        <TabsContent value="projects" className="goal-detail-tabs-content projects">
           {linkedProjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No linked projects.</p>
+            <p className="goal-detail-empty">{t("project:noLinkedProjects")}</p>
           ) : (
-            <div className="border border-border">
+            <div className="goal-detail-projects-list">
               {linkedProjects.map((project) => (
                 <EntityRow
                   key={project.id}

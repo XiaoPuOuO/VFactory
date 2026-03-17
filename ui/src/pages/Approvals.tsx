@@ -6,8 +6,8 @@ import { agentsApi } from "../api/agents";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
-import { cn } from "../lib/utils";
 import { PageTabBar } from "../components/PageTabBar";
+import "./Approvals.css";
 import { Tabs } from "@/components/ui/tabs";
 import { ShieldCheck } from "lucide-react";
 import { ApprovalCard } from "../components/ApprovalCard";
@@ -75,7 +75,7 @@ export function Approvals() {
   ).length;
 
   if (!selectedCompanyId) {
-    return <p className="text-sm text-muted-foreground">Select a company first.</p>;
+    return <p className="approvals-select-company">Select a company first.</p>;
   }
 
   if (isLoading) {
@@ -83,15 +83,12 @@ export function Approvals() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="approvals-page">
+      <div className="approvals-header">
         <Tabs value={statusFilter} onValueChange={(v) => navigate(`/approvals/${v}`)}>
           <PageTabBar items={[
             { value: "pending", label: <>Pending{pendingCount > 0 && (
-              <span className={cn(
-                "ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                "bg-yellow-500/20 text-yellow-500"
-              )}>
+              <span className="approvals-tab-badge">
                 {pendingCount}
               </span>
             )}</> },
@@ -100,20 +97,20 @@ export function Approvals() {
         </Tabs>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
-      {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+      {error && <p className="approvals-error">{error.message}</p>}
+      {actionError && <p className="approvals-error">{actionError}</p>}
 
       {filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <ShieldCheck className="h-8 w-8 text-muted-foreground/30 mb-3" />
-          <p className="text-sm text-muted-foreground">
+        <div className="approvals-empty">
+          <ShieldCheck className="approvals-empty-icon" />
+          <p className="approvals-empty-message">
             {statusFilter === "pending" ? "No pending approvals." : "No approvals yet."}
           </p>
         </div>
       )}
 
       {filtered.length > 0 && (
-        <div className="grid gap-3">
+        <div className="approvals-grid">
           {filtered.map((approval) => (
             <ApprovalCard
               key={approval.id}

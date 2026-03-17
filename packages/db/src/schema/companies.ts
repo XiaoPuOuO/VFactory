@@ -1,9 +1,11 @@
 import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { tenants } from "./tenants.js";
 
 export const companies = pgTable(
   "companies",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
     status: text("status").notNull().default("active"),
@@ -15,10 +17,17 @@ export const companies = pgTable(
       .notNull()
       .default(true),
     brandColor: text("brand_color"),
+    /** 公司圖示 asset id（FK 於 migration 設定）；若設定則外觀區塊顯示上傳圖，否則顯示品牌色 pattern。 */
+    iconAssetId: uuid("icon_asset_id"),
+    workingDirectory: text("working_directory"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    issuePrefixUniqueIdx: uniqueIndex("companies_issue_prefix_idx").on(table.issuePrefix),
+    /** 同一租戶內 issue_prefix 不重複；不同租戶可重複 */
+    tenantIssuePrefixUniqueIdx: uniqueIndex("companies_tenant_issue_prefix_idx").on(
+      table.tenantId,
+      table.issuePrefix,
+    ),
   }),
 );

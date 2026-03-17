@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate, useLocation, Navigate } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PROJECT_COLORS, isUuidLike } from "@paperclipai/shared";
@@ -17,8 +18,10 @@ import { StatusBadge } from "../components/StatusBadge";
 import { IssuesList } from "../components/IssuesList";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { PageTabBar } from "../components/PageTabBar";
-import { projectRouteRef, cn } from "../lib/utils";
+import { IconSettingDialog } from "../components/IconSettingDialog";
+import { projectRouteRef } from "../lib/utils";
 import { Tabs } from "@/components/ui/tabs";
+import "./ProjectDetail.css";
 
 /* ── Top-level tab types ── */
 
@@ -46,29 +49,30 @@ function OverviewContent({
   onUpdate: (data: Record<string, unknown>) => void;
   imageUploadHandler?: (file: File) => Promise<string>;
 }) {
+  const { t } = useTranslation("project");
   return (
-    <div className="space-y-6">
+    <div className="project-detail-overview">
       <InlineEditor
         value={project.description ?? ""}
         onSave={(description) => onUpdate({ description })}
         as="p"
-        className="text-sm text-muted-foreground"
-        placeholder="Add a description..."
+        className="project-detail-overview-desc"
+        placeholder={t("addDescriptionPlaceholder")}
         multiline
         imageUploadHandler={imageUploadHandler}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+      <div className="project-detail-overview-grid">
         <div>
-          <span className="text-muted-foreground">Status</span>
-          <div className="mt-1">
+          <span className="project-detail-overview-label">{t("status")}</span>
+          <div className="project-detail-overview-value">
             <StatusBadge status={project.status} />
           </div>
         </div>
         {project.targetDate && (
           <div>
-            <span className="text-muted-foreground">Target Date</span>
-            <p>{project.targetDate}</p>
+            <span className="project-detail-overview-label">{t("targetDate")}</span>
+            <p className="project-detail-overview-value">{project.targetDate}</p>
           </div>
         )}
       </div>
@@ -85,6 +89,7 @@ function ColorPicker({
   currentColor: string;
   onSelect: (color: string) => void;
 }) {
+  const { t } = useTranslation("project");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -100,28 +105,26 @@ function ColorPicker({
   }, [open]);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="project-detail-color-picker-wrap" ref={ref}>
       <button
+        type="button"
         onClick={() => setOpen(!open)}
-        className="shrink-0 h-5 w-5 rounded-md cursor-pointer hover:ring-2 hover:ring-foreground/20 transition-[box-shadow]"
+        className="project-detail-color-trigger"
         style={{ backgroundColor: currentColor }}
-        aria-label="Change project color"
+        aria-label={t("changeProjectColor")}
       />
       {open && (
-        <div className="absolute top-full left-0 mt-2 p-2 bg-popover border border-border rounded-lg shadow-lg z-50 w-max">
-          <div className="grid grid-cols-5 gap-1.5">
+        <div className="project-detail-color-popover">
+          <div className="project-detail-color-grid">
             {PROJECT_COLORS.map((color) => (
               <button
                 key={color}
+                type="button"
                 onClick={() => {
                   onSelect(color);
                   setOpen(false);
                 }}
-                className={`h-6 w-6 rounded-md cursor-pointer transition-[transform,box-shadow] duration-150 hover:scale-110 ${
-                  color === currentColor
-                    ? "ring-2 ring-foreground ring-offset-1 ring-offset-background"
-                    : "hover:ring-2 hover:ring-foreground/30"
-                }`}
+                className={`project-detail-color-swatch ${color === currentColor ? "selected" : ""}`}
                 style={{ backgroundColor: color }}
                 aria-label={`Select color ${color}`}
               />
@@ -203,6 +206,7 @@ export function ProjectDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const [fieldSaveStates, setFieldSaveStates] = useState<Partial<Record<ProjectConfigFieldKey, ProjectFieldSaveState>>>({});
+  const [showIconDialog, setShowIconDialog] = useState(false);
   const fieldSaveRequestIds = useRef<Partial<Record<ProjectConfigFieldKey, number>>>({});
   const fieldSaveTimers = useRef<Partial<Record<ProjectConfigFieldKey, ReturnType<typeof setTimeout>>>>({});
   const routeProjectRef = projectId ?? "";
@@ -251,12 +255,13 @@ export function ProjectDetail() {
     },
   });
 
+  const { t } = useTranslation(["nav", "project"]);
   useEffect(() => {
     setBreadcrumbs([
-      { label: "Projects", href: "/projects" },
-      { label: project?.name ?? routeProjectRef ?? "Project" },
+      { label: t("nav:projects"), href: "/projects" },
+      { label: project?.name ?? routeProjectRef ?? t("project:project") },
     ]);
-  }, [setBreadcrumbs, project, routeProjectRef]);
+  }, [setBreadcrumbs, project, routeProjectRef, t]);
 
   useEffect(() => {
     if (!project) return;
@@ -334,7 +339,7 @@ export function ProjectDetail() {
   }
 
   if (isLoading) return <PageSkeleton variant="detail" />;
-  if (error) return <p className="text-sm text-destructive">{error.message}</p>;
+  if (error) return <p className="project-detail-error">{error.message}</p>;
   if (!project) return null;
 
   const handleTabChange = (tab: ProjectTab) => {
@@ -348,28 +353,54 @@ export function ProjectDetail() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start gap-3">
-        <div className="h-7 flex items-center">
-          <ColorPicker
-            currentColor={project.color ?? "#6366f1"}
-            onSelect={(color) => updateProject.mutate({ color })}
+    <div className="project-detail-page">
+      <div className="project-detail-header">
+        <button
+          type="button"
+          onClick={() => setShowIconDialog(true)}
+          className="project-detail-icon-btn"
+          aria-label={t("project:iconSettingTitle")}
+        >
+          {project.iconContentPath ? (
+            <img src={project.iconContentPath} alt="" />
+          ) : (
+            <div
+              style={{ width: "100%", height: "100%", backgroundColor: project.color ?? "#6366f1" }}
+            />
+          )}
+        </button>
+        <div className="project-detail-title-wrap">
+          <InlineEditor
+            value={project.name}
+            onSave={(name) => updateProject.mutate({ name })}
+            as="h2"
+            className="project-detail-title-inline"
           />
         </div>
-        <InlineEditor
-          value={project.name}
-          onSave={(name) => updateProject.mutate({ name })}
-          as="h2"
-          className="text-xl font-bold"
-        />
       </div>
+
+      <IconSettingDialog
+        open={showIconDialog}
+        onOpenChange={setShowIconDialog}
+        mode="project"
+        companyId={resolvedCompanyId!}
+        currentIconUrl={project.iconContentPath ?? null}
+        currentColor={project.color ?? null}
+        onSaveIcon={async (assetId) => {
+          await updateProject.mutateAsync({ iconAssetId: assetId });
+        }}
+        onSaveColor={async (color) => {
+          await updateProject.mutateAsync({ color });
+        }}
+        busy={updateProject.isPending}
+      />
 
       <Tabs value={activeTab ?? "list"} onValueChange={(value) => handleTabChange(value as ProjectTab)}>
         <PageTabBar
           items={[
-            { value: "overview", label: "Overview" },
-            { value: "list", label: "List" },
-            { value: "configuration", label: "Configuration" },
+            { value: "overview", label: t("project:overview") },
+            { value: "list", label: t("project:list") },
+            { value: "configuration", label: t("project:configuration") },
           ]}
           align="start"
           value={activeTab ?? "list"}
@@ -393,12 +424,13 @@ export function ProjectDetail() {
       )}
 
       {activeTab === "configuration" && (
-        <div className="max-w-4xl">
+        <div className="project-detail-config-wrap">
           <ProjectProperties
             project={project}
             onUpdate={(data) => updateProject.mutate(data)}
             onFieldUpdate={updateProjectField}
             getFieldSaveState={(field) => fieldSaveStates[field] ?? "idle"}
+            onOpenIconSetting={() => setShowIconDialog(true)}
           />
         </div>
       )}

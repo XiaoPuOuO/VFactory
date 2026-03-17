@@ -1,0 +1,66 @@
+/**
+ * Approvals 頁面 — 原生 CSS（無 Tailwind）
+ */
+
+.approvals-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.approvals-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.approvals-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.approvals-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 0;
+  text-align: center;
+}
+
+.approvals-empty-icon {
+  width: 2rem;
+  height: 2rem;
+  color: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
+  margin-bottom: 0.75rem;
+}
+
+.approvals-empty-message {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.approvals-tab-badge {
+  margin-left: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.125rem 0.375rem;
+  font-size: 10px;
+  font-weight: 500;
+  background: color-mix(in oklab, #eab308 20%, transparent);
+  color: #ca8a04;
+}
+
+.dark .approvals-tab-badge {
+  background: color-mix(in oklab, #eab308 25%, transparent);
+  color: #facc15;
+}
+
+.approvals-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.approvals-select-company {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}

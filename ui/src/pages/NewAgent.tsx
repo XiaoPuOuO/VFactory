@@ -13,12 +13,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Shield, User } from "lucide-react";
-import { cn, agentUrl } from "../lib/utils";
+import { agentUrl } from "../lib/utils";
+import "./NewAgent.css";
 import { roleLabels } from "../components/agent-config-primitives";
 import { AgentConfigForm, type CreateConfigValues } from "../components/AgentConfigForm";
 import { defaultCreateValues } from "../components/agent-config-defaults";
 import { getUIAdapter } from "../adapters";
 import { AgentIcon } from "../components/AgentIconPicker";
+import { companiesApi } from "../api/companies";
 import {
   DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX,
   DEFAULT_CODEX_LOCAL_MODEL,
@@ -28,8 +30,11 @@ import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
 
 const SUPPORTED_ADVANCED_ADAPTER_TYPES = new Set<CreateConfigValues["adapterType"]>([
   "claude_local",
+  "claude_remote",
   "codex_local",
+  "codex_remote",
   "gemini_local",
+  "gemini_remote",
   "opencode_local",
   "pi_local",
   "cursor",
@@ -41,11 +46,11 @@ function createValuesForAdapterType(
 ): CreateConfigValues {
   const { adapterType: _discard, ...defaults } = defaultCreateValues;
   const nextValues: CreateConfigValues = { ...defaults, adapterType };
-  if (adapterType === "codex_local") {
+  if (adapterType === "codex_local" || adapterType === "codex_remote") {
     nextValues.model = DEFAULT_CODEX_LOCAL_MODEL;
     nextValues.dangerouslyBypassSandbox =
       DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX;
-  } else if (adapterType === "gemini_local") {
+  } else if (adapterType === "gemini_local" || adapterType === "gemini_remote") {
     nextValues.model = DEFAULT_GEMINI_LOCAL_MODEL;
   } else if (adapterType === "cursor") {
     nextValues.model = DEFAULT_CURSOR_LOCAL_MODEL;
@@ -77,6 +82,12 @@ export function NewAgent() {
     queryFn: () => agentsApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId,
   });
+  const { data: allowedAdapterData } = useQuery({
+    queryKey: selectedCompanyId ? queryKeys.companies.allowedAdapterTypes(selectedCompanyId) : ["companies", "none", "allowed-adapter-types"],
+    queryFn: () => companiesApi.allowedAdapterTypes(selectedCompanyId!),
+    enabled: Boolean(selectedCompanyId),
+  });
+  const allowedAdapterTypes = allowedAdapterData?.adapterTypes;
 
   const {
     data: adapterModels,
@@ -114,11 +125,20 @@ export function NewAgent() {
     if (!SUPPORTED_ADVANCED_ADAPTER_TYPES.has(requested as CreateConfigValues["adapterType"])) {
       return;
     }
+    if (allowedAdapterTypes !== undefined && !allowedAdapterTypes.includes(requested)) {
+      return;
+    }
     setConfigValues((prev) => {
       if (prev.adapterType === requested) return prev;
       return createValuesForAdapterType(requested as CreateConfigValues["adapterType"]);
     });
-  }, [presetAdapterType]);
+  }, [presetAdapterType, allowedAdapterTypes]);
+
+  // When allowed list is loaded and current adapter is not in it, switch to first allowed.
+  useEffect(() => {
+    if (!allowedAdapterTypes?.length || allowedAdapterTypes.includes(configValues.adapterType)) return;
+    setConfigValues(createValuesForAdapterType(allowedAdapterTypes[0] as CreateConfigValues["adapterType"]));
+  }, [allowedAdapterTypes, configValues.adapterType]);
 
   const createAgent = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -192,19 +212,15 @@ export function NewAgent() {
   const currentReportsTo = (agents ?? []).find((a) => a.id === reportsTo);
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold">New Agent</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Advanced agent configuration
-        </p>
+    <div className="new-agent-page">
+      <div className="new-agent-header">
+        <h1>New Agent</h1>
+        <p>Advanced agent configuration</p>
       </div>
 
-      <div className="border border-border">
-        {/* Name */}
-        <div className="px-4 pt-4 pb-2">
+      <div className="new-agent-card">
+        <div className="new-agent-name-row">
           <input
-            className="w-full text-lg font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
             placeholder="Agent name"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -212,39 +228,32 @@ export function NewAgent() {
           />
         </div>
 
-        {/* Title */}
-        <div className="px-4 pb-2">
+        <div className="new-agent-title-row">
           <input
-            className="w-full bg-transparent outline-none text-sm text-muted-foreground placeholder:text-muted-foreground/40"
             placeholder="Title (e.g. VP of Engineering)"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
 
-        {/* Property chips: Role + Reports To */}
-        <div className="flex items-center gap-1.5 px-4 py-2 border-t border-border flex-wrap">
+        <div className="new-agent-chips">
           <Popover open={roleOpen} onOpenChange={setRoleOpen}>
             <PopoverTrigger asChild>
               <button
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors",
-                  isFirstAgent && "opacity-60 cursor-not-allowed"
-                )}
+                type="button"
+                className={`new-agent-chip ${isFirstAgent ? "disabled" : ""}`}
                 disabled={isFirstAgent}
               >
-                <Shield className="h-3 w-3 text-muted-foreground" />
+                <Shield />
                 {roleLabels[effectiveRole] ?? effectiveRole}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-36 p-1" align="start">
+            <PopoverContent className="new-agent-popover-content" align="start">
               {AGENT_ROLES.map((r) => (
                 <button
                   key={r}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-                    r === role && "bg-accent"
-                  )}
+                  type="button"
+                  className={`new-agent-popover-item ${r === role ? "selected" : ""}`}
                   onClick={() => { setRole(r); setRoleOpen(false); }}
                 >
                   {roleLabels[r] ?? r}
@@ -256,31 +265,27 @@ export function NewAgent() {
           <Popover open={reportsToOpen} onOpenChange={setReportsToOpen}>
             <PopoverTrigger asChild>
               <button
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors",
-                  isFirstAgent && "opacity-60 cursor-not-allowed"
-                )}
+                type="button"
+                className={`new-agent-chip ${isFirstAgent ? "disabled" : ""}`}
                 disabled={isFirstAgent}
               >
                 {currentReportsTo ? (
                   <>
-                    <AgentIcon icon={currentReportsTo.icon} className="h-3 w-3 text-muted-foreground" />
+                    <AgentIcon icon={currentReportsTo.icon} />
                     {`Reports to ${currentReportsTo.name}`}
                   </>
                 ) : (
                   <>
-                    <User className="h-3 w-3 text-muted-foreground" />
+                    <User />
                     {isFirstAgent ? "Reports to: N/A (CEO)" : "Reports to..."}
                   </>
                 )}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-48 p-1" align="start">
+            <PopoverContent className="new-agent-popover-content wide" align="start">
               <button
-                className={cn(
-                  "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-                  !reportsTo && "bg-accent"
-                )}
+                type="button"
+                className={`new-agent-popover-item ${!reportsTo ? "selected" : ""}`}
                 onClick={() => { setReportsTo(""); setReportsToOpen(false); }}
               >
                 No manager
@@ -288,15 +293,13 @@ export function NewAgent() {
               {(agents ?? []).map((a) => (
                 <button
                   key={a.id}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 truncate",
-                    a.id === reportsTo && "bg-accent"
-                  )}
+                  type="button"
+                  className={`new-agent-popover-item truncate ${a.id === reportsTo ? "selected" : ""}`}
                   onClick={() => { setReportsTo(a.id); setReportsToOpen(false); }}
                 >
-                  <AgentIcon icon={a.icon} className="shrink-0 h-3 w-3 text-muted-foreground" />
+                  <AgentIcon icon={a.icon} />
                   {a.name}
-                  <span className="text-muted-foreground ml-auto">{roleLabels[a.role] ?? a.role}</span>
+                  <span className="new-agent-popover-item-role">{roleLabels[a.role] ?? a.role}</span>
                 </button>
               ))}
             </PopoverContent>
@@ -311,15 +314,10 @@ export function NewAgent() {
           adapterModels={adapterModels}
         />
 
-        {/* Footer */}
-        <div className="border-t border-border px-4 py-3">
-          {isFirstAgent && (
-            <p className="text-xs text-muted-foreground mb-2">This will be the CEO</p>
-          )}
-          {formError && (
-            <p className="text-xs text-destructive mb-2">{formError}</p>
-          )}
-          <div className="flex items-center justify-end gap-2">
+        <div className="new-agent-footer">
+          {isFirstAgent && <p className="new-agent-footer-hint">This will be the CEO</p>}
+          {formError && <p className="new-agent-footer-error">{formError}</p>}
+          <div className="new-agent-footer-actions">
             <Button variant="outline" size="sm" onClick={() => navigate("/agents")}>
               Cancel
             </Button>

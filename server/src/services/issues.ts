@@ -3,6 +3,7 @@ import type { Db } from "@paperclipai/db";
 import {
   agents,
   assets,
+  chatRooms,
   companies,
   companyMemberships,
   goals,
@@ -24,7 +25,7 @@ import {
 } from "./execution-workspace-policy.js";
 import { redactCurrentUserText } from "../log-redaction.js";
 import { resolveIssueGoalId, resolveNextIssueGoalId } from "./issue-goal-fallback.js";
-import { getDefaultCompanyGoal } from "./goals.js";
+import { getDefaultCompanyGoal, tryAutoAchieveGoal } from "./goals.js";
 
 const ALL_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 
@@ -650,6 +651,33 @@ export function issueService(db: Db) {
       if (data.status === "in_progress" && !data.assigneeAgentId && !data.assigneeUserId) {
         throw unprocessable("in_progress issues require an assignee");
       }
+      if (issueData.parentId) {
+        const parent = await db
+          .select({
+            id: issues.id,
+            companyId: issues.companyId,
+            sourceChatRoomId: issues.sourceChatRoomId,
+          })
+          .from(issues)
+          .where(eq(issues.id, issueData.parentId))
+          .then((rows) => rows[0] ?? null);
+        if (!parent || parent.companyId !== companyId) {
+          throw notFound("Parent issue not found");
+        }
+        if (parent.sourceChatRoomId && !issueData.sourceChatRoomId) {
+          issueData.sourceChatRoomId = parent.sourceChatRoomId;
+        }
+      }
+      if (issueData.sourceChatRoomId) {
+        const room = await db
+          .select({ id: chatRooms.id, companyId: chatRooms.companyId })
+          .from(chatRooms)
+          .where(eq(chatRooms.id, issueData.sourceChatRoomId))
+          .then((rows) => rows[0] ?? null);
+        if (!room || room.companyId !== companyId) {
+          throw notFound("Source chat room not found");
+        }
+      }
       return db.transaction(async (tx) => {
         const defaultCompanyGoal = await getDefaultCompanyGoal(tx, companyId);
         let executionWorkspaceSettings =
@@ -671,6 +699,9 @@ export function issueService(db: Db) {
           .where(eq(companies.id, companyId))
           .returning({ issueCounter: companies.issueCounter, issuePrefix: companies.issuePrefix });
 
+        if (!company) {
+          throw notFound("Company not found");
+        }
         const issueNumber = company.issueCounter;
         const identifier = `${company.issuePrefix}-${issueNumber}`;
 
@@ -777,6 +808,9 @@ export function issueService(db: Db) {
         if (!updated) return null;
         if (nextLabelIds !== undefined) {
           await syncIssueLabels(updated.id, existing.companyId, nextLabelIds, tx);
+        }
+        if (issueData.status === "done" && (updated.goalId ?? existing.goalId)) {
+          await tryAutoAchieveGoal(tx, updated.goalId ?? existing.goalId!);
         }
         const [enriched] = await withIssueLabels(tx, [updated]);
         return enriched;

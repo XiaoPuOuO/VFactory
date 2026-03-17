@@ -1,7 +1,7 @@
 export const COMPANY_STATUSES = ["active", "paused", "archived"] as const;
 export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
 
-export const DEPLOYMENT_MODES = ["local_trusted", "authenticated"] as const;
+export const DEPLOYMENT_MODES = ["authenticated"] as const;
 export type DeploymentMode = (typeof DEPLOYMENT_MODES)[number];
 
 export const DEPLOYMENT_EXPOSURES = ["private", "public"] as const;
@@ -25,14 +25,33 @@ export const AGENT_ADAPTER_TYPES = [
   "process",
   "http",
   "claude_local",
+  "claude_remote",
   "codex_local",
+  "codex_remote",
   "gemini_local",
+  "gemini_remote",
   "opencode_local",
   "pi_local",
   "cursor",
   "openclaw_gateway",
 ] as const;
 export type AgentAdapterType = (typeof AGENT_ADAPTER_TYPES)[number];
+
+/** Adapter types non-admin users may create/use. Only remote (API) adapters — local (CLI) is admin-only. */
+export const NON_ADMIN_ALLOWED_ADAPTER_TYPES = [
+  "claude_remote",
+  "codex_remote",
+  "gemini_remote",
+] as const;
+export type NonAdminAllowedAdapterType = (typeof NON_ADMIN_ALLOWED_ADAPTER_TYPES)[number];
+
+/** Remote adapters (API) require API Key; local adapters (CLI) must not set API Key. */
+export const REMOTE_ADAPTER_TYPES = [
+  "claude_remote",
+  "codex_remote",
+  "gemini_remote",
+] as const;
+export type RemoteAdapterType = (typeof REMOTE_ADAPTER_TYPES)[number];
 
 export const AGENT_ROLES = [
   "ceo",
@@ -128,6 +147,15 @@ export type GoalLevel = (typeof GOAL_LEVELS)[number];
 export const GOAL_STATUSES = ["planned", "active", "achieved", "cancelled"] as const;
 export type GoalStatus = (typeof GOAL_STATUSES)[number];
 
+/** 一次性：完成即 achieved；daily/weekly/monthly：固定週期；custom：自訂 days/hours/minutes/seconds */
+export const GOAL_RECURRENCES = ["one_time", "daily", "weekly", "monthly", "custom"] as const;
+export type GoalRecurrence = (typeof GOAL_RECURRENCES)[number];
+
+export const GOAL_RECURRENCE_INTERVAL_DAYS_MAX = 365;
+export const GOAL_RECURRENCE_INTERVAL_HOURS_MAX = 23;
+export const GOAL_RECURRENCE_INTERVAL_MINUTES_MAX = 59;
+export const GOAL_RECURRENCE_INTERVAL_SECONDS_MAX = 59;
+
 export const PROJECT_STATUSES = [
   "backlog",
   "planned",
@@ -214,6 +242,7 @@ export const LIVE_EVENT_TYPES = [
   "heartbeat.run.log",
   "agent.status",
   "activity.logged",
+  "chat.message.created",
 ] as const;
 export type LiveEventType = (typeof LIVE_EVENT_TYPES)[number];
 
@@ -222,6 +251,9 @@ export type PrincipalType = (typeof PRINCIPAL_TYPES)[number];
 
 export const MEMBERSHIP_STATUSES = ["pending", "active", "suspended"] as const;
 export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[number];
+
+/** instance_settings 表鍵名：預設公司路徑；未設定 working_directory 的公司，其 Agent 設定目錄將放在此路徑下 (companyId) 子目錄。 */
+export const INSTANCE_SETTING_KEY_DEFAULT_COMPANY_PATH = "default_company_path";
 
 export const INSTANCE_USER_ROLES = ["instance_admin"] as const;
 export type InstanceUserRole = (typeof INSTANCE_USER_ROLES)[number];
@@ -238,6 +270,21 @@ export type JoinRequestType = (typeof JOIN_REQUEST_TYPES)[number];
 export const JOIN_REQUEST_STATUSES = ["pending_approval", "approved", "rejected"] as const;
 export type JoinRequestStatus = (typeof JOIN_REQUEST_STATUSES)[number];
 
+/** 依 adapter 類型控制是否可建立／使用該類型AI員工（公司層級權限）。 */
+export const MODEL_PERMISSION_KEYS = [
+  "model.gemini.local",
+  "model.gemini.remote",
+  "model.claude.local",
+  "model.claude.remote",
+  "model.codex.local",
+  "model.codex.remote",
+  "model.cursor.local",
+  "model.opencode.local",
+  "model.pi.local",
+  "model.openclaw_gateway",
+] as const;
+export type ModelPermissionKey = (typeof MODEL_PERMISSION_KEYS)[number];
+
 export const PERMISSION_KEYS = [
   "agents:create",
   "users:invite",
@@ -245,5 +292,30 @@ export const PERMISSION_KEYS = [
   "tasks:assign",
   "tasks:assign_scope",
   "joins:approve",
+  ...MODEL_PERMISSION_KEYS,
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
+
+/** adapterType -> 對應的 model.* 權限鍵（需具備該權限才能使用該 adapter）。 */
+export const ADAPTER_TYPE_TO_MODEL_PERMISSION: Record<string, ModelPermissionKey> = {
+  gemini_local: "model.gemini.local",
+  gemini_remote: "model.gemini.remote",
+  claude_local: "model.claude.local",
+  claude_remote: "model.claude.remote",
+  codex_local: "model.codex.local",
+  codex_remote: "model.codex.remote",
+  cursor: "model.cursor.local",
+  opencode_local: "model.opencode.local",
+  pi_local: "model.pi.local",
+  openclaw_gateway: "model.openclaw_gateway",
+};
+
+/** 公司建立者（owner）預設擁有的權限，用於 ensureMembership 後呼叫 setPrincipalGrants。 */
+export const DEFAULT_OWNER_GRANTS: ReadonlyArray<{ permissionKey: PermissionKey }> =
+  PERMISSION_KEYS.map((permissionKey) => ({ permissionKey }));
+
+/** Instance 身分組可設定的權限鍵（由 instance-permissions 註冊表導出）。* 表示全部權限。 */
+export {
+  INSTANCE_PERMISSION_KEYS,
+  type InstancePermissionKey,
+} from "./instance-permissions.js";

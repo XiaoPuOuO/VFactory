@@ -20,6 +20,14 @@ type WakePayload = {
   approvalId: string | null;
   approvalStatus: string | null;
   issueIds: string[];
+  chatRoomId: string | null;
+  chatRoomType: "direct" | "group" | null;
+  chatMessageId: string | null;
+  wakeReasonLabel: string | null;
+  chatMode: string | null;
+  /** 使用者發送訊息時指定「針對此專案討論」的專案 ID／名稱，供 AI 理解討論範圍。 */
+  chatProjectId: string | null;
+  chatProjectName: string | null;
 };
 
 type GatewayDeviceIdentity = {
@@ -298,6 +306,16 @@ function buildWakePayload(ctx: AdapterExecutionContext): WakePayload {
           (value): value is string => typeof value === "string" && value.trim().length > 0,
         )
       : [],
+    chatRoomId: nonEmpty(context.roomId),
+    chatRoomType:
+      context.chatRoomType === "direct" || context.chatRoomType === "group"
+        ? context.chatRoomType
+        : null,
+    chatMessageId: nonEmpty(context.messageId),
+    wakeReasonLabel: nonEmpty(context.wakeReasonLabel),
+    chatMode: nonEmpty(context.chatMode),
+    chatProjectId: nonEmpty(context.chatProjectId),
+    chatProjectName: nonEmpty(context.chatProjectName),
   };
 }
 
@@ -331,6 +349,13 @@ function buildPaperclipEnvForWake(ctx: AdapterExecutionContext, wakePayload: Wak
   if (wakePayload.issueIds.length > 0) {
     paperclipEnv.PAPERCLIP_LINKED_ISSUE_IDS = wakePayload.issueIds.join(",");
   }
+  if (wakePayload.chatRoomId) paperclipEnv.PAPERCLIP_CHAT_ROOM_ID = wakePayload.chatRoomId;
+  if (wakePayload.chatRoomType) paperclipEnv.PAPERCLIP_CHAT_ROOM_TYPE = wakePayload.chatRoomType;
+  if (wakePayload.chatMessageId) paperclipEnv.PAPERCLIP_CHAT_MESSAGE_ID = wakePayload.chatMessageId;
+  if (wakePayload.wakeReasonLabel) paperclipEnv.PAPERCLIP_WAKE_REASON_LABEL = wakePayload.wakeReasonLabel;
+  if (wakePayload.chatMode) paperclipEnv.PAPERCLIP_CHAT_MODE = wakePayload.chatMode;
+  if (wakePayload.chatProjectId) paperclipEnv.PAPERCLIP_CHAT_PROJECT_ID = wakePayload.chatProjectId;
+  if (wakePayload.chatProjectName) paperclipEnv.PAPERCLIP_CHAT_PROJECT_NAME = wakePayload.chatProjectName;
 
   return paperclipEnv;
 }
@@ -348,6 +373,13 @@ function buildWakeText(payload: WakePayload, paperclipEnv: Record<string, string
     "PAPERCLIP_APPROVAL_ID",
     "PAPERCLIP_APPROVAL_STATUS",
     "PAPERCLIP_LINKED_ISSUE_IDS",
+    "PAPERCLIP_CHAT_ROOM_ID",
+    "PAPERCLIP_CHAT_ROOM_TYPE",
+    "PAPERCLIP_CHAT_MESSAGE_ID",
+    "PAPERCLIP_WAKE_REASON_LABEL",
+    "PAPERCLIP_CHAT_MODE",
+    "PAPERCLIP_CHAT_PROJECT_ID",
+    "PAPERCLIP_CHAT_PROJECT_NAME",
   ];
 
   const envLines: string[] = [];
@@ -361,7 +393,7 @@ function buildWakeText(payload: WakePayload, paperclipEnv: Record<string, string
   const apiBaseHint = paperclipEnv.PAPERCLIP_API_URL ?? "<set PAPERCLIP_API_URL>";
 
   const lines = [
-    "Paperclip wake event for a cloud adapter.",
+    "VFactory wake event for a cloud adapter.",
     "",
     "Run this procedure now. Do not guess undocumented endpoints and do not ask for additional heartbeat docs.",
     "",
@@ -379,6 +411,11 @@ function buildWakeText(payload: WakePayload, paperclipEnv: Record<string, string
     `approval_id=${payload.approvalId ?? ""}`,
     `approval_status=${payload.approvalStatus ?? ""}`,
     `linked_issue_ids=${payload.issueIds.join(",")}`,
+    `chat_room_id=${payload.chatRoomId ?? ""}`,
+    `chat_room_type=${payload.chatRoomType ?? ""}`,
+    `chat_message_id=${payload.chatMessageId ?? ""}`,
+    `chat_project_id=${payload.chatProjectId ?? ""}`,
+    `chat_project_name=${payload.chatProjectName ?? ""}`,
     "",
     "HTTP rules:",
     "- Use Authorization: Bearer $PAPERCLIP_API_KEY on every API call.",
@@ -399,11 +436,18 @@ function buildWakeText(payload: WakePayload, paperclipEnv: Record<string, string
     "4) If issueId does not exist:",
     "   - GET /api/companies/$PAPERCLIP_COMPANY_ID/issues?assigneeAgentId=$PAPERCLIP_AGENT_ID&status=todo,in_progress,blocked",
     "   - Pick in_progress first, then todo, then blocked, then execute step 3.",
+    "5) If PAPERCLIP_CHAT_ROOM_ID is set (wake_reason=chat_message or chat_message_mentioned):",
+    "   - This run was triggered by a chat message. GET /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages to read the conversation.",
+    "   - If PAPERCLIP_CHAT_PROJECT_ID is set, the user is discussing that specific project (name in PAPERCLIP_CHAT_PROJECT_NAME); prefer creating issues in that project when relevant.",
+    "   - If PAPERCLIP_CHAT_ROOM_TYPE=group: decide whether the triggering message is relevant to YOU based on your Role and Agent description (e.g. you were @mentioned, or the message clearly refers to you or your responsibilities). If NOT relevant to you, do NOT reply—complete the run without POSTing. Only POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\":\"your reply\"} when the message is directed at you or relevant to your role.",
+    "   - If PAPERCLIP_CHAT_ROOM_TYPE=direct: this is a 1:1 chat with a user; reply in this run (do not apply group-chat relevance filtering).",
+    "   - If the conversation calls for it, create goals or issues in the same run: GET /api/companies/$PAPERCLIP_COMPANY_ID/goals, POST /api/companies/$PAPERCLIP_COMPANY_ID/goals with {\"title\":\"...\", \"description\":\"...\" (optional), \"level\":\"company\"|\"task\" (optional), \"parentId\":\"...\" (optional), \"recurrence\":\"one_time\"|\"daily\"|\"weekly\"|\"monthly\"|\"custom\" (optional, default one_time); if recurrence is \"custom\" also send recurrenceIntervalDays, recurrenceIntervalHours, recurrenceIntervalMinutes, recurrenceIntervalSeconds (at least one > 0)}, or POST /api/companies/$PAPERCLIP_COMPANY_ID/issues (include projectId when PAPERCLIP_CHAT_PROJECT_ID is set).",
     "",
     "Useful endpoints for issue work:",
     "- POST /api/issues/{issueId}/comments",
     "- PATCH /api/issues/{issueId}",
     "- POST /api/companies/{companyId}/issues (when asked to create a new issue)",
+    "- GET /api/companies/{companyId}/goals, POST /api/companies/{companyId}/goals (recurrence: one_time|daily|weekly|monthly|custom; for custom set recurrenceIntervalDays/Hours/Minutes/Seconds)",
     "",
     "Complete the workflow in this run.",
   ];
@@ -447,6 +491,17 @@ function buildStandardPaperclipPayload(
     approvalStatus: wakePayload.approvalStatus,
     apiUrl: paperclipEnv.PAPERCLIP_API_URL ?? null,
   };
+
+  const chat: Record<string, unknown> = {};
+  if (wakePayload.chatRoomId) chat.roomId = wakePayload.chatRoomId;
+  if (wakePayload.chatRoomType) chat.roomType = wakePayload.chatRoomType;
+  if (wakePayload.chatMessageId) chat.messageId = wakePayload.chatMessageId;
+  if (wakePayload.chatMode) chat.mode = wakePayload.chatMode;
+  if (wakePayload.chatProjectId) chat.projectId = wakePayload.chatProjectId;
+  if (wakePayload.chatProjectName) chat.projectName = wakePayload.chatProjectName;
+  if (Object.keys(chat).length > 0) {
+    standardPaperclip.chat = chat;
+  }
 
   if (workspace) {
     standardPaperclip.workspace = workspace;
@@ -599,6 +654,8 @@ class GatewayWsClient {
   private challengePromise: Promise<string>;
   private resolveChallenge!: (nonce: string) => void;
   private rejectChallenge!: (err: Error) => void;
+  /** 避免 close 時對已 resolve 的 challenge 呼叫 reject，導致未處理的 rejection 或 process 崩潰 */
+  private challengeSettled = false;
 
   constructor(private readonly opts: GatewayClientOptions) {
     this.challengePromise = new Promise<string>((resolve, reject) => {
@@ -611,6 +668,7 @@ class GatewayWsClient {
     buildConnectParams: (nonce: string) => Record<string, unknown>,
     timeoutMs: number,
   ): Promise<Record<string, unknown> | null> {
+    this.challengeSettled = false;
     this.ws = new WebSocket(this.opts.url, {
       headers: this.opts.headers,
       maxPayload: 25 * 1024 * 1024,
@@ -623,10 +681,34 @@ class GatewayWsClient {
     });
 
     ws.on("close", (code, reason) => {
-      const reasonText = rawDataToString(reason);
-      const err = new Error(`gateway closed (${code}): ${reasonText}`);
-      this.failPending(err);
-      this.rejectChallenge(err);
+      try {
+        const reasonText = rawDataToString(reason);
+        // 1006 = Abnormal Closure：連線未送 close frame 就中斷，常見為 gateway 重啟/當掉、網路中斷、逾時
+        const err = new Error(`gateway closed (${code}): ${reasonText}`);
+        try {
+          this.failPending(err);
+        } catch (e) {
+          void this.opts.onLog(
+            "stderr",
+            `[openclaw-gateway] failPending on close: ${e instanceof Error ? e.message : String(e)}\n`,
+          );
+        }
+        if (!this.challengeSettled) {
+          try {
+            this.rejectChallenge(err);
+          } catch (e) {
+            void this.opts.onLog(
+              "stderr",
+              `[openclaw-gateway] rejectChallenge on close: ${e instanceof Error ? e.message : String(e)}\n`,
+            );
+          }
+        }
+      } catch (e) {
+        void this.opts.onLog(
+          "stderr",
+          `[openclaw-gateway] close handler error: ${e instanceof Error ? e.message : String(e)}\n`,
+        );
+      }
     });
 
     ws.on("error", (err) => {
@@ -737,6 +819,7 @@ class GatewayWsClient {
         const payload = asRecord(parsed.payload);
         const nonce = nonEmpty(payload?.nonce);
         if (nonce) {
+          this.challengeSettled = true;
           this.resolveChallenge(nonce);
           return;
         }
@@ -1094,6 +1177,12 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   }
 
   const outboundHeaderKeys = Object.keys(headers).sort();
+  const messageLen = typeof agentParams.message === "string" ? agentParams.message.length : 0;
+  const payloadApproxBytes = JSON.stringify(agentParams).length;
+  await ctx.onLog(
+    "stdout",
+    `[openclaw-gateway] outbound message length=${messageLen} chars, payload ~${payloadApproxBytes} bytes\n`,
+  );
   await ctx.onLog(
     "stdout",
     `[openclaw-gateway] outbound headers (redacted): ${stringifyForLog(redactForLog(headers), 4_000)}\n`,
@@ -1371,6 +1460,10 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       const lower = message.toLowerCase();
       const timedOut = lower.includes("timeout");
       const pairingRequired = lower.includes("pairing required");
+      const unauthorized =
+        lower.includes("unauthorized") ||
+        lower.includes("gateway token missing") ||
+        lower.includes("provide gateway auth token");
 
       if (
         pairingRequired &&
@@ -1410,7 +1503,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
       const detailedMessage = pairingRequired
         ? `${message}. Approve the pending device in OpenClaw (for example: openclaw devices approve --latest --url <gateway-ws-url> --token <gateway-token>) and retry. Ensure this agent has a persisted adapterConfig.devicePrivateKeyPem so approvals are reused.`
-        : message;
+        : unauthorized
+          ? `${message}. Set adapterConfig.authToken or adapterConfig.headers[\"x-openclaw-token\"] with your gateway auth token.`
+          : message;
 
       await ctx.onLog("stderr", `[openclaw-gateway] request failed: ${detailedMessage}\n`);
 
@@ -1423,7 +1518,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
           ? "openclaw_gateway_timeout"
           : pairingRequired
             ? "openclaw_gateway_pairing_required"
-            : "openclaw_gateway_request_failed",
+            : unauthorized
+              ? "openclaw_gateway_unauthorized"
+              : "openclaw_gateway_request_failed",
         resultJson: asRecord(latestResultPayload),
       };
     } finally {

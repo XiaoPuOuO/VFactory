@@ -22,7 +22,7 @@ export function PageTabBar({ items, value, onValueChange, align = "center" }: Pa
       <select
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
-        className="h-9 rounded-md border border-border bg-background px-2 py-1 text-base focus:outline-none focus:ring-1 focus:ring-ring"
+        className="ui-page-tab-select"
       >
         {items.map((item) => (
           <option key={item.value} value={item.value}>
@@ -34,7 +34,7 @@ export function PageTabBar({ items, value, onValueChange, align = "center" }: Pa
   }
 
   return (
-    <TabsList variant="line" className={align === "start" ? "justify-start" : undefined}>
+    <TabsList variant="line" align={align}>
       {items.map((item) => (
         <TabsTrigger key={item.value} value={item.value}>
           {item.label}

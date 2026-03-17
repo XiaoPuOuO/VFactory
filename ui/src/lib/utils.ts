@@ -1,9 +1,9 @@
 import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
 import { deriveAgentUrlKey, deriveProjectUrlKey } from "@paperclipai/shared";
 
+/** 合併可選的 className，僅用於 props 覆寫，不使用 Tailwind。 */
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+  return clsx(inputs);
 }
 
 export function formatCents(cents: number): string {

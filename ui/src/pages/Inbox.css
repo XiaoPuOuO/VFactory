@@ -1,0 +1,474 @@
+/**
+ * Inbox 頁面 — 原生 CSS（無 Tailwind）
+ * 收件匣：分頁、篩選、審批／加入請求／失敗 Run／警示／我碰過的議題
+ */
+
+/* ---------------------------------------------------------------------------
+   頁面容器
+   --------------------------------------------------------------------------- */
+.inbox-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.inbox-errors {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+/* ---------------------------------------------------------------------------
+   頂部：分頁 + 篩選列
+   --------------------------------------------------------------------------- */
+.inbox-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .inbox-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.inbox-header-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inbox-header-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .inbox-header-right {
+    justify-content: flex-end;
+  }
+}
+
+.inbox-select-trigger {
+  height: 2rem;
+  width: 10.625rem;
+  font-size: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+   區塊標題與網格
+   --------------------------------------------------------------------------- */
+.inbox-section {
+  /* section wrapper when needed */
+}
+
+.inbox-section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--muted-foreground);
+  margin-bottom: 0.75rem;
+}
+
+.inbox-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Failed Run 卡片
+   --------------------------------------------------------------------------- */
+.inbox-failed-run-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in oklab, var(--destructive) 30%, transparent);
+  background: linear-gradient(
+    to bottom right,
+    color-mix(in oklab, var(--destructive) 10%, transparent),
+    color-mix(in oklab, var(--destructive) 5%, var(--card)),
+    var(--card)
+  );
+  padding: 1rem;
+}
+
+.inbox-failed-run-card::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 6rem;
+  height: 6rem;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+  filter: blur(2rem);
+}
+
+.inbox-failed-run-dismiss {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  z-index: 10;
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.inbox-failed-run-card:hover .inbox-failed-run-dismiss {
+  opacity: 1;
+}
+
+.inbox-failed-run-dismiss:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.inbox-failed-run-dismiss svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.inbox-failed-run-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.inbox-failed-run-link {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.inbox-failed-run-link:hover {
+  color: var(--foreground);
+}
+
+.inbox-failed-run-link-id {
+  font-family: ui-monospace, monospace;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  margin-right: 0.375rem;
+}
+
+.inbox-failed-run-no-issue {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.inbox-failed-run-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .inbox-failed-run-row {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+}
+
+.inbox-failed-run-meta-wrap {
+  min-width: 0;
+  flex: 1;
+}
+
+.inbox-failed-run-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inbox-failed-run-meta-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem;
+  border-radius: 0.375rem;
+  background: color-mix(in oklab, var(--destructive) 20%, transparent);
+}
+
+.inbox-failed-run-meta-icon svg {
+  width: 1rem;
+  height: 1rem;
+  color: #dc2626;
+}
+
+.dark .inbox-failed-run-meta-icon svg {
+  color: #f87171;
+}
+
+.inbox-failed-run-meta-time {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.inbox-failed-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .inbox-failed-run-actions {
+    width: auto;
+    justify-content: flex-end;
+  }
+}
+
+.inbox-failed-run-actions [data-slot="button"] {
+  flex-shrink: 0;
+  height: 2rem;
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.inbox-failed-run-error-box {
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in oklab, var(--destructive) 20%, transparent);
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.inbox-failed-run-id {
+  font-size: 0.75rem;
+}
+
+.inbox-failed-run-id span {
+  font-family: ui-monospace, monospace;
+  color: var(--muted-foreground);
+}
+
+.inbox-failed-run-retry-error {
+  font-size: 0.75rem;
+  color: var(--destructive);
+}
+
+/* ---------------------------------------------------------------------------
+   Join Request 卡片
+   --------------------------------------------------------------------------- */
+.inbox-join-card {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 1rem;
+}
+
+.inbox-join-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .inbox-join-inner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.inbox-join-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inbox-join-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.inbox-join-meta {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.inbox-join-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   警示區（Agent errors / Budget）
+   --------------------------------------------------------------------------- */
+.inbox-alerts-list {
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.inbox-alert-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  transition: background-color 0.15s ease;
+}
+
+.inbox-alert-row:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.inbox-alert-row + .inbox-alert-row {
+  border-top: 1px solid var(--border);
+}
+
+.inbox-alert-link {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  color: inherit;
+  text-decoration: none;
+}
+
+.inbox-alert-link:focus {
+  outline: none;
+}
+
+.inbox-alert-icon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+}
+
+.inbox-alert-icon.red {
+  color: #dc2626;
+}
+
+.dark .inbox-alert-icon.red {
+  color: #f87171;
+}
+
+.inbox-alert-icon.yellow {
+  color: #facc15;
+}
+
+.inbox-alert-text {
+  font-size: 0.875rem;
+}
+
+.inbox-alert-text strong {
+  font-weight: 500;
+}
+
+.inbox-alert-dismiss {
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.inbox-alert-row:hover .inbox-alert-dismiss {
+  opacity: 1;
+}
+
+.inbox-alert-dismiss:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.inbox-alert-dismiss svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* ---------------------------------------------------------------------------
+   議題列表區（我碰過的議題）：沿用 issues-list
+   --------------------------------------------------------------------------- */
+.inbox-issues-wrap {
+  /* 僅作為語意包裝，實際列表用 .issues-list */
+}
+
+/* ---------------------------------------------------------------------------
+   Skeleton（inbox variant，供 PageSkeleton 使用）
+   --------------------------------------------------------------------------- */
+.inbox-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.inbox-skeleton-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inbox-skeleton-tab {
+  height: 2.25rem;
+  width: 14rem;
+}
+
+.inbox-skeleton-filter {
+  height: 2rem;
+  width: 10rem;
+}
+
+.inbox-skeleton-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.inbox-skeleton-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inbox-skeleton-section-title {
+  height: 1rem;
+  width: 10rem;
+}
+
+.inbox-skeleton-section-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.inbox-skeleton-section-rows [data-slot="skeleton"] {
+  height: 3.5rem;
+  width: 100%;
+  border-radius: 0;
+}

@@ -1,0 +1,78 @@
+/**
+ * InstanceSettings 頁面 — 原生 CSS（無 Tailwind）
+ */
+.instance-settings-page {
+  max-width: 42rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.instance-settings-card {
+  overflow: hidden;
+}
+
+.instance-settings-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.instance-settings-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.instance-settings-title-row svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--muted-foreground);
+}
+
+.instance-settings-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.instance-settings-desc {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.instance-settings-card-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.instance-settings-card-link:hover {
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
+}
+
+.instance-settings-card-link svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.instance-settings-card-body {
+  flex: 1 1 0%;
+  padding: 0;
+}
+
+.instance-settings-card-label {
+  font-weight: 500;
+}
+
+.instance-settings-card-desc {
+  margin-top: 0.125rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}

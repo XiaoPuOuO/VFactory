@@ -1,5 +1,7 @@
 import { readConfigFile } from "./config-file.js";
 import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { resolvePaperclipEnvPath } from "./paths.js";
 import {
@@ -22,9 +24,33 @@ import {
   resolveHomeAwarePath,
 } from "./home-paths.js";
 
+function findRepoEnvPath(): string | null {
+  const fromCwd = findEnvFileFromAncestors(process.cwd());
+  if (fromCwd) return fromCwd;
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = path.resolve(thisDir, "..", "..");
+  const candidate = path.join(repoRoot, ".env");
+  return existsSync(candidate) ? candidate : null;
+}
+
+function findEnvFileFromAncestors(startDir: string): string | null {
+  let currentDir = path.resolve(startDir);
+  while (true) {
+    const candidate = path.join(currentDir, ".env");
+    if (existsSync(candidate)) return candidate;
+    const parent = path.resolve(currentDir, "..");
+    if (parent === currentDir) return null;
+    currentDir = parent;
+  }
+}
+
 const PAPERCLIP_ENV_FILE_PATH = resolvePaperclipEnvPath();
 if (existsSync(PAPERCLIP_ENV_FILE_PATH)) {
   loadDotenv({ path: PAPERCLIP_ENV_FILE_PATH, override: false, quiet: true });
+}
+const repoEnvPath = findRepoEnvPath();
+if (repoEnvPath && repoEnvPath !== PAPERCLIP_ENV_FILE_PATH) {
+  loadDotenv({ path: repoEnvPath, override: true, quiet: true });
 }
 
 type DatabaseMode = "embedded-postgres" | "postgres";
@@ -38,6 +64,10 @@ export interface Config {
   authBaseUrlMode: AuthBaseUrlMode;
   authPublicBaseUrl: string | undefined;
   authDisableSignUp: boolean;
+  /** Google OAuth 啟用時為 true（clientId 與 clientSecret 皆已設定） */
+  authGoogleEnabled: boolean;
+  authGoogleClientId: string | undefined;
+  authGoogleClientSecret: string | undefined;
   databaseMode: DatabaseMode;
   databaseUrl: string | undefined;
   embeddedPostgresDataDir: string;
@@ -60,6 +90,8 @@ export interface Config {
   storageS3ForcePathStyle: boolean;
   heartbeatSchedulerEnabled: boolean;
   heartbeatSchedulerIntervalMs: number;
+  scheduleSchedulerEnabled: boolean;
+  scheduleSchedulerIntervalMs: number;
   companyDeletionEnabled: boolean;
 }
 
@@ -114,7 +146,7 @@ export function loadConfig(): Config {
     deploymentModeFromEnvRaw && DEPLOYMENT_MODES.includes(deploymentModeFromEnvRaw as DeploymentMode)
       ? (deploymentModeFromEnvRaw as DeploymentMode)
       : null;
-  const deploymentMode: DeploymentMode = deploymentModeFromEnv ?? fileConfig?.server.deploymentMode ?? "local_trusted";
+  const deploymentMode: DeploymentMode = deploymentModeFromEnv ?? fileConfig?.server.deploymentMode ?? "authenticated";
   const deploymentExposureFromEnvRaw = process.env.PAPERCLIP_DEPLOYMENT_EXPOSURE;
   const deploymentExposureFromEnv =
     deploymentExposureFromEnvRaw &&
@@ -122,9 +154,7 @@ export function loadConfig(): Config {
       ? (deploymentExposureFromEnvRaw as DeploymentExposure)
       : null;
   const deploymentExposure: DeploymentExposure =
-    deploymentMode === "local_trusted"
-      ? "private"
-      : (deploymentExposureFromEnv ?? fileConfig?.server.exposure ?? "private");
+    deploymentExposureFromEnv ?? fileConfig?.server.exposure ?? "private";
   const authBaseUrlModeFromEnvRaw = process.env.PAPERCLIP_AUTH_BASE_URL_MODE;
   const authBaseUrlModeFromEnv =
     authBaseUrlModeFromEnvRaw &&
@@ -148,6 +178,19 @@ export function loadConfig(): Config {
     disableSignUpFromEnv !== undefined
       ? disableSignUpFromEnv === "true"
       : (fileConfig?.auth?.disableSignUp ?? false);
+  const authGoogleClientId =
+    process.env.GOOGLE_CLIENT_ID?.trim() ||
+    process.env.PAPERCLIP_GOOGLE_CLIENT_ID?.trim() ||
+    (fileConfig?.auth as { google?: { clientId?: string; clientSecret?: string } } | undefined)?.google?.clientId ||
+    undefined;
+  const authGoogleClientSecret =
+    process.env.GOOGLE_CLIENT_SECRET?.trim() ||
+    process.env.PAPERCLIP_GOOGLE_CLIENT_SECRET?.trim() ||
+    (fileConfig?.auth as { google?: { clientId?: string; clientSecret?: string } } | undefined)?.google?.clientSecret ||
+    undefined;
+  const authGoogleEnabled = Boolean(
+    authGoogleClientId && authGoogleClientSecret,
+  );
   const allowedHostnamesFromEnvRaw = process.env.PAPERCLIP_ALLOWED_HOSTNAMES;
   const allowedHostnamesFromEnv = allowedHostnamesFromEnvRaw
     ? allowedHostnamesFromEnvRaw
@@ -176,9 +219,7 @@ export function loadConfig(): Config {
   );
   const companyDeletionEnvRaw = process.env.PAPERCLIP_ENABLE_COMPANY_DELETION;
   const companyDeletionEnabled =
-    companyDeletionEnvRaw !== undefined
-      ? companyDeletionEnvRaw === "true"
-      : deploymentMode === "local_trusted";
+    companyDeletionEnvRaw !== undefined ? companyDeletionEnvRaw === "true" : false;
   const databaseBackupEnabled =
     process.env.PAPERCLIP_DB_BACKUP_ENABLED !== undefined
       ? process.env.PAPERCLIP_DB_BACKUP_ENABLED === "true"
@@ -210,6 +251,9 @@ export function loadConfig(): Config {
     authBaseUrlMode,
     authPublicBaseUrl,
     authDisableSignUp,
+    authGoogleEnabled,
+    authGoogleClientId: authGoogleEnabled ? authGoogleClientId : undefined,
+    authGoogleClientSecret: authGoogleEnabled ? authGoogleClientSecret : undefined,
     databaseMode: fileDatabaseMode,
     databaseUrl: process.env.DATABASE_URL ?? fileDbUrl,
     embeddedPostgresDataDir: resolveHomeAwarePath(
@@ -242,6 +286,8 @@ export function loadConfig(): Config {
     storageS3ForcePathStyle,
     heartbeatSchedulerEnabled: process.env.HEARTBEAT_SCHEDULER_ENABLED !== "false",
     heartbeatSchedulerIntervalMs: Math.max(10000, Number(process.env.HEARTBEAT_SCHEDULER_INTERVAL_MS) || 30000),
+    scheduleSchedulerEnabled: process.env.PAPERCLIP_SCHEDULE_SCHEDULER_ENABLED !== "false",
+    scheduleSchedulerIntervalMs: Math.max(60_000, Number(process.env.PAPERCLIP_SCHEDULE_SCHEDULER_INTERVAL_MS) || 60_000),
     companyDeletionEnabled,
   };
 }

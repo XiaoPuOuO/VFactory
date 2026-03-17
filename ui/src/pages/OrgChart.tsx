@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { agentsApi, type OrgNode } from "../api/agents";
@@ -11,6 +12,7 @@ import { PageSkeleton } from "../components/PageSkeleton";
 import { AgentIcon } from "../components/AgentIconPicker";
 import { Network } from "lucide-react";
 import { AGENT_ROLE_LABELS, type Agent } from "@paperclipai/shared";
+import "./OrgChart.css";
 
 // Layout constants
 const CARD_W = 200;
@@ -117,8 +119,11 @@ function collectEdges(nodes: LayoutNode[]): Array<{ parent: LayoutNode; child: L
 
 const adapterLabels: Record<string, string> = {
   claude_local: "Claude",
+  claude_remote: "Claude",
   codex_local: "Codex",
+  codex_remote: "Codex",
   gemini_local: "Gemini",
+  gemini_remote: "Gemini",
   opencode_local: "OpenCode",
   cursor: "Cursor",
   openclaw_gateway: "OpenClaw Gateway",
@@ -161,9 +166,10 @@ export function OrgChart() {
     return m;
   }, [agents]);
 
+  const { t } = useTranslation("org");
   useEffect(() => {
-    setBreadcrumbs([{ label: "Org Chart" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("pageTitle") }]);
+  }, [setBreadcrumbs, t]);
 
   // Layout computation
   const layout = useMemo(() => layoutForest(orgTree ?? []), [orgTree]);
@@ -255,7 +261,7 @@ export function OrgChart() {
   }, [zoom, pan]);
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={Network} message="Select a company to view the org chart." />;
+    return <EmptyState icon={Network} message={t("selectCompanyToView")} />;
   }
 
   if (isLoading) {
@@ -263,13 +269,13 @@ export function OrgChart() {
   }
 
   if (orgTree && orgTree.length === 0) {
-    return <EmptyState icon={Network} message="No organizational hierarchy defined." />;
+    return <EmptyState icon={Network} message={t("noHierarchy")} />;
   }
 
   return (
     <div
       ref={containerRef}
-      className="w-full h-[calc(100vh-4rem)] overflow-hidden relative bg-muted/20 border border-border rounded-lg"
+      className="org-chart-container"
       style={{ cursor: dragging ? "grabbing" : "grab" }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -277,10 +283,10 @@ export function OrgChart() {
       onMouseLeave={handleMouseUp}
       onWheel={handleWheel}
     >
-      {/* Zoom controls */}
-      <div className="absolute top-3 right-3 z-10 flex flex-col gap-1">
+      <div className="org-chart-zoom-buttons">
         <button
-          className="w-7 h-7 flex items-center justify-center bg-background border border-border rounded text-sm hover:bg-accent transition-colors"
+          type="button"
+          className="org-chart-zoom-btn"
           onClick={() => {
             const newZoom = Math.min(zoom * 1.2, 2);
             const container = containerRef.current;
@@ -297,7 +303,8 @@ export function OrgChart() {
           +
         </button>
         <button
-          className="w-7 h-7 flex items-center justify-center bg-background border border-border rounded text-sm hover:bg-accent transition-colors"
+          type="button"
+          className="org-chart-zoom-btn"
           onClick={() => {
             const newZoom = Math.max(zoom * 0.8, 0.2);
             const container = containerRef.current;
@@ -314,7 +321,8 @@ export function OrgChart() {
           &minus;
         </button>
         <button
-          className="w-7 h-7 flex items-center justify-center bg-background border border-border rounded text-[10px] hover:bg-accent transition-colors"
+          type="button"
+          className="org-chart-zoom-btn fit"
           onClick={() => {
             if (!containerRef.current) return;
             const cW = containerRef.current.clientWidth;
@@ -334,13 +342,9 @@ export function OrgChart() {
         </button>
       </div>
 
-      {/* SVG layer for edges */}
       <svg
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          width: "100%",
-          height: "100%",
-        }}
+        className="org-chart-svg"
+        style={{ width: "100%", height: "100%" }}
       >
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {edges.map(({ parent, child }) => {
@@ -363,9 +367,8 @@ export function OrgChart() {
         </g>
       </svg>
 
-      {/* Card layer */}
       <div
-        className="absolute inset-0"
+        className="org-chart-cards-wrap"
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           transformOrigin: "0 0",
@@ -379,7 +382,7 @@ export function OrgChart() {
             <div
               key={node.id}
               data-org-card
-              className="absolute bg-card border border-border rounded-lg shadow-sm hover:shadow-md hover:border-foreground/20 transition-[box-shadow,border-color] duration-150 cursor-pointer select-none"
+              className="org-chart-card"
               style={{
                 left: node.x,
                 top: node.y,
@@ -388,27 +391,23 @@ export function OrgChart() {
               }}
               onClick={() => navigate(agent ? agentUrl(agent) : `/agents/${node.id}`)}
             >
-              <div className="flex items-center px-4 py-3 gap-3">
-                {/* Agent icon + status dot */}
-                <div className="relative shrink-0">
-                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                    <AgentIcon icon={agent?.icon} className="h-4.5 w-4.5 text-foreground/70" />
+              <div className="org-chart-card-inner">
+                <div className="org-chart-card-avatar">
+                  <div className="org-chart-card-avatar-box">
+                    <AgentIcon icon={agent?.icon} />
                   </div>
                   <span
-                    className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card"
+                    className="org-chart-card-dot"
                     style={{ backgroundColor: dotColor }}
                   />
                 </div>
-                {/* Name + role + adapter type */}
-                <div className="flex flex-col items-start min-w-0 flex-1">
-                  <span className="text-sm font-semibold text-foreground leading-tight">
-                    {node.name}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground leading-tight mt-0.5">
+                <div className="org-chart-card-body">
+                  <span className="org-chart-card-name">{node.name}</span>
+                  <span className="org-chart-card-role">
                     {agent?.title ?? roleLabel(node.role)}
                   </span>
                   {agent && (
-                    <span className="text-[10px] text-muted-foreground/60 font-mono leading-tight mt-1">
+                    <span className="org-chart-card-adapter">
                       {adapterLabels[agent.adapterType] ?? agent.adapterType}
                     </span>
                   )}

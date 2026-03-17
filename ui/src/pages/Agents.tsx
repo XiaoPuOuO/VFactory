@@ -9,11 +9,11 @@ import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useSidebar } from "../context/SidebarContext";
 import { queryKeys } from "../lib/queryKeys";
 import { StatusBadge } from "../components/StatusBadge";
-import { agentStatusDot, agentStatusDotDefault } from "../lib/status-colors";
 import { EntityRow } from "../components/EntityRow";
 import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
-import { relativeTime, cn, agentRouteRef, agentUrl } from "../lib/utils";
+import { relativeTime, agentRouteRef, agentUrl } from "../lib/utils";
+import "./Agents.css";
 import { getAgentModelId, getModelOptionsFromAgents } from "../lib/agent-utils";
 import { PageTabBar } from "../components/PageTabBar";
 import { Tabs } from "@/components/ui/tabs";
@@ -23,8 +23,11 @@ import { AGENT_ROLE_LABELS, type Agent } from "@paperclipai/shared";
 
 const adapterLabels: Record<string, string> = {
   claude_local: "Claude",
+  claude_remote: "Claude",
   codex_local: "Codex",
+  codex_remote: "Codex",
   gemini_local: "Gemini",
+  gemini_remote: "Gemini",
   opencode_local: "OpenCode",
   cursor: "Cursor",
   openclaw_gateway: "OpenClaw Gateway",
@@ -167,8 +170,8 @@ export function Agents() {
   const filteredOrg = filterOrgTree(orgTree ?? [], tab, showTerminated, agentMap, modelFilter);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="agents-page">
+      <div className="agents-header">
         <Tabs value={tab} onValueChange={(v) => navigate(`/agents/${v}`)}>
           <PageTabBar
             items={[
@@ -181,36 +184,25 @@ export function Agents() {
             onValueChange={(v) => navigate(`/agents/${v}`)}
           />
         </Tabs>
-        <div className="flex items-center gap-2">
-          {/* Filters */}
+        <div className="agents-header-actions">
           <div className="relative">
             <button
-              className={cn(
-                "flex items-center gap-1.5 px-2 py-1.5 text-xs transition-colors border border-border",
-                filtersOpen || showTerminated || modelFilter !== null
-                  ? "text-foreground bg-accent"
-                  : "text-muted-foreground hover:bg-accent/50"
-              )}
+              className={`agents-filters-trigger ${filtersOpen || showTerminated || modelFilter !== null ? "active" : ""}`}
               onClick={() => setFiltersOpen(!filtersOpen)}
             >
-              <SlidersHorizontal className="h-3 w-3" />
+              <SlidersHorizontal />
               Filters
               {(showTerminated || modelFilter !== null) && (
-                <span className="ml-0.5 px-1 bg-foreground/10 rounded text-[10px]">
+                <span className="agents-filters-badge">
                   {[showTerminated, modelFilter !== null].filter(Boolean).length}
                 </span>
               )}
             </button>
             {filtersOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-56 border border-border bg-popover shadow-md p-1">
-                <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Model
-                </div>
+              <div className="agents-filters-dropdown">
+                <div className="agents-filters-dropdown-label">Model</div>
                 <button
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent/50 transition-colors",
-                    modelFilter === null && "bg-accent"
-                  )}
+                  className={`agents-filters-dropdown-item ${modelFilter === null ? "active" : ""}`}
                   onClick={() => { setModelFilter(null); }}
                 >
                   All models
@@ -218,66 +210,53 @@ export function Agents() {
                 {modelOptions.map((opt) => (
                   <button
                     key={opt.id === "" ? "__default__" : opt.id}
-                    className={cn(
-                      "flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent/50 transition-colors truncate",
-                      modelFilter === opt.id && "bg-accent"
-                    )}
+                    className={`agents-filters-dropdown-item truncate ${modelFilter === opt.id ? "active" : ""}`}
                     onClick={() => setModelFilter(opt.id)}
                   >
-                    <span className="truncate" title={opt.id || "Default"}>{opt.label}</span>
+                    <span title={opt.id || "Default"}>{opt.label}</span>
                   </button>
                 ))}
-                <div className="border-t border-border my-1" />
+                <div className="agents-filters-divider" />
                 <button
-                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left hover:bg-accent/50 transition-colors"
+                  className="agents-filters-checkbox-row"
                   onClick={() => setShowTerminated(!showTerminated)}
                 >
-                  <span className={cn(
-                    "flex items-center justify-center h-3.5 w-3.5 border border-border rounded-sm shrink-0",
-                    showTerminated && "bg-foreground"
-                  )}>
-                    {showTerminated && <span className="text-background text-[10px] leading-none">&#10003;</span>}
+                  <span className={`agents-filters-checkbox ${showTerminated ? "checked" : ""}`}>
+                    {showTerminated && <span>&#10003;</span>}
                   </span>
                   Show terminated
                 </button>
               </div>
             )}
           </div>
-          {/* View toggle */}
           {!forceListView && (
-            <div className="flex items-center border border-border">
+            <div className="agents-view-toggle">
               <button
-                className={cn(
-                  "p-1.5 transition-colors",
-                  effectiveView === "list" ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50"
-                )}
+                className={effectiveView === "list" ? "active" : ""}
                 onClick={() => setView("list")}
               >
-                <List className="h-3.5 w-3.5" />
+                <List />
               </button>
               <button
-                className={cn(
-                  "p-1.5 transition-colors",
-                  effectiveView === "org" ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50"
-                )}
+                className={effectiveView === "org" ? "active" : ""}
                 onClick={() => setView("org")}
               >
-                <GitBranch className="h-3.5 w-3.5" />
+                <GitBranch />
               </button>
             </div>
           )}
           <Button size="sm" variant="outline" onClick={openNewAgent}>
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            <Plus className="board-page-btn-icon-sm" />
             New Agent
           </Button>
         </div>
       </div>
 
       {filtered.length > 0 && (
-        <p className="text-xs text-muted-foreground">{filtered.length} agent{filtered.length !== 1 ? "s" : ""}</p>
+        <p className="board-page-meta">{filtered.length} agent{filtered.length !== 1 ? "s" : ""}</p>
       )}
 
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
+      {error && <p className="board-page-error">{error.message}</p>}
 
       {agents && agents.length === 0 && (
         <EmptyState
@@ -288,71 +267,63 @@ export function Agents() {
         />
       )}
 
-      {/* List view */}
       {effectiveView === "list" && filtered.length > 0 && (
-        <div className="border border-border">
-          {filtered.map((agent) => {
-            return (
-              <EntityRow
-                key={agent.id}
-                title={agent.name}
-                subtitle={`${roleLabels[agent.role] ?? agent.role}${agent.title ? ` - ${agent.title}` : ""}`}
-                to={agentUrl(agent)}
-                leading={
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span
-                      className={`absolute inline-flex h-full w-full rounded-full ${agentStatusDot[agent.status] ?? agentStatusDotDefault}`}
-                    />
+        <div className="agents-list-wrap">
+          {filtered.map((agent) => (
+            <EntityRow
+              key={agent.id}
+              title={agent.name}
+              subtitle={`${roleLabels[agent.role] ?? agent.role}${agent.title ? ` - ${agent.title}` : ""}`}
+              to={agentUrl(agent)}
+              leading={
+                <span className="agents-status-dot" data-status={agent.status}>
+                  <span />
+                </span>
+              }
+              trailing={
+                <div className="agents-list-meta">
+                  <span className="agents-org-node-mobile">
+                    {liveRunByAgent.has(agent.id) ? (
+                      <LiveRunIndicator
+                        agentRef={agentRouteRef(agent)}
+                        runId={liveRunByAgent.get(agent.id)!.runId}
+                        liveCount={liveRunByAgent.get(agent.id)!.liveCount}
+                      />
+                    ) : (
+                      <StatusBadge status={agent.status} />
+                    )}
                   </span>
-                }
-                trailing={
-                  <div className="flex items-center gap-3">
-                    <span className="sm:hidden">
-                      {liveRunByAgent.has(agent.id) ? (
-                        <LiveRunIndicator
-                          agentRef={agentRouteRef(agent)}
-                          runId={liveRunByAgent.get(agent.id)!.runId}
-                          liveCount={liveRunByAgent.get(agent.id)!.liveCount}
-                        />
-                      ) : (
-                        <StatusBadge status={agent.status} />
-                      )}
+                  <div className="agents-org-node-desktop agents-list-meta">
+                    {liveRunByAgent.has(agent.id) && (
+                      <LiveRunIndicator
+                        agentRef={agentRouteRef(agent)}
+                        runId={liveRunByAgent.get(agent.id)!.runId}
+                        liveCount={liveRunByAgent.get(agent.id)!.liveCount}
+                      />
+                    )}
+                    <span className="agents-list-adapter">
+                      {adapterLabels[agent.adapterType] ?? agent.adapterType}
                     </span>
-                    <div className="hidden sm:flex items-center gap-3">
-                      {liveRunByAgent.has(agent.id) && (
-                        <LiveRunIndicator
-                          agentRef={agentRouteRef(agent)}
-                          runId={liveRunByAgent.get(agent.id)!.runId}
-                          liveCount={liveRunByAgent.get(agent.id)!.liveCount}
-                        />
-                      )}
-                      <span className="text-xs text-muted-foreground font-mono w-14 text-right">
-                        {adapterLabels[agent.adapterType] ?? agent.adapterType}
-                      </span>
-                      <span className="text-xs text-muted-foreground w-16 text-right">
-                        {agent.lastHeartbeatAt ? relativeTime(agent.lastHeartbeatAt) : "—"}
-                      </span>
-                      <span className="w-20 flex justify-end">
-                        <StatusBadge status={agent.status} />
-                      </span>
-                    </div>
+                    <span className="agents-list-time">
+                      {agent.lastHeartbeatAt ? relativeTime(agent.lastHeartbeatAt) : "—"}
+                    </span>
+                    <span className="agents-list-status-wrap">
+                      <StatusBadge status={agent.status} />
+                    </span>
                   </div>
-                }
-              />
-            );
-          })}
+                </div>
+              }
+            />
+          ))}
         </div>
       )}
 
       {effectiveView === "list" && agents && agents.length > 0 && filtered.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          No agents match the selected filter.
-        </p>
+        <p className="board-page-empty-message">No agents match the selected filter.</p>
       )}
 
-      {/* Org chart view */}
       {effectiveView === "org" && filteredOrg.length > 0 && (
-        <div className="border border-border py-1">
+        <div className="agents-org-wrap">
           {filteredOrg.map((node) => (
             <OrgTreeNode key={node.id} node={node} depth={0} agentMap={agentMap} liveRunByAgent={liveRunByAgent} />
           ))}
@@ -360,15 +331,11 @@ export function Agents() {
       )}
 
       {effectiveView === "org" && orgTree && orgTree.length > 0 && filteredOrg.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          No agents match the selected filter.
-        </p>
+        <p className="board-page-empty-message">No agents match the selected filter.</p>
       )}
 
       {effectiveView === "org" && orgTree && orgTree.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          No organizational hierarchy defined.
-        </p>
+        <p className="board-page-empty-message">No organizational hierarchy defined.</p>
       )}
     </div>
   );
@@ -387,26 +354,24 @@ function OrgTreeNode({
 }) {
   const agent = agentMap.get(node.id);
 
-  const statusColor = agentStatusDot[node.status] ?? agentStatusDotDefault;
-
   return (
     <div style={{ paddingLeft: depth * 24 }}>
       <Link
         to={agent ? agentUrl(agent) : `/agents/${node.id}`}
-        className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors w-full text-left no-underline text-inherit"
+        className="agents-org-node"
       >
-        <span className="relative flex h-2.5 w-2.5 shrink-0">
-          <span className={`absolute inline-flex h-full w-full rounded-full ${statusColor}`} />
+        <span className="agents-org-node-dot" data-status={node.status}>
+          <span />
         </span>
-        <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium">{node.name}</span>
-          <span className="text-xs text-muted-foreground ml-2">
+        <div className="agents-org-node-body">
+          <span className="agents-org-node-name">{node.name}</span>
+          <span className="agents-org-node-meta">
             {roleLabels[node.role] ?? node.role}
             {agent?.title ? ` - ${agent.title}` : ""}
           </span>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="sm:hidden">
+        <div className="agents-org-node-trailing">
+          <span className="agents-org-node-mobile">
             {liveRunByAgent.has(node.id) ? (
               <LiveRunIndicator
                 agentRef={agent ? agentRouteRef(agent) : node.id}
@@ -417,7 +382,7 @@ function OrgTreeNode({
               <StatusBadge status={node.status} />
             )}
           </span>
-          <div className="hidden sm:flex items-center gap-3">
+          <div className="agents-org-node-desktop agents-org-node-trailing">
             {liveRunByAgent.has(node.id) && (
               <LiveRunIndicator
                 agentRef={agent ? agentRouteRef(agent) : node.id}
@@ -427,22 +392,22 @@ function OrgTreeNode({
             )}
             {agent && (
               <>
-                <span className="text-xs text-muted-foreground font-mono w-14 text-right">
+                <span className="agents-org-node-adapter">
                   {adapterLabels[agent.adapterType] ?? agent.adapterType}
                 </span>
-                <span className="text-xs text-muted-foreground w-16 text-right">
+                <span className="agents-org-node-time">
                   {agent.lastHeartbeatAt ? relativeTime(agent.lastHeartbeatAt) : "—"}
                 </span>
               </>
             )}
-            <span className="w-20 flex justify-end">
+            <span className="agents-list-status-wrap">
               <StatusBadge status={node.status} />
             </span>
           </div>
         </div>
       </Link>
       {node.reports && node.reports.length > 0 && (
-        <div className="border-l border-border/50 ml-4">
+        <div className="agents-org-children">
           {node.reports.map((child) => (
             <OrgTreeNode key={child.id} node={child} depth={depth + 1} agentMap={agentMap} liveRunByAgent={liveRunByAgent} />
           ))}
@@ -464,14 +429,13 @@ function LiveRunIndicator({
   return (
     <Link
       to={`/agents/${agentRef}/runs/${runId}`}
-      className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 transition-colors no-underline"
+      className="agents-live-run-link"
       onClick={(e) => e.stopPropagation()}
     >
-      <span className="relative flex h-2 w-2">
-        <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+      <span className="agents-live-run-dot">
+        <span className="agents-live-run-dot-ping" />
       </span>
-      <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400">
+      <span className="agents-live-run-label">
         Live{liveCount > 1 ? ` (${liveCount})` : ""}
       </span>
     </Link>

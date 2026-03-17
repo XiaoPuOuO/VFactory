@@ -7,10 +7,11 @@ import { timeAgo } from "../lib/timeAgo";
 import type { Approval, Agent } from "@paperclipai/shared";
 
 function statusIcon(status: string) {
-  if (status === "approved") return <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />;
-  if (status === "rejected") return <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />;
-  if (status === "revision_requested") return <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />;
-  if (status === "pending") return <Clock className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />;
+  const base = "ui-approval-card-status-icon";
+  if (status === "approved") return <CheckCircle2 className={`${base} approved`} />;
+  if (status === "rejected") return <XCircle className={`${base} rejected`} />;
+  if (status === "revision_requested") return <Clock className={`${base} revision`} />;
+  if (status === "pending") return <Clock className={`${base} pending`} />;
   return null;
 }
 
@@ -35,43 +36,39 @@ export function ApprovalCard({
   const label = typeLabel[approval.type] ?? approval.type;
 
   return (
-    <div className="border border-border rounded-lg p-4 space-y-0">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-sm">{label}</span>
+    <div className="ui-approval-card">
+      <div className="ui-approval-card-header">
+        <div className="ui-approval-card-header-left">
+          <Icon className="ui-approval-card-type-icon" />
+          <div className="ui-approval-card-header-title-wrap">
+            <span className="ui-approval-card-label">{label}</span>
             {requesterAgent && (
-              <span className="text-xs text-muted-foreground">
-                requested by <Identity name={requesterAgent.name} size="sm" className="inline-flex" />
+              <span className="ui-approval-card-meta">
+                requested by <Identity name={requesterAgent.name} size="sm" className="ui-approval-card-identity-inline" />
               </span>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="ui-approval-card-header-right">
           {statusIcon(approval.status)}
-          <span className="text-xs text-muted-foreground capitalize">{approval.status}</span>
-          <span className="text-xs text-muted-foreground">· {timeAgo(approval.createdAt)}</span>
+          <span className="ui-approval-card-meta ui-approval-card-status-text">{approval.status}</span>
+          <span className="ui-approval-card-meta">· {timeAgo(approval.createdAt)}</span>
         </div>
       </div>
 
-      {/* Payload */}
       <ApprovalPayloadRenderer type={approval.type} payload={approval.payload} />
 
-      {/* Decision note */}
       {approval.decisionNote && (
-        <div className="mt-3 text-xs text-muted-foreground italic border-t border-border pt-2">
+        <div className="ui-approval-card-decision-note">
           Note: {approval.decisionNote}
         </div>
       )}
 
-      {/* Actions */}
       {(approval.status === "pending" || approval.status === "revision_requested") && (
-        <div className="flex gap-2 mt-4 pt-3 border-t border-border">
+        <div className="ui-approval-card-actions">
           <Button
             size="sm"
-            className="bg-green-700 hover:bg-green-600 text-white"
+            className="ui-approval-card-approve-btn"
             onClick={onApprove}
             disabled={isPending}
           >
@@ -87,13 +84,13 @@ export function ApprovalCard({
           </Button>
         </div>
       )}
-      <div className="mt-3">
+      <div className="ui-approval-card-detail-wrap">
         {detailLink ? (
-          <Button variant="ghost" size="sm" className="text-xs px-0" asChild>
+          <Button variant="ghost" size="sm" className="ui-approval-card-detail-btn" asChild>
             <Link to={detailLink}>View details</Link>
           </Button>
         ) : (
-          <Button variant="ghost" size="sm" className="text-xs px-0" onClick={onOpen}>
+          <Button variant="ghost" size="sm" className="ui-approval-card-detail-btn" onClick={onOpen}>
             View details
           </Button>
         )}

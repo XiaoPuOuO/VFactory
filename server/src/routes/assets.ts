@@ -5,7 +5,13 @@ import { createAssetImageMetadataSchema } from "@paperclipai/shared";
 import type { StorageService } from "../storage/types.js";
 import { assetService, logActivity } from "../services/index.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
-import { isAllowedContentType, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
+import {
+  isAllowedContentType,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ICON_BYTES,
+  isAllowedIconContentType,
+  validateIconMagicBytes,
+} from "../attachment-types.js";
 
 export function assetRoutes(db: Db, storage: StorageService) {
   const router = Router();
@@ -13,6 +19,10 @@ export function assetRoutes(db: Db, storage: StorageService) {
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_ATTACHMENT_BYTES, files: 1 },
+  });
+  const iconUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_ICON_BYTES, files: 1 },
   });
 
   async function runSingleFileUpload(req: Request, res: Response) {
@@ -26,7 +36,7 @@ export function assetRoutes(db: Db, storage: StorageService) {
 
   router.post("/companies/:companyId/assets/images", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
 
     try {
       await runSingleFileUpload(req, res);
@@ -118,6 +128,107 @@ export function assetRoutes(db: Db, storage: StorageService) {
     });
   });
 
+  /** 公司/專案圖示上傳：僅允許 PNG/JPEG、較小體積、magic bytes 驗證防木馬。 */
+  router.post("/companies/:companyId/assets/icon", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyAccess(req, companyId, db);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        iconUpload.single("file")(req, res, (err: unknown) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    } catch (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          res.status(422).json({ error: `Icon must be under ${MAX_ICON_BYTES} bytes` });
+          return;
+        }
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
+
+    const file = (req as Request & { file?: { mimetype: string; buffer: Buffer; originalname: string } }).file;
+    if (!file) {
+      res.status(400).json({ error: "Missing file field 'file'" });
+      return;
+    }
+
+    const contentType = (file.mimetype || "").toLowerCase();
+    if (!isAllowedIconContentType(contentType)) {
+      res.status(422).json({ error: "Icon must be PNG or JPEG only" });
+      return;
+    }
+    if (file.buffer.length <= 0) {
+      res.status(422).json({ error: "Image is empty" });
+      return;
+    }
+
+    const magic = validateIconMagicBytes(file.buffer, contentType);
+    if (!magic.ok) {
+      res.status(422).json({ error: magic.error });
+      return;
+    }
+
+    const namespaceSuffix = "icon";
+    const actor = getActorInfo(req);
+    const stored = await storage.putFile({
+      companyId,
+      namespace: `assets/${namespaceSuffix}`,
+      originalFilename: file.originalname || null,
+      contentType,
+      body: file.buffer,
+    });
+
+    const asset = await svc.create(companyId, {
+      provider: stored.provider,
+      objectKey: stored.objectKey,
+      contentType: stored.contentType,
+      byteSize: stored.byteSize,
+      sha256: stored.sha256,
+      originalFilename: stored.originalFilename,
+      createdByAgentId: actor.agentId,
+      createdByUserId: actor.actorType === "user" ? actor.actorId : null,
+    });
+
+    await logActivity(db, {
+      companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      runId: actor.runId,
+      action: "asset.created",
+      entityType: "asset",
+      entityId: asset.id,
+      details: {
+        originalFilename: asset.originalFilename,
+        contentType: asset.contentType,
+        byteSize: asset.byteSize,
+        namespace: namespaceSuffix,
+      },
+    });
+
+    res.status(201).json({
+      assetId: asset.id,
+      companyId: asset.companyId,
+      provider: asset.provider,
+      objectKey: asset.objectKey,
+      contentType: asset.contentType,
+      byteSize: asset.byteSize,
+      sha256: asset.sha256,
+      originalFilename: asset.originalFilename,
+      createdByAgentId: asset.createdByAgentId,
+      createdByUserId: asset.createdByUserId,
+      createdAt: asset.createdAt,
+      updatedAt: asset.updatedAt,
+      contentPath: `/api/assets/${asset.id}/content`,
+    });
+  });
+
   router.get("/assets/:assetId/content", async (req, res, next) => {
     const assetId = req.params.assetId as string;
     const asset = await svc.getById(assetId);
@@ -125,7 +236,7 @@ export function assetRoutes(db: Db, storage: StorageService) {
       res.status(404).json({ error: "Asset not found" });
       return;
     }
-    assertCompanyAccess(req, asset.companyId);
+    await assertCompanyAccess(req, asset.companyId, db);
 
     const object = await storage.getObject(asset.companyId, asset.objectKey);
     res.setHeader("Content-Type", asset.contentType || object.contentType || "application/octet-stream");

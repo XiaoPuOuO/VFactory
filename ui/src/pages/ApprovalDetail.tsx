@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, ChevronRight, Sparkles } from "lucide-react";
 import type { ApprovalComment } from "@paperclipai/shared";
 import { MarkdownBody } from "../components/MarkdownBody";
+import "./ApprovalDetail.css";
 
 export function ApprovalDetail() {
   const { approvalId } = useParams<{ approvalId: string }>();
@@ -142,7 +143,7 @@ export function ApprovalDetail() {
   });
 
   if (isLoading) return <PageSkeleton variant="detail" />;
-  if (!approval) return <p className="text-sm text-muted-foreground">Approval not found.</p>;
+  if (!approval) return <p className="approval-detail-not-found">Approval not found.</p>;
 
   const payload = approval.payload as Record<string, unknown>;
   const linkedAgentId = typeof payload.agentId === "string" ? payload.agentId : null;
@@ -170,18 +171,18 @@ export function ApprovalDetail() {
           };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="approval-detail-page">
       {showApprovedBanner && (
-        <div className="border border-green-300 dark:border-green-700/40 bg-green-50 dark:bg-green-900/20 rounded-lg px-4 py-3 animate-in fade-in zoom-in-95 duration-300">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-2">
-              <div className="relative mt-0.5">
-                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-300" />
-                <Sparkles className="h-3 w-3 text-green-500 dark:text-green-200 absolute -right-2 -top-1 animate-pulse" />
+        <div className="approval-detail-banner">
+          <div className="approval-detail-banner-inner">
+            <div className="approval-detail-banner-left">
+              <div className="approval-detail-banner-icon-wrap">
+                <CheckCircle2 className="approval-detail-banner-icon" />
+                <Sparkles className="approval-detail-banner-sparkle" />
               </div>
               <div>
-                <p className="text-sm text-green-800 dark:text-green-100 font-medium">Approval confirmed</p>
-                <p className="text-xs text-green-700 dark:text-green-200/90">
+                <p className="approval-detail-banner-title">Approval confirmed</p>
+                <p className="approval-detail-banner-desc">
                   Requesting agent was notified to review this approval and linked issues.
                 </p>
               </div>
@@ -189,7 +190,7 @@ export function ApprovalDetail() {
             <Button
               size="sm"
               variant="outline"
-              className="border-green-400 dark:border-green-600/50 text-green-800 dark:text-green-100 hover:bg-green-100 dark:hover:bg-green-900/30"
+              className="approval-detail-banner-cta"
               onClick={() => navigate(resolvedCta.to)}
             >
               {resolvedCta.label}
@@ -197,21 +198,21 @@ export function ApprovalDetail() {
           </div>
         </div>
       )}
-      <div className="border border-border rounded-lg p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TypeIcon className="h-5 w-5 text-muted-foreground shrink-0" />
+      <div className="approval-detail-card">
+        <div className="approval-detail-card-header">
+          <div className="approval-detail-card-header-left">
+            <TypeIcon className="approval-detail-card-type-icon" />
             <div>
-              <h2 className="text-lg font-semibold">{typeLabel[approval.type] ?? approval.type.replace(/_/g, " ")}</h2>
-              <p className="text-xs text-muted-foreground font-mono">{approval.id}</p>
+              <h2 className="approval-detail-card-title">{typeLabel[approval.type] ?? approval.type.replace(/_/g, " ")}</h2>
+              <p className="approval-detail-card-id">{approval.id}</p>
             </div>
           </div>
           <StatusBadge status={approval.status} />
         </div>
-        <div className="text-sm space-y-1">
+        <div className="approval-detail-body">
           {approval.requestedByAgentId && (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-xs">Requested by</span>
+            <div className="approval-detail-requested-by">
+              <span className="approval-detail-requested-by-label">Requested by</span>
               <Identity
                 name={agentNameById.get(approval.requestedByAgentId) ?? approval.requestedByAgentId.slice(0, 8)}
                 size="sm"
@@ -221,50 +222,50 @@ export function ApprovalDetail() {
           <ApprovalPayloadRenderer type={approval.type} payload={payload} />
           <button
             type="button"
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-2"
+            className={`approval-detail-toggle-raw ${showRawPayload ? "expanded" : ""}`}
             onClick={() => setShowRawPayload((v) => !v)}
           >
-            <ChevronRight className={`h-3 w-3 transition-transform ${showRawPayload ? "rotate-90" : ""}`} />
+            <ChevronRight />
             See full request
           </button>
           {showRawPayload && (
-            <pre className="text-xs bg-muted/40 rounded-md p-3 overflow-x-auto">
+            <pre className="approval-detail-raw-payload">
               {JSON.stringify(payload, null, 2)}
             </pre>
           )}
           {approval.decisionNote && (
-            <p className="text-xs text-muted-foreground">Decision note: {approval.decisionNote}</p>
+            <p className="approval-detail-decision-note">Decision note: {approval.decisionNote}</p>
           )}
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="approval-detail-error">{error}</p>}
         {linkedIssues && linkedIssues.length > 0 && (
-          <div className="pt-2 border-t border-border/60">
-            <p className="text-xs text-muted-foreground mb-1.5">Linked Issues</p>
-            <div className="space-y-1.5">
+          <div className="approval-detail-linked">
+            <p className="approval-detail-linked-title">Linked Issues</p>
+            <div className="approval-detail-linked-list">
               {linkedIssues.map((issue) => (
                 <Link
                   key={issue.id}
                   to={`/issues/${issue.identifier ?? issue.id}`}
-                  className="block text-xs rounded border border-border/70 px-2 py-1.5 hover:bg-accent/20"
+                  className="approval-detail-linked-item"
                 >
-                  <span className="font-mono text-muted-foreground mr-2">
+                  <span className="approval-detail-linked-item-id">
                     {issue.identifier ?? issue.id.slice(0, 8)}
                   </span>
                   <span>{issue.title}</span>
                 </Link>
               ))}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-2">
+            <p className="approval-detail-linked-note">
               Linked issues remain open until the requesting agent follows up and closes them.
             </p>
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="approval-detail-actions">
           {isActionable && (
             <>
               <Button
                 size="sm"
-                className="bg-green-700 hover:bg-green-600 text-white"
+                className="approval-detail-btn-approve"
                 onClick={() => approveMutation.mutate()}
                 disabled={approveMutation.isPending}
               >
@@ -304,7 +305,7 @@ export function ApprovalDetail() {
             <Button
               size="sm"
               variant="outline"
-              className="text-destructive border-destructive/40"
+              className="approval-detail-btn-destructive-outline"
               onClick={() => {
                 if (!window.confirm("Delete this disapproved agent? This cannot be undone.")) return;
                 deleteAgentMutation.mutate(linkedAgentId);
@@ -317,14 +318,14 @@ export function ApprovalDetail() {
         </div>
       </div>
 
-      <div className="border border-border rounded-lg p-4 space-y-3">
-        <h3 className="text-sm font-medium">Comments ({comments?.length ?? 0})</h3>
-        <div className="space-y-2">
+      <div className="approval-detail-card">
+        <h3 className="approval-detail-comments-title">Comments ({comments?.length ?? 0})</h3>
+        <div className="approval-detail-comments-list">
           {(comments ?? []).map((comment: ApprovalComment) => (
-            <div key={comment.id} className="border border-border/60 rounded-md p-3">
-              <div className="flex items-center justify-between mb-1">
+            <div key={comment.id} className="approval-detail-comment">
+              <div className="approval-detail-comment-header">
                 {comment.authorAgentId ? (
-                  <Link to={`/agents/${comment.authorAgentId}`} className="hover:underline">
+                  <Link to={`/agents/${comment.authorAgentId}`} className="approval-detail-comment-author-link">
                     <Identity
                       name={agentNameById.get(comment.authorAgentId) ?? comment.authorAgentId.slice(0, 8)}
                       size="sm"
@@ -333,7 +334,7 @@ export function ApprovalDetail() {
                 ) : (
                   <Identity name="Board" size="sm" />
                 )}
-                <span className="text-xs text-muted-foreground">
+                <span className="approval-detail-comment-time">
                   {new Date(comment.createdAt).toLocaleString()}
                 </span>
               </div>
@@ -347,7 +348,7 @@ export function ApprovalDetail() {
           placeholder="Add a comment..."
           rows={3}
         />
-        <div className="flex justify-end">
+        <div className="approval-detail-comment-actions">
           <Button
             size="sm"
             onClick={() => addCommentMutation.mutate()}

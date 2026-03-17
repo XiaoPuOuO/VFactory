@@ -13,7 +13,7 @@ export function costRoutes(db: Db) {
 
   router.post("/companies/:companyId/cost-events", validate(createCostEventSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
 
     if (req.actor.type === "agent" && req.actor.agentId !== req.body.agentId) {
       res.status(403).json({ error: "Agent can only report its own costs" });
@@ -48,7 +48,7 @@ export function costRoutes(db: Db) {
 
   router.get("/companies/:companyId/costs/summary", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const range = parseDateRange(req.query);
     const summary = await costs.summary(companyId, range);
     res.json(summary);
@@ -56,7 +56,7 @@ export function costRoutes(db: Db) {
 
   router.get("/companies/:companyId/costs/by-agent", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const range = parseDateRange(req.query);
     const rows = await costs.byAgent(companyId, range);
     res.json(rows);
@@ -64,7 +64,7 @@ export function costRoutes(db: Db) {
 
   router.get("/companies/:companyId/costs/by-project", async (req, res) => {
     const companyId = req.params.companyId as string;
-    assertCompanyAccess(req, companyId);
+    await assertCompanyAccess(req, companyId, db);
     const range = parseDateRange(req.query);
     const rows = await costs.byProject(companyId, range);
     res.json(rows);

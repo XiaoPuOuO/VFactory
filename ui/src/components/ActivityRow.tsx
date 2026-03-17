@@ -1,44 +1,44 @@
 import { Link } from "@/lib/router";
+import { useTranslation } from "react-i18next";
 import { Identity } from "./Identity";
-import { timeAgo } from "../lib/timeAgo";
-import { cn } from "../lib/utils";
+import { formatRelativeTime } from "../lib/formatRelativeTime";
 import { deriveProjectUrlKey, type ActivityEvent, type Agent } from "@paperclipai/shared";
 
-const ACTION_VERBS: Record<string, string> = {
-  "issue.created": "created",
-  "issue.updated": "updated",
-  "issue.checked_out": "checked out",
-  "issue.released": "released",
-  "issue.comment_added": "commented on",
-  "issue.attachment_added": "attached file to",
-  "issue.attachment_removed": "removed attachment from",
-  "issue.commented": "commented on",
-  "issue.deleted": "deleted",
-  "agent.created": "created",
-  "agent.updated": "updated",
-  "agent.paused": "paused",
-  "agent.resumed": "resumed",
-  "agent.terminated": "terminated",
-  "agent.key_created": "created API key for",
-  "agent.budget_updated": "updated budget for",
-  "agent.runtime_session_reset": "reset session for",
-  "heartbeat.invoked": "invoked heartbeat for",
-  "heartbeat.cancelled": "cancelled heartbeat for",
-  "approval.created": "requested approval",
-  "approval.approved": "approved",
-  "approval.rejected": "rejected",
-  "project.created": "created",
-  "project.updated": "updated",
-  "project.deleted": "deleted",
-  "goal.created": "created",
-  "goal.updated": "updated",
-  "goal.deleted": "deleted",
-  "cost.reported": "reported cost for",
-  "cost.recorded": "recorded cost for",
-  "company.created": "created company",
-  "company.updated": "updated company",
-  "company.archived": "archived",
-  "company.budget_updated": "updated budget for",
+const ACTION_VERB_KEYS: Record<string, string> = {
+  "issue.created": "activity.created",
+  "issue.updated": "activity.updated",
+  "issue.checked_out": "activity.checkedOut",
+  "issue.released": "activity.released",
+  "issue.comment_added": "activity.commentedOn",
+  "issue.attachment_added": "activity.attachedFileTo",
+  "issue.attachment_removed": "activity.removedAttachmentFrom",
+  "issue.commented": "activity.commentedOn",
+  "issue.deleted": "activity.deleted",
+  "agent.created": "activity.created",
+  "agent.updated": "activity.updated",
+  "agent.paused": "activity.paused",
+  "agent.resumed": "activity.resumed",
+  "agent.terminated": "activity.terminated",
+  "agent.key_created": "activity.createdApiKeyFor",
+  "agent.budget_updated": "activity.updatedBudgetFor",
+  "agent.runtime_session_reset": "activity.resetSessionFor",
+  "heartbeat.invoked": "activity.invokedHeartbeatFor",
+  "heartbeat.cancelled": "activity.cancelledHeartbeatFor",
+  "approval.created": "activity.requestedApproval",
+  "approval.approved": "activity.approved",
+  "approval.rejected": "activity.rejected",
+  "project.created": "activity.created",
+  "project.updated": "activity.updated",
+  "project.deleted": "activity.deleted",
+  "goal.created": "activity.created",
+  "goal.updated": "activity.updated",
+  "goal.deleted": "activity.deleted",
+  "cost.reported": "activity.reportedCostFor",
+  "cost.recorded": "activity.recordedCostFor",
+  "company.created": "activity.createdCompany",
+  "company.updated": "activity.updatedCompany",
+  "company.archived": "activity.archived",
+  "company.budget_updated": "activity.updatedBudgetFor",
 };
 
 function humanizeValue(value: unknown): string {
@@ -46,23 +46,28 @@ function humanizeValue(value: unknown): string {
   return value.replace(/_/g, " ");
 }
 
-function formatVerb(action: string, details?: Record<string, unknown> | null): string {
+function formatVerb(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  action: string,
+  details?: Record<string, unknown> | null
+): string {
   if (action === "issue.updated" && details) {
     const previous = (details._previous ?? {}) as Record<string, unknown>;
     if (details.status !== undefined) {
       const from = previous.status;
       return from
-        ? `changed status from ${humanizeValue(from)} to ${humanizeValue(details.status)} on`
-        : `changed status to ${humanizeValue(details.status)} on`;
+        ? t("activity.changedStatusFromToOn", { from: humanizeValue(from), to: humanizeValue(details.status) })
+        : t("activity.changedStatusToOn", { status: humanizeValue(details.status) });
     }
     if (details.priority !== undefined) {
       const from = previous.priority;
       return from
-        ? `changed priority from ${humanizeValue(from)} to ${humanizeValue(details.priority)} on`
-        : `changed priority to ${humanizeValue(details.priority)} on`;
+        ? t("activity.changedPriorityFromToOn", { from: humanizeValue(from), to: humanizeValue(details.priority) })
+        : t("activity.changedPriorityToOn", { priority: humanizeValue(details.priority) });
     }
   }
-  return ACTION_VERBS[action] ?? action.replace(/[._]/g, " ");
+  const key = ACTION_VERB_KEYS[action];
+  return key ? t(key) : action.replace(/[._]/g, " ");
 }
 
 function entityLink(entityType: string, entityId: string, name?: string | null): string | null {
@@ -85,7 +90,8 @@ interface ActivityRowProps {
 }
 
 export function ActivityRow({ event, agentMap, entityNameMap, entityTitleMap, className }: ActivityRowProps) {
-  const verb = formatVerb(event.action, event.details);
+  const { t } = useTranslation();
+  const verb = formatVerb(t, event.action, event.details);
 
   const isHeartbeatEvent = event.entityType === "heartbeat_run";
   const heartbeatAgentId = isHeartbeatEvent
@@ -103,41 +109,29 @@ export function ActivityRow({ event, agentMap, entityNameMap, entityTitleMap, cl
     : entityLink(event.entityType, event.entityId, name);
 
   const actor = event.actorType === "agent" ? agentMap.get(event.actorId) : null;
-  const actorName = actor?.name ?? (event.actorType === "system" ? "System" : event.actorType === "user" ? "Board" : event.actorId || "Unknown");
+  const actorName = actor?.name ?? (event.actorType === "system" ? t("activity.system") : event.actorType === "user" ? t("activity.board") : event.actorId || t("activity.unknown"));
 
   const inner = (
-    <div className="flex gap-3">
-      <p className="flex-1 min-w-0 truncate">
-        <Identity
-          name={actorName}
-          size="xs"
-          className="align-baseline"
-        />
-        <span className="text-muted-foreground ml-1">{verb} </span>
-        {name && <span className="font-medium">{name}</span>}
-        {entityTitle && <span className="text-muted-foreground ml-1">— {entityTitle}</span>}
+    <>
+      <p className="dashboard-activity-row-body">
+        <Identity name={actorName} size="xs" className="activity-row-identity-baseline" />
+        <span className="dashboard-activity-row-verb">{verb} </span>
+        {name && <span className="dashboard-activity-row-name">{name}</span>}
+        {entityTitle && <span className="dashboard-activity-row-verb">— {entityTitle}</span>}
       </p>
-      <span className="text-xs text-muted-foreground shrink-0 pt-0.5">{timeAgo(event.createdAt)}</span>
-    </div>
+      <span className="dashboard-activity-row-time">{formatRelativeTime(t, event.createdAt)}</span>
+    </>
   );
 
-  const classes = cn(
-    "px-4 py-2 text-sm",
-    link && "cursor-pointer hover:bg-accent/50 transition-colors",
-    className,
-  );
+  const rowClasses = ["dashboard-activity-row", link && "link", className].filter(Boolean).join(" ");
 
   if (link) {
     return (
-      <Link to={link} className={cn(classes, "no-underline text-inherit block")}>
+      <Link to={link} className={rowClasses}>
         {inner}
       </Link>
     );
   }
 
-  return (
-    <div className={classes}>
-      {inner}
-    </div>
-  );
+  return <div className={rowClasses}>{inner}</div>;
 }

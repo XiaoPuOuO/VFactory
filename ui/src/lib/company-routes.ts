@@ -1,12 +1,15 @@
 const BOARD_ROUTE_ROOTS = new Set([
+  "account",
   "dashboard",
   "companies",
   "company",
   "org",
+  "goal-map",
   "agents",
   "projects",
   "issues",
   "goals",
+  "schedules",
   "approvals",
   "costs",
   "activity",
@@ -14,7 +17,7 @@ const BOARD_ROUTE_ROOTS = new Set([
   "design-guide",
 ]);
 
-const GLOBAL_ROUTE_ROOTS = new Set(["auth", "invite", "board-claim", "docs", "instance"]);
+const GLOBAL_ROUTE_ROOTS = new Set(["auth", "invite", "board-claim", "docs", "instance", "landing"]);
 
 export function normalizeCompanyPrefix(prefix: string): string {
   return prefix.trim().toUpperCase();
@@ -70,16 +73,21 @@ export function applyCompanyPrefix(path: string, companyPrefix: string | null | 
   return `/${prefix}${pathname}${search}${hash}`;
 }
 
+/**
+ * 從 path 去掉開頭的 company prefix 段，只保留 board/global 路徑。
+ * 例如 /HOPA/CMP/dashboard → /dashboard，避免切換公司時重複疊加 prefix。
+ */
 export function toCompanyRelativePath(path: string): string {
   const { pathname, search, hash } = splitPath(path);
   const segments = pathname.split("/").filter(Boolean);
 
-  if (segments.length >= 2) {
-    const second = segments[1]!.toLowerCase();
-    if (!GLOBAL_ROUTE_ROOTS.has(segments[0]!.toLowerCase()) && BOARD_ROUTE_ROOTS.has(second)) {
-      return `/${segments.slice(1).join("/")}${search}${hash}`;
-    }
+  const rootIndex = segments.findIndex(
+    (s) =>
+      GLOBAL_ROUTE_ROOTS.has(s.toLowerCase()) || BOARD_ROUTE_ROOTS.has(s.toLowerCase()),
+  );
+  if (rootIndex >= 0) {
+    return `/${segments.slice(rootIndex).join("/")}${search}${hash}`;
   }
 
-  return `${pathname}${search}${hash}`;
+  return pathname ? `${pathname}${search}${hash}` : `/dashboard${search}${hash}`;
 }

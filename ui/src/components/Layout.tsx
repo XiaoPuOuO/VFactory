@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Moon, Settings, Sun } from "lucide-react";
+import { Moon, Settings, Sun, User } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@/lib/router";
 import { CompanyRail } from "./CompanyRail";
 import { Sidebar } from "./Sidebar";
@@ -23,12 +24,15 @@ import { useTheme } from "../context/ThemeContext";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useCompanyPageMemory } from "../hooks/useCompanyPageMemory";
 import { healthApi } from "../api/health";
+import { meApi, canAccessInstanceSettings } from "../api/me";
 import { queryKeys } from "../lib/queryKeys";
-import { cn } from "../lib/utils";
 import { NotFoundPage } from "../pages/NotFound";
 import { Button } from "@/components/ui/button";
 
+import "../styles/board.css";
+
 export function Layout() {
+  const { t } = useTranslation();
   const { sidebarOpen, setSidebarOpen, toggleSidebar, isMobile, sidebarWidth, setSidebarWidth } = useSidebar();
   const { openNewIssue, openOnboarding } = useDialog();
   const { togglePanelVisible } = usePanel();
@@ -62,6 +66,12 @@ export function Layout() {
     queryFn: () => healthApi.get(),
     retry: false,
   });
+  const { data: meProfile } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => meApi.get(),
+    retry: false,
+  });
+  const showSettingsButton = canAccessInstanceSettings(meProfile);
 
   useEffect(() => {
     if (companiesLoading || onboardingTriggered.current) return;
@@ -79,15 +89,32 @@ export function Layout() {
       const fallback = (selectedCompanyId ? companies.find((company) => company.id === selectedCompanyId) : null)
         ?? companies[0]
         ?? null;
-      if (fallback && selectedCompanyId !== fallback.id) {
-        setSelectedCompanyId(fallback.id, { source: "route_sync" });
+      if (fallback) {
+        if (selectedCompanyId !== fallback.id) {
+          setSelectedCompanyId(fallback.id, { source: "route_sync" });
+        }
+        if (companyPrefix) {
+          navigate(`/${fallback.issuePrefix}/dashboard${location.search}${location.hash}`, {
+            replace: true,
+          });
+          return;
+        }
       }
       return;
     }
 
     if (companyPrefix !== matchedCompany.issuePrefix) {
-      const suffix = location.pathname.replace(/^\/[^/]+/, "");
-      navigate(`/${matchedCompany.issuePrefix}${suffix}${location.search}`, { replace: true });
+      navigate(`/${matchedCompany.issuePrefix}/dashboard${location.search}${location.hash}`, { replace: true });
+      return;
+    }
+
+    // 偵測 URL 重複疊加（例如 /HOPA/CMP/HOPA/CMP/...），一律導回 dashboard
+    const prefixWithSlash = `/${matchedCompany.issuePrefix}/`;
+    if (
+      location.pathname.startsWith(prefixWithSlash) &&
+      location.pathname.indexOf(prefixWithSlash, prefixWithSlash.length) !== -1
+    ) {
+      navigate(`/${matchedCompany.issuePrefix}/dashboard${location.search}${location.hash}`, { replace: true });
       return;
     }
 
@@ -241,150 +268,129 @@ export function Layout() {
 
   return (
     <div
-      className={cn(
-        "bg-background text-foreground pt-[env(safe-area-inset-top)]",
-        isMobile ? "min-h-dvh" : "flex h-dvh overflow-hidden",
-      )}
+      className={`board-root ${isMobile ? "board-root-mobile" : "board-root-desktop"}`}
     >
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        Skip to Main Content
+      <a href="#main-content" className="board-skip-link">
+        {t("common.skipToMainContent")}
       </a>
-      {/* Mobile backdrop */}
       {isMobile && sidebarOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-black/50"
+          className="board-backdrop"
           onClick={() => setSidebarOpen(false)}
-          aria-label="Close sidebar"
+          aria-label={t("common.closeSidebar")}
         />
       )}
 
-      {/* Combined sidebar area: company rail + inner sidebar + docs bar */}
       {isMobile ? (
-        <div
-          className={cn(
-            "fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden pt-[env(safe-area-inset-top)] transition-transform duration-100 ease-out",
-            sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          )}
-        >
-          <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className={`board-sidebar-wrap-mobile ${sidebarOpen ? "open" : "closed"}`}>
+          <div className="board-sidebar-inner">
             <CompanyRail />
             {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
           </div>
-          <div className="border-t border-r border-border px-3 py-2 bg-background">
-            <div className="flex items-center gap-1">
+          <div className="board-sidebar-footer">
+            <div className="board-sidebar-footer-btn-wrap">
               <SidebarNavItem
-                to="/docs"
-                label="Documentation"
-                icon={BookOpen}
-                className="flex-1 min-w-0"
+                to="/account"
+                label={t("nav.account")}
+                icon={User}
               />
-              <Button variant="ghost" size="icon-sm" className="text-muted-foreground shrink-0" asChild>
+            </div>
+            {showSettingsButton && (
+              <Button variant="ghost" size="icon-sm" className="board-sidebar-footer-icon-btn" asChild>
                 <Link
                   to="/instance/settings"
-                  aria-label="Instance settings"
-                  title="Instance settings"
+                  aria-label={t("nav.instanceSettings")}
+                  title={t("nav.instanceSettings")}
                   onClick={() => {
                     if (isMobile) setSidebarOpen(false);
                   }}
                 >
-                  <Settings className="h-4 w-4" />
+                  <Settings />
                 </Link>
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground shrink-0"
-                onClick={toggleTheme}
-                aria-label={`Switch to ${nextTheme} mode`}
-                title={`Switch to ${nextTheme} mode`}
-              >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </Button>
-            </div>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="board-sidebar-footer-icon-btn"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? t("nav.switchToLightMode") : t("nav.switchToDarkMode")}
+              title={theme === "dark" ? t("nav.switchToLightMode") : t("nav.switchToDarkMode")}
+            >
+              {theme === "dark" ? <Sun /> : <Moon />}
+            </Button>
           </div>
         </div>
       ) : (
         <>
-          <div className="flex flex-col shrink-0 h-full">
-            <div className="flex flex-1 min-h-0">
+          <div className="board-sidebar-wrap-desktop">
+            <div className="board-sidebar-inner">
               <CompanyRail />
               <div
-                className="overflow-hidden transition-[width] duration-100 ease-out"
+                className="board-sidebar-collapsible"
                 style={{ width: sidebarOpen ? sidebarWidth : 0 }}
               >
                 {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
               </div>
             </div>
-            <div className="border-t border-r border-border px-3 py-2">
-              <div className="flex items-center gap-1">
+            <div className="board-sidebar-footer">
+              <div className="board-sidebar-footer-btn-wrap">
                 <SidebarNavItem
-                  to="/docs"
-                  label="Documentation"
-                  icon={BookOpen}
-                  className="flex-1 min-w-0"
+                  to="/account"
+                  label={t("nav.account")}
+                  icon={User}
                 />
-                <Button variant="ghost" size="icon-sm" className="text-muted-foreground shrink-0" asChild>
+              </div>
+              {showSettingsButton && (
+                <Button variant="ghost" size="icon-sm" className="board-sidebar-footer-icon-btn" asChild>
                   <Link
                     to="/instance/settings"
-                    aria-label="Instance settings"
-                    title="Instance settings"
+                    aria-label={t("nav.instanceSettings")}
+                    title={t("nav.instanceSettings")}
                     onClick={() => {
                       if (isMobile) setSidebarOpen(false);
                     }}
                   >
-                    <Settings className="h-4 w-4" />
+                    <Settings />
                   </Link>
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground shrink-0"
-                  onClick={toggleTheme}
-                  aria-label={`Switch to ${nextTheme} mode`}
-                  title={`Switch to ${nextTheme} mode`}
-                >
-                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                </Button>
-              </div>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="board-sidebar-footer-icon-btn"
+                onClick={toggleTheme}
+                aria-label={`Switch to ${nextTheme} mode`}
+                title={`Switch to ${nextTheme} mode`}
+              >
+                {theme === "dark" ? <Sun /> : <Moon />}
+              </Button>
             </div>
           </div>
 
-          {/* 可拖動分隔器：僅在桌面版且側邊欄開啟時顯示 */}
           {sidebarOpen && (
             <button
               type="button"
-              className="shrink-0 w-1 h-full bg-border hover:bg-primary/20 focus:bg-primary/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 cursor-col-resize transition-colors"
-              style={{ minWidth: 4 }}
+              className="board-resize-handle"
               onPointerDown={onResizePointerDown}
-              aria-label="拖動以調整側邊欄寬度"
+              aria-label={t("common.resizeSidebar")}
             />
           )}
         </>
       )}
 
-      {/* Main content */}
-      <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "h-full flex-1")}>
-        <div
-          className={cn(
-            isMobile && "sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85",
-          )}
-        >
+      <div className={`board-main-wrap ${isMobile ? "board-main-wrap-mobile" : "board-main-wrap-desktop"}`}>
+        <div className={isMobile ? "board-breadcrumb-bar-mobile-sticky" : ""}>
           <BreadcrumbBar />
         </div>
-        <div className={cn(isMobile ? "block" : "flex flex-1 min-h-0")}>
+        <div className={["board-content-row", isMobile && "board-content-row-mobile"].filter(Boolean).join(" ")}>
           <main
             id="main-content"
             tabIndex={-1}
-            className={cn(
-              "flex-1 p-4 md:p-6",
-              isMobile ? "overflow-visible pb-[calc(5rem+env(safe-area-inset-bottom))]" : "overflow-auto",
-            )}
+            className={["board-main", isMobile && "board-main-mobile"].filter(Boolean).join(" ")}
           >
             {hasUnknownCompanyPrefix ? (
               <NotFoundPage

@@ -67,6 +67,8 @@ const projectFields = {
   leadAgentId: z.string().uuid().optional().nullable(),
   targetDate: z.string().optional().nullable(),
   color: z.string().optional().nullable(),
+  /** 專案圖示 asset id；設為 null 則清除圖示。 */
+  iconAssetId: z.string().uuid().optional().nullable(),
   executionWorkspacePolicy: projectExecutionWorkspacePolicySchema.optional().nullable(),
   archivedAt: z.string().datetime().optional().nullable(),
 };

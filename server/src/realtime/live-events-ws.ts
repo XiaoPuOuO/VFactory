@@ -4,7 +4,13 @@ import { createRequire } from "node:module";
 import type { Duplex } from "node:stream";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agentApiKeys, companyMemberships, instanceUserRoles } from "@paperclipai/db";
+import {
+  agentApiKeys,
+  authUsers,
+  companyMemberships,
+  instanceGroupPermissions,
+  instanceGroups,
+} from "@paperclipai/db";
 import type { DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "../middleware/logger.js";
@@ -106,16 +112,8 @@ async function authorizeUpgrade(
   const authToken = parseBearerToken(req.headers.authorization);
   const token = authToken ?? (queryToken.length > 0 ? queryToken : null);
 
-  // Browser board context has no bearer token in local_trusted and authenticated modes.
+  // Browser board context has no bearer token; resolve session when authenticated.
   if (!token) {
-    if (opts.deploymentMode === "local_trusted") {
-      return {
-        companyId,
-        actorType: "board",
-        actorId: "board",
-      };
-    }
-
     if (opts.deploymentMode !== "authenticated" || !opts.resolveSessionFromHeaders) {
       return null;
     }
@@ -124,12 +122,7 @@ async function authorizeUpgrade(
     const userId = session?.user?.id;
     if (!userId) return null;
 
-    const [roleRow, memberships] = await Promise.all([
-      db
-        .select({ id: instanceUserRoles.id })
-        .from(instanceUserRoles)
-        .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
-        .then((rows) => rows[0] ?? null),
+    const [memberships, instanceFullAccess] = await Promise.all([
       db
         .select({ companyId: companyMemberships.companyId })
         .from(companyMemberships)
@@ -140,10 +133,27 @@ async function authorizeUpgrade(
             eq(companyMemberships.status, "active"),
           ),
         ),
+      (async (): Promise<boolean> => {
+        const u = await db
+          .select({ group: authUsers.group })
+          .from(authUsers)
+          .where(eq(authUsers.id, userId))
+          .then((rows) => rows[0] ?? null);
+        if (!u?.group) return false;
+        const perms = await db
+          .select({ permissionKey: instanceGroupPermissions.permissionKey })
+          .from(instanceGroups)
+          .innerJoin(
+            instanceGroupPermissions,
+            eq(instanceGroups.id, instanceGroupPermissions.groupId),
+          )
+          .where(eq(instanceGroups.name, u.group));
+        return perms.some((p) => p.permissionKey === "*");
+      })(),
     ]);
 
     const hasCompanyMembership = memberships.some((row) => row.companyId === companyId);
-    if (!roleRow && !hasCompanyMembership) return null;
+    if (!instanceFullAccess && !hasCompanyMembership) return null;
 
     return {
       companyId,
@@ -234,6 +244,10 @@ export function setupLiveEventsWebSocketServer(
   });
 
   server.on("upgrade", (req, socket, head) => {
+    const upgradeHeader = (req.headers["upgrade"] ?? "").toString().toLowerCase();
+    if (upgradeHeader !== "websocket") {
+      return;
+    }
     if (!req.url) {
       rejectUpgrade(socket, "400 Bad Request", "missing url");
       return;
@@ -242,9 +256,11 @@ export function setupLiveEventsWebSocketServer(
     const url = new URL(req.url, "http://localhost");
     const companyId = parseCompanyId(url.pathname);
     if (!companyId) {
-      socket.destroy();
+      // 路徑非 /api/companies/:id/events/ws，不處理也不關閉，交給其他 listener（如 Vite HMR）
       return;
     }
+
+    logger.info({ path: url.pathname, companyId }, "events/ws upgrade request");
 
     void authorizeUpgrade(db, req, companyId, url, {
       deploymentMode: opts.deploymentMode,
@@ -252,6 +268,7 @@ export function setupLiveEventsWebSocketServer(
     })
       .then((context) => {
         if (!context) {
+          logger.warn({ companyId, path: req.url }, "websocket upgrade forbidden: no valid session or token");
           rejectUpgrade(socket, "403 Forbidden", "forbidden");
           return;
         }
@@ -259,9 +276,15 @@ export function setupLiveEventsWebSocketServer(
         const reqWithContext = req as IncomingMessageWithContext;
         reqWithContext.paperclipUpgradeContext = context;
 
-        wss.handleUpgrade(req, socket, head, (ws: WsSocket) => {
-          wss.emit("connection", ws, reqWithContext);
-        });
+        try {
+          wss.handleUpgrade(req, socket, head, (ws: WsSocket) => {
+            wss.emit("connection", ws, reqWithContext);
+            logger.info({ companyId: context.companyId, actorType: context.actorType }, "live events websocket connected");
+          });
+        } catch (err) {
+          logger.error({ err, path: req.url }, "events/ws handleUpgrade threw");
+          rejectUpgrade(socket, "500 Internal Server Error", "upgrade failed");
+        }
       })
       .catch((err) => {
         logger.error({ err, path: req.url }, "failed websocket upgrade authorization");

@@ -44,7 +44,7 @@ export const loggingConfigSchema = z.object({
 });
 
 export const serverConfigSchema = z.object({
-  deploymentMode: z.enum(DEPLOYMENT_MODES).default("local_trusted"),
+  deploymentMode: z.enum(DEPLOYMENT_MODES).default("authenticated"),
   exposure: z.enum(DEPLOYMENT_EXPOSURES).default("private"),
   host: z.string().default("127.0.0.1"),
   port: z.number().int().min(1).max(65535).default(3100),
@@ -56,6 +56,13 @@ export const authConfigSchema = z.object({
   baseUrlMode: z.enum(AUTH_BASE_URL_MODES).default("auto"),
   publicBaseUrl: z.string().url().optional(),
   disableSignUp: z.boolean().default(false),
+  /** Google OAuth：clientId 與 clientSecret 皆設定時啟用「使用 Google 登入」 */
+  google: z
+    .object({
+      clientId: z.string().min(1),
+      clientSecret: z.string().min(1),
+    })
+    .optional(),
 });
 
 export const storageLocalDiskConfigSchema = z.object({
@@ -127,17 +134,6 @@ export const paperclipConfigSchema = z
     }),
   })
   .superRefine((value, ctx) => {
-    if (value.server.deploymentMode === "local_trusted") {
-      if (value.server.exposure !== "private") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "server.exposure must be private when deploymentMode is local_trusted",
-          path: ["server", "exposure"],
-        });
-      }
-      return;
-    }
-
     if (value.auth.baseUrlMode === "explicit" && !value.auth.publicBaseUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

@@ -524,24 +524,19 @@ function TranscriptMessageBlock({
   return (
     <div>
       {!isAssistant && (
-        <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          <User className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+        <div className={compact ? "transcript-msg-header compact" : "transcript-msg-header"}>
+          <User aria-hidden />
           <span>User</span>
         </div>
       )}
-      <MarkdownBody
-        className={cn(
-          "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-          compact ? "text-xs leading-5 text-foreground/85" : "text-sm",
-        )}
-      >
+      <MarkdownBody className={`transcript-msg-body${compact ? " compact" : ""}`}>
         {block.text}
       </MarkdownBody>
       {block.streaming && (
-        <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium italic text-muted-foreground">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-70" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
+        <div className="transcript-streaming">
+          <span className="transcript-streaming-dot">
+            <span className="transcript-streaming-dot-ping" aria-hidden />
+            <span className="transcript-streaming-dot-inner" aria-hidden />
           </span>
           Streaming
         </div>
@@ -561,11 +556,7 @@ function TranscriptThinkingBlock({
 }) {
   return (
     <MarkdownBody
-      className={cn(
-        "italic text-foreground/70 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        density === "compact" ? "text-[11px] leading-5" : "text-sm leading-6",
-        className,
-      )}
+      className={[ "transcript-thinking", density === "compact" ? "compact" : "", className ].filter(Boolean).join(" ")}
     >
       {block.text}
     </MarkdownBody>
@@ -588,24 +579,6 @@ function TranscriptToolCard({
       : block.status === "error"
         ? "Errored"
         : "Completed";
-  const statusTone =
-    block.status === "running"
-      ? "text-cyan-700 dark:text-cyan-300"
-      : block.status === "error"
-        ? "text-red-700 dark:text-red-300"
-        : "text-emerald-700 dark:text-emerald-300";
-  const detailsClass = cn(
-    "space-y-3",
-    block.status === "error" && "rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3",
-  );
-  const iconClass = cn(
-    "mt-0.5 h-3.5 w-3.5 shrink-0",
-    block.status === "error"
-      ? "text-red-600 dark:text-red-300"
-      : block.status === "completed"
-        ? "text-emerald-600 dark:text-emerald-300"
-        : "text-cyan-600 dark:text-cyan-300",
-  );
   const summary = block.status === "running"
     ? summarizeToolInput(block.name, block.input, density)
     : block.status === "completed" && parsedResult?.body
@@ -613,57 +586,48 @@ function TranscriptToolCard({
       : summarizeToolResult(block.result, block.isError, density);
 
   return (
-    <div className={cn(block.status === "error" && "rounded-xl border border-red-500/20 bg-red-500/[0.04] p-3")}>
-      <div className="flex items-start gap-2">
+    <div className="transcript-tool-card" data-error={block.status === "error" ? "true" : undefined}>
+      <div className="transcript-tool-row">
         {block.status === "error" ? (
-          <CircleAlert className={iconClass} />
+          <CircleAlert className="transcript-tool-icon" data-status="error" aria-hidden />
         ) : block.status === "completed" ? (
-          <Check className={iconClass} />
+          <Check className="transcript-tool-icon" data-status="completed" aria-hidden />
         ) : (
-          <Wrench className={iconClass} />
+          <Wrench className="transcript-tool-icon" data-status="running" aria-hidden />
         )}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {block.name}
-            </span>
-            <span className={cn("text-[10px] font-semibold uppercase tracking-[0.14em]", statusTone)}>
+        <div className="transcript-tool-body">
+          <div className="transcript-tool-meta">
+            <span className="transcript-tool-name">{block.name}</span>
+            <span className="transcript-tool-status" data-status={block.status}>
               {statusLabel}
             </span>
           </div>
-          <div className={cn("mt-1 break-words text-foreground/80", compact ? "text-xs" : "text-sm")}>
+          <div className={`transcript-tool-summary${compact ? " compact" : ""}`}>
             {summary}
           </div>
         </div>
         <button
           type="button"
-          className="mt-0.5 inline-flex h-5 w-5 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+          className="transcript-tool-toggle"
           onClick={() => setOpen((value) => !value)}
           aria-label={open ? "Collapse tool details" : "Expand tool details"}
         >
-          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          {open ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
         </button>
       </div>
       {open && (
-        <div className="mt-3">
-          <div className={detailsClass}>
-            <div className={cn("grid gap-3", compact ? "grid-cols-1" : "lg:grid-cols-2")}>
+        <div className="transcript-tool-details">
+          <div className="transcript-tool-details-inner" data-error={block.status === "error" ? "true" : undefined}>
+            <div className={`transcript-tool-grid${compact ? " compact" : ""}`}>
               <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Input
-                </div>
-                <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] text-foreground/80">
+                <div className="transcript-tool-label">Input</div>
+                <pre className="transcript-tool-pre">
                   {formatToolPayload(block.input) || "<empty>"}
                 </pre>
               </div>
               <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Result
-                </div>
-                <pre className={cn(
-                  "overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px]",
-                  block.status === "error" ? "text-red-700 dark:text-red-300" : "text-foreground/80",
-                )}>
+                <div className="transcript-tool-label">Result</div>
+                <pre className="transcript-tool-pre" data-error={block.status === "error" ? "true" : undefined}>
                   {block.result ? formatToolPayload(block.result) : "Waiting for result..."}
                 </pre>
               </div>
@@ -702,16 +666,13 @@ function TranscriptCommandGroup({
   const subtitle = runningItem
     ? summarizeToolInput("command_execution", runningItem.input, density)
     : null;
-  const statusTone = isRunning
-      ? "text-cyan-700 dark:text-cyan-300"
-      : "text-foreground/70";
 
   return (
-    <div className={cn(showExpandedErrorState && "rounded-xl border border-red-500/20 bg-red-500/[0.04] p-3")}>
+    <div className="transcript-cmd-card" data-error={showExpandedErrorState ? "true" : undefined}>
       <div
         role="button"
         tabIndex={0}
-        className={cn("flex cursor-pointer gap-2", subtitle ? "items-start" : "items-center")}
+        className={`transcript-cmd-header${subtitle ? " with-subtitle" : ""}`}
         onClick={() => {
           if (hasSelectedText()) return;
           setOpen((value) => !value);
@@ -723,77 +684,56 @@ function TranscriptCommandGroup({
           }
         }}
       >
-        <div className={cn("flex shrink-0 items-center", subtitle && "mt-0.5")}>
+        <div className="transcript-cmd-avatars">
           {block.items.slice(0, Math.min(block.items.length, 3)).map((_, index) => (
             <span
               key={index}
-              className={cn(
-                "inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm",
-                index > 0 && "-ml-1.5",
-                isRunning
-                  ? "border-cyan-500/25 bg-cyan-500/[0.08] text-cyan-600 dark:text-cyan-300"
-                  : "border-border/70 bg-background text-foreground/55",
-                isRunning && "animate-pulse",
-              )}
+              className="transcript-cmd-avatar"
+              data-running={isRunning ? "true" : undefined}
             >
-              <TerminalSquare className="h-3.5 w-3.5" />
+              <TerminalSquare className="h-3.5 w-3.5" aria-hidden />
             </span>
           ))}
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold uppercase leading-none tracking-[0.1em] text-muted-foreground/70">
-            {title}
-          </div>
+        <div className="transcript-cmd-body">
+          <div className="transcript-cmd-title">{title}</div>
           {subtitle && (
-            <div className={cn("mt-1 break-words font-mono text-foreground/85", compact ? "text-xs" : "text-sm")}>
+            <div className={`transcript-cmd-subtitle${compact ? " compact" : ""}`}>
               {subtitle}
             </div>
           )}
           {!subtitle && latestItem?.status === "error" && open && (
-            <div className={cn("mt-1", compact ? "text-xs" : "text-sm", statusTone)}>
+            <div className={`transcript-cmd-fail${compact ? " compact" : ""}`} data-running={isRunning ? "true" : undefined}>
               Command failed
             </div>
           )}
         </div>
         <button
           type="button"
-          className={cn(
-            "inline-flex h-5 w-5 items-center justify-center text-muted-foreground transition-colors hover:text-foreground",
-            subtitle && "mt-0.5",
-          )}
+          className={`transcript-cmd-toggle${subtitle ? " with-subtitle" : ""}`}
           onClick={(event) => {
             event.stopPropagation();
             setOpen((value) => !value);
           }}
           aria-label={open ? "Collapse command details" : "Expand command details"}
         >
-          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          {open ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
         </button>
       </div>
       {open && (
-        <div className={cn("mt-3 space-y-3", hasError && "rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3")}>
+        <div className="transcript-cmd-items" data-error={hasError ? "true" : undefined}>
           {block.items.map((item, index) => (
-            <div key={`${item.ts}-${index}`} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className={cn(
-                  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                  item.status === "error"
-                    ? "border-red-500/25 bg-red-500/[0.08] text-red-600 dark:text-red-300"
-                    : item.status === "running"
-                      ? "border-cyan-500/25 bg-cyan-500/[0.08] text-cyan-600 dark:text-cyan-300"
-                      : "border-border/70 bg-background text-foreground/55",
-                )}>
-                  <TerminalSquare className="h-3 w-3" />
+            <div key={`${item.ts}-${index}`} className="transcript-cmd-item">
+              <div className="transcript-cmd-item-row">
+                <span className="transcript-cmd-item-dot" data-status={item.status}>
+                  <TerminalSquare className="h-3 w-3" aria-hidden />
                 </span>
-                <span className={cn("font-mono break-all", compact ? "text-[11px]" : "text-xs")}>
+                <span className={`transcript-cmd-item-text${compact ? " compact" : ""}`}>
                   {summarizeToolInput("command_execution", item.input, density)}
                 </span>
               </div>
               {item.result && (
-                <pre className={cn(
-                  "overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px]",
-                  item.status === "error" ? "text-red-700 dark:text-red-300" : "text-foreground/80",
-                )}>
+                <pre className="transcript-cmd-item-pre" data-error={item.status === "error" ? "true" : undefined}>
                   {formatToolPayload(item.result)}
                 </pre>
               )}
@@ -813,19 +753,16 @@ function TranscriptActivityRow({
   density: TranscriptDensity;
 }) {
   return (
-    <div className="flex items-start gap-2">
+    <div className="transcript-activity-row">
       {block.status === "completed" ? (
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
+        <Check className="transcript-activity-icon" aria-hidden />
       ) : (
-        <span className="relative mt-1 flex h-2.5 w-2.5 shrink-0">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-70" />
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-cyan-500" />
+        <span className="transcript-activity-dot">
+          <span className="transcript-activity-dot-ping" aria-hidden />
+          <span className="transcript-activity-dot-inner" aria-hidden />
         </span>
       )}
-      <div className={cn(
-        "break-words text-foreground/80",
-        density === "compact" ? "text-xs leading-5" : "text-sm leading-6",
-      )}>
+      <div className={`transcript-activity-text${density === "compact" ? " compact" : ""}`}>
         {block.name}
       </div>
     </div>
@@ -840,40 +777,30 @@ function TranscriptEventRow({
   density: TranscriptDensity;
 }) {
   const compact = density === "compact";
-  const toneClasses =
-    block.tone === "error"
-      ? "rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-red-700 dark:text-red-300"
-      : block.tone === "warn"
-        ? "text-amber-700 dark:text-amber-300"
-        : block.tone === "info"
-          ? "text-sky-700 dark:text-sky-300"
-          : "text-foreground/75";
 
   return (
-    <div className={toneClasses}>
-      <div className="flex items-start gap-2">
+    <div className="transcript-event" data-tone={block.tone}>
+      <div className="transcript-event-row">
         {block.tone === "error" ? (
-          <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <CircleAlert className="transcript-event-icon" aria-hidden />
         ) : block.tone === "warn" ? (
-          <TerminalSquare className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <TerminalSquare className="transcript-event-icon" aria-hidden />
         ) : (
-          <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-current/50" />
+          <span className="transcript-event-dot" aria-hidden />
         )}
-        <div className="min-w-0 flex-1">
+        <div className="transcript-event-body">
           {block.label === "result" && block.tone !== "error" ? (
-            <div className={cn("whitespace-pre-wrap break-words text-sky-700 dark:text-sky-300", compact ? "text-[11px]" : "text-xs")}>
+            <div className={`transcript-event-text sky${compact ? " compact" : ""}`}>
               {block.text}
             </div>
           ) : (
-            <div className={cn("whitespace-pre-wrap break-words", compact ? "text-[11px]" : "text-xs")}>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
-                {block.label}
-              </span>
-              {block.text ? <span className="ml-2">{block.text}</span> : null}
+            <div className={`transcript-event-text${compact ? " compact" : ""}`}>
+              <span className="transcript-event-label">{block.label}</span>
+              {block.text ? <span className="transcript-event-label-inline">{block.text}</span> : null}
             </div>
           )}
           {block.detail && (
-            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] text-foreground/75">
+            <pre className="transcript-event-pre">
               {block.detail}
             </pre>
           )}
@@ -895,25 +822,20 @@ function TranscriptStdoutRow({
   const [open, setOpen] = useState(!collapseByDefault);
 
   return (
-    <div>
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          stdout
-        </span>
+    <div className="transcript-stdout-row">
+      <div className="transcript-stdout-header">
+        <span className="transcript-stdout-label">stdout</span>
         <button
           type="button"
-          className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+          className="transcript-stdout-toggle"
           onClick={() => setOpen((value) => !value)}
           aria-label={open ? "Collapse stdout" : "Expand stdout"}
         >
-          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          {open ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
         </button>
       </div>
       {open && (
-        <pre className={cn(
-          "mt-2 overflow-x-auto whitespace-pre-wrap break-words font-mono text-foreground/80",
-          density === "compact" ? "text-[11px]" : "text-xs",
-        )}>
+        <pre className={`transcript-stdout-pre${density === "compact" ? " compact" : ""}`}>
           {block.text}
         </pre>
       )}
@@ -930,19 +852,11 @@ function RawTranscriptView({
 }) {
   const compact = density === "compact";
   return (
-    <div className={cn("font-mono", compact ? "space-y-1 text-[11px]" : "space-y-1.5 text-xs")}>
+    <div className={`transcript-raw${compact ? " compact" : ""}`}>
       {entries.map((entry, idx) => (
-        <div
-          key={`${entry.kind}-${entry.ts}-${idx}`}
-          className={cn(
-            "grid gap-x-3",
-            "grid-cols-[auto_1fr]",
-          )}
-        >
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            {entry.kind}
-          </span>
-          <pre className="min-w-0 whitespace-pre-wrap break-words text-foreground/80">
+        <div key={`${entry.kind}-${entry.ts}-${idx}`} className="transcript-raw-row">
+          <span className="transcript-raw-kind">{entry.kind}</span>
+          <pre className="transcript-raw-pre">
             {entry.kind === "tool_call"
               ? `${entry.name}\n${formatToolPayload(entry.input)}`
               : entry.kind === "tool_result"
@@ -976,7 +890,7 @@ export function RunTranscriptView({
 
   if (entries.length === 0) {
     return (
-      <div className={cn("rounded-2xl border border-dashed border-border/70 bg-background/40 p-4 text-sm text-muted-foreground", className)}>
+      <div className={cn("transcript-empty", className)}>
         {emptyMessage}
       </div>
     );
@@ -984,18 +898,18 @@ export function RunTranscriptView({
 
   if (mode === "raw") {
     return (
-      <div className={className}>
+      <div className={className ?? undefined}>
         <RawTranscriptView entries={visibleEntries} density={density} />
       </div>
     );
   }
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("transcript-list", className)}>
       {visibleBlocks.map((block, index) => (
         <div
           key={`${block.type}-${block.ts}-${index}`}
-          className={cn(index === visibleBlocks.length - 1 && streaming && "animate-in fade-in slide-in-from-bottom-1 duration-300")}
+          className={index === visibleBlocks.length - 1 && streaming ? "transcript-block-streaming" : undefined}
         >
           {block.type === "message" && <TranscriptMessageBlock block={block} density={density} />}
           {block.type === "thinking" && (

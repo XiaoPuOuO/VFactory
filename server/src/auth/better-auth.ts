@@ -54,6 +54,9 @@ export function deriveAuthTrustedOrigins(config: Config): string[] {
     }
   }
   if (config.deploymentMode === "authenticated") {
+    const port = config.port || 3100;
+    trustedOrigins.add(`http://127.0.0.1:${port}`);
+    trustedOrigins.add(`http://localhost:${port}`);
     for (const hostname of config.allowedHostnames) {
       const trimmed = hostname.trim().toLowerCase();
       if (!trimmed) continue;
@@ -66,11 +69,21 @@ export function deriveAuthTrustedOrigins(config: Config): string[] {
 }
 
 export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins?: string[]): BetterAuthInstance {
-  const baseUrl = config.authBaseUrlMode === "explicit" ? config.authPublicBaseUrl : undefined;
+  const explicitBaseUrl = config.authBaseUrlMode === "explicit" ? config.authPublicBaseUrl : undefined;
   const secret = process.env.BETTER_AUTH_SECRET ?? process.env.PAPERCLIP_AGENT_JWT_SECRET ?? "paperclip-dev-secret";
   const effectiveTrustedOrigins = trustedOrigins ?? deriveAuthTrustedOrigins(config);
-
-  const publicUrl = process.env.PAPERCLIP_PUBLIC_URL ?? baseUrl;
+  const hostForBase =
+    config.host === "0.0.0.0" || config.host === "::" ? "127.0.0.1" : config.host;
+  const fallbackBaseUrl =
+    config.deploymentMode === "authenticated"
+      ? `http://${hostForBase}:${config.port}`
+      : undefined;
+  const publicUrlFromEnv = process.env.PAPERCLIP_PUBLIC_URL?.trim();
+  const baseUrl =
+    explicitBaseUrl ??
+    (publicUrlFromEnv ? publicUrlFromEnv.replace(/\/+$/, "") : undefined) ??
+    fallbackBaseUrl;
+  const publicUrl = baseUrl ?? fallbackBaseUrl;
   const isHttpOnly = publicUrl ? publicUrl.startsWith("http://") : false;
 
   const authConfig = {
@@ -87,16 +100,22 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins?
       },
     }),
     emailAndPassword: {
-      enabled: true,
-      requireEmailVerification: false,
-      disableSignUp: config.authDisableSignUp,
+      enabled: false,
     },
+    ...(config.authGoogleEnabled &&
+    config.authGoogleClientId &&
+    config.authGoogleClientSecret
+      ? {
+          socialProviders: {
+            google: {
+              clientId: config.authGoogleClientId,
+              clientSecret: config.authGoogleClientSecret,
+            },
+          },
+        }
+      : {}),
     ...(isHttpOnly ? { advanced: { useSecureCookies: false } } : {}),
   };
-
-  if (!baseUrl) {
-    delete (authConfig as { baseURL?: string }).baseURL;
-  }
 
   return betterAuth(authConfig);
 }

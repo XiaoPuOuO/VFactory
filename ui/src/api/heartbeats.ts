@@ -1,8 +1,4 @@
-import type {
-  HeartbeatRun,
-  HeartbeatRunEvent,
-  InstanceSchedulerHeartbeatAgent,
-} from "@paperclipai/shared";
+import type { HeartbeatRun, HeartbeatRunEvent } from "@paperclipai/shared";
 import { api } from "./client";
 
 export interface ActiveRunForIssue extends HeartbeatRun {
@@ -49,6 +45,4 @@ export const heartbeatsApi = {
     api.get<ActiveRunForIssue | null>(`/issues/${issueId}/active-run`),
   liveRunsForCompany: (companyId: string, minCount?: number) =>
     api.get<LiveRunForIssue[]>(`/companies/${companyId}/live-runs${minCount ? `?minCount=${minCount}` : ""}`),
-  listInstanceSchedulerAgents: () =>
-    api.get<InstanceSchedulerHeartbeatAgent[]>("/instance/scheduler-heartbeats"),
 };

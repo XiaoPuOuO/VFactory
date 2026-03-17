@@ -1,0 +1,151 @@
+/**
+ * 通用列表頁樣式 — 多頁共用（Agents, Projects, Goals, Schedules, Org 等）
+ * 無 Tailwind，語義化 class。
+ */
+
+/* 通用頁面容器 */
+.board-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.board-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .board-page-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.board-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.board-page-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+.board-page-meta {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.board-page-empty-message {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.board-page-list {
+  border: 1px solid var(--border);
+}
+
+.board-page-list-empty {
+  border: 1px solid var(--border);
+}
+
+/* 按鈕內 icon 間距 */
+.board-page-btn-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.375rem;
+}
+
+.board-page-btn-icon-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.375rem;
+}
+
+/* EntityRow — 列表行（可選 leading / trailing） */
+.entity-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.entity-row:last-child {
+  border-bottom-width: 0;
+}
+
+.entity-row.clickable {
+  cursor: pointer;
+}
+
+.entity-row.clickable:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.entity-row.selected {
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+}
+
+.entity-row-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.entity-row-leading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.entity-row-body {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.entity-row-body-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.entity-row-identifier {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  font-family: ui-monospace, monospace;
+  flex-shrink: 0;
+  position: relative;
+  top: 1px;
+}
+
+.entity-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-row-subtitle {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+  margin-top: 0.125rem;
+}
+
+.entity-row-trailing {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "@/lib/router";
 import { Menu } from "lucide-react";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
@@ -14,49 +15,48 @@ import {
 import { Fragment } from "react";
 
 export function BreadcrumbBar() {
+  const { t } = useTranslation();
   const { breadcrumbs } = useBreadcrumbs();
-  const { toggleSidebar, isMobile } = useSidebar();
+  const { toggleSidebar, isMobile, sidebarOpen } = useSidebar();
 
   if (breadcrumbs.length === 0) return null;
 
-  const menuButton = isMobile && (
+  /** 麵包屑列左側的 Sidebar 切換：手機版一律顯示；桌面版在 Sidebar 收合時顯示以利展開，必要時可改為永遠顯示以支援收合 */
+  const showMenuButton = isMobile || !sidebarOpen;
+  const menuButton = showMenuButton ? (
     <Button
       variant="ghost"
       size="icon-sm"
-      className="mr-2 shrink-0"
+      className="board-breadcrumb-menu-btn"
       onClick={toggleSidebar}
-      aria-label="Open sidebar"
+      aria-label={sidebarOpen ? t("common.closeSidebar") : t("common.openSidebar")}
     >
-      <Menu className="h-5 w-5" />
+      <Menu />
     </Button>
-  );
+  ) : null;
 
-  // Single breadcrumb = page title (uppercase)
   if (breadcrumbs.length === 1) {
     return (
-      <div className="border-b border-border px-4 md:px-6 h-12 shrink-0 flex items-center min-w-0 overflow-hidden">
+      <div className="board-breadcrumb-bar">
         {menuButton}
-        <h1 className="text-sm font-semibold uppercase tracking-wider truncate">
-          {breadcrumbs[0].label}
-        </h1>
+        <h1 className="board-breadcrumb-title">{breadcrumbs[0].label}</h1>
       </div>
     );
   }
 
-  // Multiple breadcrumbs = breadcrumb trail
   return (
-    <div className="border-b border-border px-4 md:px-6 h-12 shrink-0 flex items-center min-w-0 overflow-hidden">
+    <div className="board-breadcrumb-bar">
       {menuButton}
-      <Breadcrumb className="min-w-0 overflow-hidden">
-        <BreadcrumbList className="flex-nowrap">
+      <Breadcrumb className="board-breadcrumb-nav">
+        <BreadcrumbList className="board-breadcrumb-list">
           {breadcrumbs.map((crumb, i) => {
             const isLast = i === breadcrumbs.length - 1;
             return (
               <Fragment key={i}>
                 {i > 0 && <BreadcrumbSeparator />}
-                <BreadcrumbItem className={isLast ? "min-w-0" : "shrink-0"}>
+                <BreadcrumbItem className={isLast ? "board-breadcrumb-item-last" : "board-breadcrumb-item-shrink"}>
                   {isLast || !crumb.href ? (
-                    <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
+                    <BreadcrumbPage className="board-breadcrumb-page-truncate">{crumb.label}</BreadcrumbPage>
                   ) : (
                     <BreadcrumbLink asChild>
                       <Link to={crumb.href}>{crumb.label}</Link>

@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { cn } from "../lib/utils";
 
 const BAYER_4X4 = [
   [0, 8, 2, 10],
@@ -167,26 +166,19 @@ export function CompanyPatternIcon({ companyName, brandColor, className }: Compa
   );
 
   return (
-    <div
-      className={cn(
-        "relative flex items-center justify-center w-11 h-11 text-base font-semibold text-white overflow-hidden",
-        className,
-      )}
-    >
+    <div className={["ui-company-pattern-icon", className].filter(Boolean).join(" ")}>
       {patternDataUrl ? (
         <img
           src={patternDataUrl}
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full"
+          className="ui-company-pattern-icon-img"
           style={{ imageRendering: "pixelated" }}
         />
       ) : (
-        <div className="absolute inset-0 bg-muted" />
+        <div className="ui-company-pattern-icon-fallback" />
       )}
-      <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]">
-        {initial}
-      </span>
+      <span className="ui-company-pattern-icon-initial">{initial}</span>
     </div>
   );
 }

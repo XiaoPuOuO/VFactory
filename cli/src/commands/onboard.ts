@@ -115,13 +115,12 @@ function quickstartDefaultsFromEnv(): {
     process.env.BETTER_AUTH_BASE_URL?.trim() ||
     undefined;
   const deploymentMode =
-    parseEnumFromEnv<DeploymentMode>(process.env.PAPERCLIP_DEPLOYMENT_MODE, DEPLOYMENT_MODES) ?? "local_trusted";
+    parseEnumFromEnv<DeploymentMode>(process.env.PAPERCLIP_DEPLOYMENT_MODE, DEPLOYMENT_MODES) ?? "authenticated";
   const deploymentExposureFromEnv = parseEnumFromEnv<DeploymentExposure>(
     process.env.PAPERCLIP_DEPLOYMENT_EXPOSURE,
     DEPLOYMENT_EXPOSURES,
   );
-  const deploymentExposure =
-    deploymentMode === "local_trusted" ? "private" : (deploymentExposureFromEnv ?? "private");
+  const deploymentExposure = deploymentExposureFromEnv ?? "private";
   const authPublicBaseUrl = publicUrl;
   const authBaseUrlModeFromEnv = parseEnumFromEnv<AuthBaseUrlMode>(
     process.env.PAPERCLIP_AUTH_BASE_URL_MODE,
@@ -215,13 +214,6 @@ function quickstartDefaultsFromEnv(): {
     },
   };
   const ignoredEnvKeys: Array<{ key: string; reason: string }> = [];
-  if (deploymentMode === "local_trusted" && process.env.PAPERCLIP_DEPLOYMENT_EXPOSURE !== undefined) {
-    ignoredEnvKeys.push({
-      key: "PAPERCLIP_DEPLOYMENT_EXPOSURE",
-      reason: "Ignored because deployment mode local_trusted always forces private exposure",
-    });
-  }
-
   const ignoredKeySet = new Set(ignoredEnvKeys.map((entry) => entry.key));
   const usedEnvKeys = ONBOARD_ENV_KEYS.filter(
     (key) => process.env[key] !== undefined && !ignoredKeySet.has(key),

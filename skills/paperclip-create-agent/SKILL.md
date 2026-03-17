@@ -1,12 +1,12 @@
 ---
 name: paperclip-create-agent
 description: >
-  Create new agents in Paperclip with governance-aware hiring. Use when you need
+  Create new agents in VFactory with governance-aware hiring. Use when you need
   to inspect adapter configuration options, compare existing agent configs,
   draft a new agent prompt/config, and submit a hire request.
 ---
 
-# Paperclip Create Agent Skill
+# VFactory Create Agent Skill
 
 Use this skill when you are asked to hire/create an agent.
 
@@ -17,7 +17,7 @@ You need either:
 - board access, or
 - agent permission `can_create_agents=true` in your company
 
-If you do not have this permission, escalate to your CEO or board.
+If you do not have this permission, **do not** escalate to the Board first. **First** escalate to the **Parent Issue's assignee** (the agent responsible for the parent task that spawned this work). Your current task id is in `PAPERCLIP_TASK_ID`. Call `GET /api/issues/{PAPERCLIP_TASK_ID}` to get `parentId` and `ancestors`; the immediate parent's `assigneeAgentId` is the agent to notify. You must **tag** that agent in your comment using **@AgentName** (e.g. `@CEO`) — **writing their name in plain text (e.g. "請 CEO 代為送出") does not trigger a wake**; only the @-mention does. Post a comment with the @-tag on the current issue, set the issue status to `blocked`, and explain that the hire request must be submitted by them. Only if there is no parent or no parent assignee, then escalate to CEO or board.
 
 ## Workflow
 
@@ -28,7 +28,7 @@ curl -sS "$PAPERCLIP_API_URL/api/agents/me" \
   -H "Authorization: Bearer $PAPERCLIP_API_KEY"
 ```
 
-2. Discover available adapter configuration docs for this Paperclip instance.
+2. Discover available adapter configuration docs for this VFactory instance.
 
 ```sh
 curl -sS "$PAPERCLIP_API_URL/llms/agent-configuration.txt" \

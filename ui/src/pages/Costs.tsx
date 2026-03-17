@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { costsApi } from "../api/costs";
 import { useCompany } from "../context/CompanyContext";
@@ -17,16 +18,17 @@ import {
   TokenUsageByProjectChart,
   SubscriptionRunsByAgentChart,
 } from "../components/CostCharts";
+import "./Costs.css";
 
 type DatePreset = "mtd" | "7d" | "30d" | "ytd" | "all" | "custom";
 
-const PRESET_LABELS: Record<DatePreset, string> = {
-  mtd: "Month to Date",
-  "7d": "Last 7 Days",
-  "30d": "Last 30 Days",
-  ytd: "Year to Date",
-  all: "All Time",
-  custom: "Custom",
+const PRESET_KEYS: Record<DatePreset, string> = {
+  mtd: "mtd",
+  "7d": "last7Days",
+  "30d": "last30Days",
+  ytd: "ytd",
+  all: "allTime",
+  custom: "custom",
 };
 
 function computeRange(preset: DatePreset): { from: string; to: string } {
@@ -57,6 +59,7 @@ function computeRange(preset: DatePreset): { from: string; to: string } {
 }
 
 export function Costs() {
+  const { t } = useTranslation("costs");
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
 
@@ -65,8 +68,8 @@ export function Costs() {
   const [customTo, setCustomTo] = useState("");
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Costs" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("pageTitle") }]);
+  }, [setBreadcrumbs, t]);
 
   const { from, to } = useMemo(() => {
     if (preset === "custom") {
@@ -92,7 +95,7 @@ export function Costs() {
   });
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={DollarSign} message="Select a company to view costs." />;
+    return <EmptyState icon={DollarSign} message={t("selectCompanyToViewCosts")} />;
   }
 
   if (isLoading) {
@@ -101,10 +104,17 @@ export function Costs() {
 
   const presetKeys: DatePreset[] = ["mtd", "7d", "30d", "ytd", "all", "custom"];
 
+  const barVariant = data && data.summary.budgetCents > 0
+    ? data.summary.utilizationPercent > 90
+      ? "_red"
+      : data.summary.utilizationPercent > 70
+        ? "_yellow"
+        : "_green"
+    : "_green";
+
   return (
-    <div className="space-y-6">
-      {/* Date range selector */}
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="costs-page">
+      <div className="costs-filters">
         {presetKeys.map((p) => (
           <Button
             key={p}
@@ -112,61 +122,52 @@ export function Costs() {
             size="sm"
             onClick={() => setPreset(p)}
           >
-            {PRESET_LABELS[p]}
+            {t(PRESET_KEYS[p])}
           </Button>
         ))}
         {preset === "custom" && (
-          <div className="flex items-center gap-2 ml-2">
+          <div className="costs-custom-range">
             <input
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
             />
-            <span className="text-sm text-muted-foreground">to</span>
+            <span>{t("to")}</span>
             <input
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
             />
           </div>
         )}
       </div>
 
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
+      {error && <p className="costs-error">{error.message}</p>}
 
       {data && (
         <>
-          {/* Summary card */}
           <Card>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{PRESET_LABELS[preset]}</p>
+            <CardContent className="costs-summary-card">
+              <div className="costs-summary-header">
+                <p className="costs-summary-label">{t(PRESET_KEYS[preset])}</p>
                 {data.summary.budgetCents > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    {data.summary.utilizationPercent}% utilized
+                  <p className="costs-summary-label">
+                    {t("utilized", { pct: data.summary.utilizationPercent })}
                   </p>
                 )}
               </div>
-              <p className="text-2xl font-bold tabular-nums">
+              <p className="costs-summary-value">
                 {formatCents(data.summary.spendCents)}{" "}
-                <span className="text-base font-normal text-muted-foreground">
+                <span className="costs-summary-budget">
                   {data.summary.budgetCents > 0
                     ? `/ ${formatCents(data.summary.budgetCents)}`
-                    : "Unlimited budget"}
+                    : t("unlimitedBudget")}
                 </span>
               </p>
               {data.summary.budgetCents > 0 && (
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div className="costs-summary-bar-wrap">
                   <div
-                    className={`h-full rounded-full transition-[width,background-color] duration-150 ${
-                      data.summary.utilizationPercent > 90
-                        ? "bg-red-400"
-                        : data.summary.utilizationPercent > 70
-                          ? "bg-yellow-400"
-                          : "bg-green-400"
-                    }`}
+                    className={`costs-summary-bar ${barVariant}`}
                     style={{ width: `${Math.min(100, data.summary.utilizationPercent)}%` }}
                   />
                 </div>
@@ -174,30 +175,42 @@ export function Costs() {
             </CardContent>
           </Card>
 
-          {/* 用量圖表 */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <TokenUsageByAgentChart data={data.byAgent} />
-            <TokenUsageByProjectChart data={data.byProject} />
-          </div>
+          {(() => {
+            const totalInput = data.byAgent.reduce(
+              (acc, row) => acc + row.inputTokens + (row.subscriptionInputTokens ?? 0),
+              0
+            );
+            const totalOutput = data.byAgent.reduce(
+              (acc, row) => acc + row.outputTokens + (row.subscriptionOutputTokens ?? 0),
+              0
+            );
+            const totalTokenSummary = t("totalTokensInRange", {
+              range: t(PRESET_KEYS[preset]),
+              input: formatTokens(totalInput),
+              output: formatTokens(totalOutput),
+            });
+            return (
+              <div className="costs-charts-grid">
+                <TokenUsageByAgentChart data={data.byAgent} totalTokenSummary={totalTokenSummary} />
+                <TokenUsageByProjectChart data={data.byProject} totalTokenSummary={totalTokenSummary} />
+              </div>
+            );
+          })()}
           <div>
             <SubscriptionRunsByAgentChart data={data.byAgent} />
           </div>
 
-          {/* By Agent / By Project */}
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="costs-panels-grid">
             <Card>
-              <CardContent className="p-4">
-                <h3 className="text-sm font-semibold mb-3">By Agent</h3>
+              <CardContent className="costs-panel">
+                <h3 className="costs-panel-title">{t("byAgent")}</h3>
                 {data.byAgent.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No cost events yet.</p>
+                  <p className="costs-panel-empty">{t("noCostEventsYet")}</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="costs-by-agent-list">
                     {data.byAgent.map((row) => (
-                      <div
-                        key={row.agentId}
-                        className="flex items-start justify-between text-sm"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
+                      <div key={row.agentId} className="costs-by-agent-row">
+                        <div className="costs-by-agent-left">
                           <Identity
                             name={row.agentName ?? row.agentId}
                             size="sm"
@@ -206,17 +219,24 @@ export function Costs() {
                             <StatusBadge status="terminated" />
                           )}
                         </div>
-                        <div className="text-right shrink-0 ml-2 tabular-nums">
-                          <span className="font-medium block">{formatCents(row.costCents)}</span>
-                          <span className="text-xs text-muted-foreground block">
-                            in {formatTokens(row.inputTokens)} / out {formatTokens(row.outputTokens)} tok
+                        <div className="costs-by-agent-right">
+                          <span className="costs-by-agent-amount">{formatCents(row.costCents)}</span>
+                          <span className="costs-by-agent-tokens">
+                            {t("inOutTok", {
+                              in: formatTokens(row.inputTokens),
+                              out: formatTokens(row.outputTokens),
+                            })}
                           </span>
                           {(row.apiRunCount > 0 || row.subscriptionRunCount > 0) && (
-                            <span className="text-xs text-muted-foreground block">
-                              {row.apiRunCount > 0 ? `api runs: ${row.apiRunCount}` : null}
+                            <span className="costs-by-agent-runs">
+                              {row.apiRunCount > 0 ? t("apiRunsCount", { count: row.apiRunCount }) : null}
                               {row.apiRunCount > 0 && row.subscriptionRunCount > 0 ? " | " : null}
                               {row.subscriptionRunCount > 0
-                                ? `subscription runs: ${row.subscriptionRunCount} (${formatTokens(row.subscriptionInputTokens)} in / ${formatTokens(row.subscriptionOutputTokens)} out tok)`
+                                ? t("subscriptionRunsDetail", {
+                                    count: row.subscriptionRunCount,
+                                    in: formatTokens(row.subscriptionInputTokens),
+                                    out: formatTokens(row.subscriptionOutputTokens),
+                                  })
                                 : null}
                             </span>
                           )}
@@ -229,21 +249,18 @@ export function Costs() {
             </Card>
 
             <Card>
-              <CardContent className="p-4">
-                <h3 className="text-sm font-semibold mb-3">By Project</h3>
+              <CardContent className="costs-panel">
+                <h3 className="costs-panel-title">{t("byProject")}</h3>
                 {data.byProject.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No project-attributed run costs yet.</p>
+                  <p className="costs-panel-empty">{t("noProjectCostsYet")}</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="costs-by-agent-list">
                     {data.byProject.map((row) => (
-                      <div
-                        key={row.projectId ?? "na"}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="truncate">
-                          {row.projectName ?? row.projectId ?? "Unattributed"}
+                      <div key={row.projectId ?? "na"} className="costs-by-project-row">
+                        <span>
+                          {row.projectName ?? row.projectId ?? t("unattributed")}
                         </span>
-                        <span className="font-medium tabular-nums">{formatCents(row.costCents)}</span>
+                        <span className="costs-by-agent-amount">{formatCents(row.costCents)}</span>
                       </div>
                     ))}
                   </div>

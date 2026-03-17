@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "@/lib/router";
 import type { Issue } from "@paperclipai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentsApi } from "../api/agents";
-import { authApi } from "../api/auth";
+import { authApi, isAuthSession } from "../api/auth";
 import { issuesApi } from "../api/issues";
 import { projectsApi } from "../api/projects";
 import { useCompany } from "../context/CompanyContext";
@@ -13,8 +14,8 @@ import { getRecentAssigneeIds, sortAgentsByRecency, trackRecentAssignee } from "
 import { StatusIcon } from "./StatusIcon";
 import { PriorityIcon } from "./PriorityIcon";
 import { Identity } from "./Identity";
-import { formatDate, cn, projectUrl } from "../lib/utils";
-import { timeAgo } from "../lib/timeAgo";
+import { formatDate, projectUrl } from "../lib/utils";
+import { formatRelativeTime } from "../lib/formatRelativeTime";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { User, Hexagon, ArrowUpRight, Tag, Plus, Trash2 } from "lucide-react";
@@ -31,9 +32,9 @@ interface IssuePropertiesProps {
 
 function PropertyRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      <span className="text-xs text-muted-foreground shrink-0 w-20">{label}</span>
-      <div className="flex items-center gap-1.5 min-w-0 flex-1">{children}</div>
+    <div className="ui-properties-row">
+      <span className="ui-properties-label">{label}</span>
+      <div className="ui-properties-value ui-properties-value-flex1">{children}</div>
     </div>
   );
 }
@@ -62,22 +63,19 @@ function PropertyPicker({
   extra?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const btnCn = cn(
-    "inline-flex items-center gap-1.5 cursor-pointer hover:bg-accent/50 rounded px-1 -mx-1 py-0.5 transition-colors",
-    triggerClassName,
-  );
+  const triggerClass = ["ui-properties-picker-trigger-inline", triggerClassName].filter(Boolean).join(" ");
 
   if (inline) {
     return (
       <div>
         <PropertyRow label={label}>
-          <button className={btnCn} onClick={() => onOpenChange(!open)}>
+          <button type="button" className={triggerClass} onClick={() => onOpenChange(!open)}>
             {triggerContent}
           </button>
           {extra}
         </PropertyRow>
         {open && (
-          <div className={cn("rounded-md border border-border bg-popover p-1 mb-2", popoverClassName)}>
+          <div className={["ui-properties-picker-inline-panel", popoverClassName].filter(Boolean).join(" ")}>
             {children}
           </div>
         )}
@@ -89,9 +87,9 @@ function PropertyPicker({
     <PropertyRow label={label}>
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
-          <button className={btnCn}>{triggerContent}</button>
+          <button type="button" className={triggerClass}>{triggerContent}</button>
         </PopoverTrigger>
-        <PopoverContent className={cn("p-1", popoverClassName)} align={popoverAlign} collisionPadding={16}>
+        <PopoverContent className={["ui-properties-picker-content-pad", popoverClassName].filter(Boolean).join(" ")} align={popoverAlign} collisionPadding={16}>
           {children}
         </PopoverContent>
       </Popover>
@@ -101,6 +99,7 @@ function PropertyPicker({
 }
 
 export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProps) {
+  const { t } = useTranslation();
   const { selectedCompanyId } = useCompany();
   const queryClient = useQueryClient();
   const companyId = issue.companyId ?? selectedCompanyId;
@@ -117,7 +116,7 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
   });
-  const currentUserId = session?.user?.id ?? session?.session?.userId;
+  const currentUserId = isAuthSession(session) ? session.user?.id ?? session.session?.userId : undefined;
 
   const { data: agents } = useQuery({
     queryKey: queryKeys.agents.list(companyId!),
@@ -209,20 +208,20 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
   const userLabel = (userId: string | null | undefined) =>
     userId
       ? userId === "local-board"
-        ? "Board"
+        ? t("properties.board")
         : currentUserId && userId === currentUserId
-          ? "Me"
+          ? t("properties.me")
           : userId.slice(0, 5)
       : null;
   const assigneeUserLabel = userLabel(issue.assigneeUserId);
   const creatorUserLabel = userLabel(issue.createdByUserId);
 
   const labelsTrigger = (issue.labels ?? []).length > 0 ? (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div className="ui-issue-props-chips">
       {(issue.labels ?? []).slice(0, 3).map((label) => (
         <span
           key={label.id}
-          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border"
+          className="ui-issue-props-chip"
           style={{
             borderColor: label.color,
             backgroundColor: `${label.color}22`,
@@ -233,26 +232,26 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
         </span>
       ))}
       {(issue.labels ?? []).length > 3 && (
-        <span className="text-xs text-muted-foreground">+{(issue.labels ?? []).length - 3}</span>
+        <span className="ui-issue-props-muted-sm">+{(issue.labels ?? []).length - 3}</span>
       )}
     </div>
   ) : (
     <>
-      <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="text-sm text-muted-foreground">No labels</span>
+      <Tag className="ui-issue-props-icon-sm" />
+      <span className="ui-issue-props-empty">{t("properties.noLabels")}</span>
     </>
   );
 
   const labelsContent = (
     <>
       <input
-        className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
-        placeholder="Search labels..."
+        className="ui-issue-props-search"
+        placeholder={t("properties.searchLabels")}
         value={labelSearch}
         onChange={(e) => setLabelSearch(e.target.value)}
         autoFocus={!inline}
       />
-      <div className="max-h-44 overflow-y-auto overscroll-contain space-y-0.5">
+      <div className="ui-issue-props-list">
         {(labels ?? [])
           .filter((label) => {
             if (!labelSearch.trim()) return true;
@@ -261,46 +260,45 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
           .map((label) => {
             const selected = (issue.labelIds ?? []).includes(label.id);
             return (
-              <div key={label.id} className="flex items-center gap-1">
+              <div key={label.id} className="ui-issue-props-option">
                 <button
-                  className={cn(
-                    "flex items-center gap-2 flex-1 px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-left",
-                    selected && "bg-accent"
-                  )}
+                  type="button"
+                  className={["ui-form-dialog-popover-item", "ui-issue-props-option-btn", selected ? "active" : ""].filter(Boolean).join(" ")}
                   onClick={() => toggleLabel(label.id)}
                 >
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: label.color }} />
-                  <span className="truncate">{label.name}</span>
+                  <span className="ui-issue-props-chip-dot" style={{ backgroundColor: label.color }} />
+                  <span className="ui-issue-props-trigger-inner">{label.name}</span>
                 </button>
                 <button
                   type="button"
-                  className="p-1 text-muted-foreground hover:text-destructive rounded"
+                  className="ui-issue-props-chip-remove"
                   onClick={() => deleteLabel.mutate(label.id)}
-                  title={`Delete ${label.name}`}
+                  title={t("properties.deleteLabel", { name: label.name })}
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 className="ui-issue-props-icon-xs" />
                 </button>
               </div>
             );
           })}
       </div>
-      <div className="mt-2 border-t border-border pt-2 space-y-1">
-        <div className="flex items-center gap-1">
+      <div className="ui-issue-props-add-section">
+        <div className="ui-issue-props-add-row">
           <input
-            className="h-7 w-7 p-0 rounded bg-transparent"
+            className="ui-issue-props-color-btn"
             type="color"
             value={newLabelColor}
             onChange={(e) => setNewLabelColor(e.target.value)}
           />
           <input
-            className="flex-1 px-2 py-1.5 text-xs bg-transparent outline-none rounded placeholder:text-muted-foreground/50"
-            placeholder="New label"
+            className="ui-issue-props-add-input"
+            placeholder={t("properties.newLabel")}
             value={newLabelName}
             onChange={(e) => setNewLabelName(e.target.value)}
           />
         </div>
         <button
-          className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 text-xs rounded border border-border hover:bg-accent/50 disabled:opacity-50"
+          type="button"
+          className="ui-issue-props-add-btn"
           disabled={!newLabelName.trim() || createLabel.isPending}
           onClick={() =>
             createLabel.mutate({
@@ -309,8 +307,8 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
             })
           }
         >
-          <Plus className="h-3 w-3" />
-          {createLabel.isPending ? "Creating…" : "Create label"}
+          <Plus className="ui-issue-props-icon-xs" />
+          {createLabel.isPending ? t("properties.creating") : t("properties.createLabel")}
         </button>
       </div>
     </>
@@ -320,48 +318,44 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
     <Identity name={assignee.name} size="sm" />
   ) : assigneeUserLabel ? (
     <>
-      <User className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="text-sm">{assigneeUserLabel}</span>
+      <User className="ui-issue-props-icon-sm" />
+      <span className="ui-issue-props-text">{assigneeUserLabel}</span>
     </>
   ) : (
     <>
-      <User className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="text-sm text-muted-foreground">Unassigned</span>
+      <User className="ui-issue-props-icon-sm" />
+      <span className="ui-issue-props-empty">{t("properties.unassigned")}</span>
     </>
   );
 
   const assigneeContent = (
     <>
       <input
-        className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
-        placeholder="Search assignees..."
+        className="ui-issue-props-search"
+        placeholder={t("properties.searchAssignees")}
         value={assigneeSearch}
         onChange={(e) => setAssigneeSearch(e.target.value)}
         autoFocus={!inline}
       />
-      <div className="max-h-48 overflow-y-auto overscroll-contain">
+      <div className="ui-issue-props-list ui-issue-props-list-tall">
         <button
-          className={cn(
-            "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-            !issue.assigneeAgentId && !issue.assigneeUserId && "bg-accent"
-          )}
+          type="button"
+          className={["ui-form-dialog-popover-item", !issue.assigneeAgentId && !issue.assigneeUserId ? "active" : ""].filter(Boolean).join(" ")}
           onClick={() => { onUpdate({ assigneeAgentId: null, assigneeUserId: null }); setAssigneeOpen(false); }}
         >
-          No assignee
+          {t("properties.noAssignee")}
         </button>
         {issue.createdByUserId && (
           <button
-            className={cn(
-              "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-              issue.assigneeUserId === issue.createdByUserId && "bg-accent",
-            )}
+            type="button"
+            className={["ui-form-dialog-popover-item", issue.assigneeUserId === issue.createdByUserId ? "active" : ""].filter(Boolean).join(" ")}
             onClick={() => {
               onUpdate({ assigneeAgentId: null, assigneeUserId: issue.createdByUserId });
               setAssigneeOpen(false);
             }}
           >
-            <User className="h-3 w-3 shrink-0 text-muted-foreground" />
-            {creatorUserLabel ? `Assign to ${creatorUserLabel === "Me" ? "me" : creatorUserLabel}` : "Assign to requester"}
+            <User className="ui-issue-props-icon-xs" />
+            {creatorUserLabel ? (creatorUserLabel === t("properties.me") ? t("properties.assignToMe") : t("properties.assignTo", { name: creatorUserLabel })) : t("properties.assignToRequester")}
           </button>
         )}
         {sortedAgents
@@ -373,13 +367,11 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
           .map((a) => (
           <button
             key={a.id}
-            className={cn(
-              "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-              a.id === issue.assigneeAgentId && "bg-accent"
-            )}
+            type="button"
+            className={["ui-form-dialog-popover-item", a.id === issue.assigneeAgentId ? "active" : ""].filter(Boolean).join(" ")}
             onClick={() => { trackRecentAssignee(a.id); onUpdate({ assigneeAgentId: a.id, assigneeUserId: null }); setAssigneeOpen(false); }}
           >
-            <AgentIcon icon={a.icon} className="shrink-0 h-3 w-3 text-muted-foreground" />
+            <AgentIcon icon={a.icon} className="ui-issue-props-icon-xs" />
             {a.name}
           </button>
         ))}
@@ -390,39 +382,34 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
   const projectTrigger = issue.projectId ? (
     <>
       <span
-        className="shrink-0 h-3 w-3 rounded-sm"
+        className="ui-issue-props-project-color"
         style={{ backgroundColor: orderedProjects.find((p) => p.id === issue.projectId)?.color ?? "#6366f1" }}
       />
-      <span className="text-sm truncate">{projectName(issue.projectId)}</span>
+      <span className="ui-issue-props-text ui-issue-props-trigger-inner">{projectName(issue.projectId)}</span>
     </>
   ) : (
     <>
-      <Hexagon className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="text-sm text-muted-foreground">No project</span>
+      <Hexagon className="ui-issue-props-icon-sm" />
+      <span className="ui-issue-props-empty">{t("properties.noProject")}</span>
     </>
   );
 
   const projectContent = (
     <>
       <input
-        className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
-        placeholder="Search projects..."
+        className="ui-issue-props-search"
+        placeholder={t("properties.searchProjects")}
         value={projectSearch}
         onChange={(e) => setProjectSearch(e.target.value)}
         autoFocus={!inline}
       />
-      <div className="max-h-48 overflow-y-auto overscroll-contain">
+      <div className="ui-issue-props-list ui-issue-props-list-tall">
         <button
-          className={cn(
-            "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 whitespace-nowrap",
-            !issue.projectId && "bg-accent"
-          )}
-          onClick={() => {
-            onUpdate({ projectId: null, executionWorkspaceSettings: null });
-            setProjectOpen(false);
-          }}
+          type="button"
+          className={["ui-form-dialog-popover-item", "ui-issue-props-nowrap", !issue.projectId ? "active" : ""].filter(Boolean).join(" ")}
+          onClick={() => { onUpdate({ projectId: null }); setProjectOpen(false); }}
         >
-          No project
+          {t("properties.noProject")}
         </button>
         {orderedProjects
           .filter((p) => {
@@ -433,10 +420,8 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
           .map((p) => (
           <button
             key={p.id}
-            className={cn(
-              "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 whitespace-nowrap",
-              p.id === issue.projectId && "bg-accent"
-            )}
+            type="button"
+            className={["ui-form-dialog-popover-item", "ui-issue-props-nowrap", p.id === issue.projectId ? "active" : ""].filter(Boolean).join(" ")}
             onClick={() => {
               onUpdate({
                 projectId: p.id,
@@ -448,7 +433,7 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
             }}
           >
             <span
-              className="shrink-0 h-3 w-3 rounded-sm"
+              className="ui-issue-props-project-color"
               style={{ backgroundColor: p.color ?? "#6366f1" }}
             />
             {p.name}
@@ -459,9 +444,9 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
   );
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <PropertyRow label="Status">
+    <div className="ui-properties">
+      <div className="ui-properties-section">
+        <PropertyRow label={t("properties.status")}>
           <StatusIcon
             status={issue.status}
             onChange={(status) => onUpdate({ status })}
@@ -469,7 +454,7 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
           />
         </PropertyRow>
 
-        <PropertyRow label="Priority">
+        <PropertyRow label={t("properties.priority")}>
           <PriorityIcon
             priority={issue.priority}
             onChange={(priority) => onUpdate({ priority })}
@@ -479,7 +464,7 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
 
         <PropertyPicker
           inline={inline}
-          label="Labels"
+          label={t("properties.labels")}
           open={labelsOpen}
           onOpenChange={(open) => { setLabelsOpen(open); if (!open) setLabelSearch(""); }}
           triggerContent={labelsTrigger}
@@ -491,7 +476,7 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
 
         <PropertyPicker
           inline={inline}
-          label="Assignee"
+          label={t("properties.assignee")}
           open={assigneeOpen}
           onOpenChange={(open) => { setAssigneeOpen(open); if (!open) setAssigneeSearch(""); }}
           triggerContent={assigneeTrigger}
@@ -499,10 +484,10 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
           extra={issue.assigneeAgentId ? (
             <Link
               to={`/agents/${issue.assigneeAgentId}`}
-              className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-accent/50 transition-colors text-muted-foreground hover:text-foreground"
+              className="ui-issue-props-action-btn"
               onClick={(e) => e.stopPropagation()}
             >
-              <ArrowUpRight className="h-3 w-3" />
+              <ArrowUpRight className="ui-issue-props-icon-xs" />
             </Link>
           ) : undefined}
         >
@@ -511,7 +496,7 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
 
         <PropertyPicker
           inline={inline}
-          label="Project"
+          label={t("properties.project")}
           open={projectOpen}
           onOpenChange={(open) => { setProjectOpen(open); if (!open) setProjectSearch(""); }}
           triggerContent={projectTrigger}
@@ -520,10 +505,10 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
           extra={issue.projectId ? (
             <Link
               to={projectLink(issue.projectId)!}
-              className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-accent/50 transition-colors text-muted-foreground hover:text-foreground"
+              className="ui-issue-props-action-btn"
               onClick={(e) => e.stopPropagation()}
             >
-              <ArrowUpRight className="h-3 w-3" />
+              <ArrowUpRight className="ui-issue-props-icon-xs" />
             </Link>
           ) : undefined}
         >
@@ -531,22 +516,19 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
         </PropertyPicker>
 
         {currentProjectSupportsExecutionWorkspace && (
-          <PropertyRow label="Workspace">
-            <div className="flex items-center justify-between gap-3 rounded-md border border-border px-2 py-1.5 w-full">
-              <div className="min-w-0">
-                <div className="text-sm">
-                  {usesIsolatedExecutionWorkspace ? "Isolated issue checkout" : "Project primary checkout"}
+          <PropertyRow label={t("properties.workspace")}>
+            <div className="ui-issue-props-card">
+              <div className="ui-issue-props-card-body">
+                <div className="ui-issue-props-card-title">
+                  {usesIsolatedExecutionWorkspace ? t("properties.isolatedCheckout") : t("properties.projectPrimaryCheckout")}
                 </div>
-                <div className="text-[11px] text-muted-foreground">
-                  Toggle whether this issue runs in its own execution workspace.
+                <div className="ui-issue-props-card-meta">
+                  {t("properties.workspaceToggleHint")}
                 </div>
               </div>
               <button
-                className={cn(
-                  "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                  usesIsolatedExecutionWorkspace ? "bg-green-600" : "bg-muted",
-                )}
                 type="button"
+                className={["ui-new-issue-toggle", usesIsolatedExecutionWorkspace ? "on" : ""].filter(Boolean).join(" ")}
                 onClick={() =>
                   onUpdate({
                     executionWorkspaceSettings: {
@@ -555,22 +537,17 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
                   })
                 }
               >
-                <span
-                  className={cn(
-                    "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
-                    usesIsolatedExecutionWorkspace ? "translate-x-4.5" : "translate-x-0.5",
-                  )}
-                />
+                <span className="ui-new-issue-toggle-thumb" />
               </button>
             </div>
           </PropertyRow>
         )}
 
-        <PropertyRow label="Execution label">
+        <PropertyRow label={t("properties.executionLabel")}>
           <input
             type="text"
-            className="flex-1 min-w-0 px-2 py-1 text-xs bg-transparent border border-transparent hover:border-border rounded outline-none focus:border-ring"
-            placeholder="e.g. Frontend-A"
+            className="ui-issue-props-add-input ui-issue-props-add-input-full"
+            placeholder={t("properties.executionLabelPlaceholder")}
             maxLength={64}
             value={issue.executionLabel ?? ""}
             onChange={(e) =>
@@ -580,9 +557,9 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
             }
           />
         </PropertyRow>
-        <PropertyRow label="Subtask execution">
+        <PropertyRow label={t("properties.subtaskExecution")}>
           <select
-            className="text-xs bg-transparent border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring"
+            className="ui-issue-props-select"
             value={issue.executionPolicy?.subtaskExecutionPolicy ?? "parallel"}
             onChange={(e) =>
               onUpdate({
@@ -593,18 +570,18 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
               })
             }
           >
-            <option value="parallel">Parallel</option>
-            <option value="sequential">Sequential</option>
-            <option value="phased">Phased</option>
+            <option value="parallel">{t("properties.parallel")} {t("properties.parallelForChildTasks")}</option>
+            <option value="sequential">{t("properties.sequential")}</option>
+            <option value="phased">{t("properties.phased")}</option>
           </select>
-          <span className="text-[11px] text-muted-foreground ml-1">(for child tasks)</span>
+          <span className="ui-issue-props-muted-sm ui-issue-props-ml-1">{t("properties.parallelForChildTasks")}</span>
         </PropertyRow>
 
         {issue.parentId && (
           <PropertyRow label="Parent">
             <Link
               to={`/issues/${issue.ancestors?.[0]?.identifier ?? issue.parentId}`}
-              className="text-sm hover:underline"
+              className="ui-issue-props-link"
             >
               {issue.ancestors?.[0]?.title ?? issue.parentId.slice(0, 8)}
             </Link>
@@ -613,46 +590,46 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
 
         {issue.requestDepth > 0 && (
           <PropertyRow label="Depth">
-            <span className="text-sm font-mono">{issue.requestDepth}</span>
+            <span className="ui-issue-props-text ui-issue-props-text-mono">{issue.requestDepth}</span>
           </PropertyRow>
         )}
       </div>
 
       <Separator />
 
-      <div className="space-y-1">
+      <div className="ui-properties-section">
         {(issue.createdByAgentId || issue.createdByUserId) && (
-          <PropertyRow label="Created by">
+          <PropertyRow label={t("properties.createdBy")}>
             {issue.createdByAgentId ? (
               <Link
                 to={`/agents/${issue.createdByAgentId}`}
-                className="hover:underline"
+                className="ui-issue-props-link"
               >
                 <Identity name={agentName(issue.createdByAgentId) ?? issue.createdByAgentId.slice(0, 8)} size="sm" />
               </Link>
             ) : (
               <>
-                <User className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-sm">{creatorUserLabel ?? "User"}</span>
+                <User className="ui-issue-props-icon-sm" />
+                <span className="ui-issue-props-text">{creatorUserLabel ?? "User"}</span>
               </>
             )}
           </PropertyRow>
         )}
         {issue.startedAt && (
-          <PropertyRow label="Started">
-            <span className="text-sm">{formatDate(issue.startedAt)}</span>
+          <PropertyRow label={t("properties.started")}>
+            <span className="ui-issue-props-text">{formatDate(issue.startedAt)}</span>
           </PropertyRow>
         )}
         {issue.completedAt && (
-          <PropertyRow label="Completed">
-            <span className="text-sm">{formatDate(issue.completedAt)}</span>
+          <PropertyRow label={t("properties.completed")}>
+            <span className="ui-issue-props-text">{formatDate(issue.completedAt)}</span>
           </PropertyRow>
         )}
-        <PropertyRow label="Created">
-          <span className="text-sm">{formatDate(issue.createdAt)}</span>
+        <PropertyRow label={t("properties.created")}>
+          <span className="ui-issue-props-text">{formatDate(issue.createdAt)}</span>
         </PropertyRow>
-        <PropertyRow label="Updated">
-          <span className="text-sm">{timeAgo(issue.updatedAt)}</span>
+        <PropertyRow label={t("properties.updated")}>
+          <span className="ui-issue-props-text">{formatRelativeTime(t, issue.updatedAt)}</span>
         </PropertyRow>
       </div>
     </div>

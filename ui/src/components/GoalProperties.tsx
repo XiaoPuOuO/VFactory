@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Link } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import type { Goal } from "@paperclipai/shared";
-import { GOAL_STATUSES, GOAL_LEVELS } from "@paperclipai/shared";
+import { GOAL_STATUSES, GOAL_LEVELS, GOAL_RECURRENCES } from "@paperclipai/shared";
 import { agentsApi } from "../api/agents";
 import { goalsApi } from "../api/goals";
 import { useCompany } from "../context/CompanyContext";
 import { queryKeys } from "../lib/queryKeys";
 import { StatusBadge } from "./StatusBadge";
-import { formatDate, cn, agentUrl } from "../lib/utils";
+import { formatDate, agentUrl } from "../lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -20,9 +21,9 @@ interface GoalPropertiesProps {
 
 function PropertyRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      <span className="text-xs text-muted-foreground shrink-0 w-20">{label}</span>
-      <div className="flex items-center gap-1.5 min-w-0">{children}</div>
+    <div className="ui-properties-row">
+      <span className="ui-properties-label">{label}</span>
+      <div className="ui-properties-value">{children}</div>
     </div>
   );
 }
@@ -46,17 +47,17 @@ function PickerButton({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="cursor-pointer hover:opacity-80 transition-opacity">
+        <button type="button" className="ui-properties-picker-trigger">
           {children}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-40 p-1" align="end">
+      <PopoverContent className="ui-properties-picker-content" align="end">
         {options.map((opt) => (
           <Button
             key={opt}
             variant="ghost"
             size="sm"
-            className={cn("w-full justify-start text-xs", opt === current && "bg-accent")}
+            className={["ui-properties-picker-item", opt === current ? "active" : ""].filter(Boolean).join(" ")}
             onClick={() => {
               onChange(opt);
               setOpen(false);
@@ -70,8 +71,18 @@ function PickerButton({
   );
 }
 
+const RECURRENCE_I18N: Record<string, string> = {
+  one_time: "goals.recurrenceOneTime",
+  daily: "goals.recurrenceDaily",
+  weekly: "goals.recurrenceWeekly",
+  monthly: "goals.recurrenceMonthly",
+  custom: "goals.recurrenceCustom",
+};
+
 export function GoalProperties({ goal, onUpdate }: GoalPropertiesProps) {
+  const { t } = useTranslation();
   const { selectedCompanyId } = useCompany();
+  const recurrence = goal.recurrence ?? "one_time";
 
   const { data: agents } = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId!),
@@ -94,8 +105,8 @@ export function GoalProperties({ goal, onUpdate }: GoalPropertiesProps) {
     : null;
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
+    <div className="ui-properties">
+      <div className="ui-properties-section">
         <PropertyRow label="Status">
           {onUpdate ? (
             <PickerButton
@@ -117,32 +128,70 @@ export function GoalProperties({ goal, onUpdate }: GoalPropertiesProps) {
               options={GOAL_LEVELS}
               onChange={(level) => onUpdate({ level })}
             >
-              <span className="text-sm capitalize">{goal.level}</span>
+              <span className="ui-properties-text capitalize">{goal.level}</span>
             </PickerButton>
           ) : (
-            <span className="text-sm capitalize">{goal.level}</span>
+            <span className="ui-properties-text capitalize">{goal.level}</span>
+          )}
+        </PropertyRow>
+
+        <PropertyRow label={t("goals.recurrence")}>
+          {onUpdate ? (
+            <PickerButton
+              current={recurrence}
+              options={[...GOAL_RECURRENCES]}
+              onChange={(value) => {
+                if (value === "custom") {
+                  onUpdate({
+                    recurrence: "custom",
+                    recurrenceIntervalDays: goal.recurrenceIntervalDays || 1,
+                    recurrenceIntervalHours: goal.recurrenceIntervalHours ?? 0,
+                    recurrenceIntervalMinutes: goal.recurrenceIntervalMinutes ?? 0,
+                    recurrenceIntervalSeconds: goal.recurrenceIntervalSeconds ?? 0,
+                  });
+                } else {
+                  onUpdate({ recurrence: value });
+                }
+              }}
+            >
+              <span className="ui-properties-text">
+                {recurrence === "custom"
+                  ? t("goals.recurrenceIntervalLabel", {
+                      days: goal.recurrenceIntervalDays ?? 0,
+                      hours: goal.recurrenceIntervalHours ?? 0,
+                      minutes: goal.recurrenceIntervalMinutes ?? 0,
+                      seconds: goal.recurrenceIntervalSeconds ?? 0,
+                    })
+                  : (RECURRENCE_I18N[recurrence] ? t(RECURRENCE_I18N[recurrence]) : recurrence)}
+              </span>
+            </PickerButton>
+          ) : (
+            <span className="ui-properties-text">
+              {recurrence === "custom"
+                ? t("goals.recurrenceIntervalLabel", {
+                    days: goal.recurrenceIntervalDays ?? 0,
+                    hours: goal.recurrenceIntervalHours ?? 0,
+                    minutes: goal.recurrenceIntervalMinutes ?? 0,
+                    seconds: goal.recurrenceIntervalSeconds ?? 0,
+                  })
+                : (RECURRENCE_I18N[recurrence] ? t(RECURRENCE_I18N[recurrence]) : recurrence)}
+            </span>
           )}
         </PropertyRow>
 
         <PropertyRow label="Owner">
           {ownerAgent ? (
-            <Link
-              to={agentUrl(ownerAgent)}
-              className="text-sm hover:underline"
-            >
+            <Link to={agentUrl(ownerAgent)} className="ui-properties-link">
               {ownerAgent.name}
             </Link>
           ) : (
-            <span className="text-sm text-muted-foreground">None</span>
+            <span className="ui-properties-muted">None</span>
           )}
         </PropertyRow>
 
         {goal.parentId && (
           <PropertyRow label="Parent Goal">
-            <Link
-              to={`/goals/${goal.parentId}`}
-              className="text-sm hover:underline"
-            >
+            <Link to={`/goals/${goal.parentId}`} className="ui-properties-link">
               {parentGoal?.title ?? goal.parentId.slice(0, 8)}
             </Link>
           </PropertyRow>
@@ -151,12 +200,12 @@ export function GoalProperties({ goal, onUpdate }: GoalPropertiesProps) {
 
       <Separator />
 
-      <div className="space-y-1">
+      <div className="ui-properties-section">
         <PropertyRow label="Created">
-          <span className="text-sm">{formatDate(goal.createdAt)}</span>
+          <span className="ui-properties-text">{formatDate(goal.createdAt)}</span>
         </PropertyRow>
         <PropertyRow label="Updated">
-          <span className="text-sm">{formatDate(goal.updatedAt)}</span>
+          <span className="ui-properties-text">{formatDate(goal.updatedAt)}</span>
         </PropertyRow>
       </div>
     </div>

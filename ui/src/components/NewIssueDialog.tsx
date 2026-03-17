@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ChangeEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
 import { issuesApi } from "../api/issues";
 import { projectsApi } from "../api/projects";
 import { agentsApi } from "../api/agents";
-import { authApi } from "../api/auth";
+import { authApi, isAuthSession } from "../api/auth";
 import { assetsApi } from "../api/assets";
 import { queryKeys } from "../lib/queryKeys";
 import { useProjectOrder } from "../hooks/useProjectOrder";
@@ -13,6 +14,7 @@ import { getRecentAssigneeIds, sortAgentsByRecency, trackRecentAssignee } from "
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,9 +38,7 @@ import {
   Paperclip,
   Loader2,
 } from "lucide-react";
-import { cn } from "../lib/utils";
 import { extractProviderIdWithFallback } from "../lib/model-utils";
-import { issueStatusText, issueStatusTextDefault, priorityColor, priorityColorDefault } from "../lib/status-colors";
 import { MarkdownEditor, type MarkdownEditorRef, type MentionOption } from "./MarkdownEditor";
 import { AgentIcon } from "./AgentIconPicker";
 import { InlineEntitySelector, type InlineEntityOption } from "./InlineEntitySelector";
@@ -72,16 +72,38 @@ interface IssueDraft {
   executionLabel: string;
 }
 
-const ISSUE_OVERRIDE_ADAPTER_TYPES = new Set(["claude_local", "codex_local", "opencode_local"]);
+const ISSUE_OVERRIDE_ADAPTER_TYPES = new Set([
+  "claude_local",
+  "claude_remote",
+  "codex_local",
+  "codex_remote",
+  "opencode_local",
+]);
 
-const ISSUE_THINKING_EFFORT_OPTIONS = {
+const ISSUE_THINKING_EFFORT_OPTIONS: Record<
+  string,
+  Array<{ value: string; label: string }>
+> = {
   claude_local: [
     { value: "", label: "Default" },
     { value: "low", label: "Low" },
     { value: "medium", label: "Medium" },
     { value: "high", label: "High" },
   ],
+  claude_remote: [
+    { value: "", label: "Default" },
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+  ],
   codex_local: [
+    { value: "", label: "Default" },
+    { value: "minimal", label: "Minimal" },
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+  ],
+  codex_remote: [
     { value: "", label: "Default" },
     { value: "minimal", label: "Minimal" },
     { value: "low", label: "Low" },
@@ -112,17 +134,15 @@ function buildAssigneeAdapterOverrides(input: {
   const adapterConfig: Record<string, unknown> = {};
   if (input.modelOverride) adapterConfig.model = input.modelOverride;
   if (input.thinkingEffortOverride) {
-    if (adapterType === "codex_local") {
+    if (adapterType === "codex_local" || adapterType === "codex_remote") {
       adapterConfig.modelReasoningEffort = input.thinkingEffortOverride;
     } else if (adapterType === "opencode_local") {
       adapterConfig.variant = input.thinkingEffortOverride;
-    } else if (adapterType === "claude_local") {
+    } else if (adapterType === "claude_local" || adapterType === "claude_remote") {
       adapterConfig.effort = input.thinkingEffortOverride;
-    } else if (adapterType === "opencode_local") {
-      adapterConfig.variant = input.thinkingEffortOverride;
     }
   }
-  if (adapterType === "claude_local" && input.chrome) {
+  if ((adapterType === "claude_local" || adapterType === "claude_remote") && input.chrome) {
     adapterConfig.chrome = true;
   }
 
@@ -151,25 +171,35 @@ function clearDraft() {
   localStorage.removeItem(DRAFT_KEY);
 }
 
-const statuses = [
-  { value: "backlog", label: "Backlog", color: issueStatusText.backlog ?? issueStatusTextDefault },
-  { value: "todo", label: "Todo", color: issueStatusText.todo ?? issueStatusTextDefault },
-  { value: "in_progress", label: "In Progress", color: issueStatusText.in_progress ?? issueStatusTextDefault },
-  { value: "in_review", label: "In Review", color: issueStatusText.in_review ?? issueStatusTextDefault },
-  { value: "done", label: "Done", color: issueStatusText.done ?? issueStatusTextDefault },
+const STATUS_VALUES = [
+  { value: "backlog", labelKey: "status.backlog" },
+  { value: "todo", labelKey: "status.todo" },
+  { value: "in_progress", labelKey: "status.inProgress" },
+  { value: "in_review", labelKey: "status.inReview" },
+  { value: "done", labelKey: "status.done" },
 ];
 
-const priorities = [
-  { value: "critical", label: "Critical", icon: AlertTriangle, color: priorityColor.critical ?? priorityColorDefault },
-  { value: "high", label: "High", icon: ArrowUp, color: priorityColor.high ?? priorityColorDefault },
-  { value: "medium", label: "Medium", icon: Minus, color: priorityColor.medium ?? priorityColorDefault },
-  { value: "low", label: "Low", icon: ArrowDown, color: priorityColor.low ?? priorityColorDefault },
+const PRIORITY_VALUES = [
+  { value: "critical", labelKey: "dashboard.priorityCritical", icon: AlertTriangle },
+  { value: "high", labelKey: "dashboard.priorityHigh", icon: ArrowUp },
+  { value: "medium", labelKey: "dashboard.priorityMedium", icon: Minus },
+  { value: "low", labelKey: "dashboard.priorityLow", icon: ArrowDown },
 ];
 
 export function NewIssueDialog() {
+  const { t } = useTranslation();
   const { newIssueOpen, newIssueDefaults, closeNewIssue } = useDialog();
   const { companies, selectedCompanyId, selectedCompany } = useCompany();
   const queryClient = useQueryClient();
+
+  const statuses = useMemo(
+    () => STATUS_VALUES.map((s) => ({ ...s, label: t(s.labelKey) })),
+    [t],
+  );
+  const priorities = useMemo(
+    () => PRIORITY_VALUES.map((p) => ({ ...p, label: t(p.labelKey) })),
+    [t],
+  );
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("todo");
@@ -215,7 +245,7 @@ export function NewIssueDialog() {
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
   });
-  const currentUserId = session?.user?.id ?? session?.session?.userId ?? null;
+  const currentUserId = isAuthSession(session) ? session.user?.id ?? session.session?.userId ?? null : null;
   const { orderedProjects } = useProjectOrder({
     projects: projects ?? [],
     companyId: effectiveCompanyId,
@@ -375,11 +405,8 @@ export function NewIssueDialog() {
     }
 
     const validThinkingValues =
-      assigneeAdapterType === "codex_local"
-        ? ISSUE_THINKING_EFFORT_OPTIONS.codex_local
-        : assigneeAdapterType === "opencode_local"
-          ? ISSUE_THINKING_EFFORT_OPTIONS.opencode_local
-          : ISSUE_THINKING_EFFORT_OPTIONS.claude_local;
+      ISSUE_THINKING_EFFORT_OPTIONS[assigneeAdapterType ?? ""] ??
+      ISSUE_THINKING_EFFORT_OPTIONS.claude_local;
     if (!validThinkingValues.some((option) => option.value === assigneeThinkingEffort)) {
       setAssigneeThinkingEffort("");
     }
@@ -491,18 +518,15 @@ export function NewIssueDialog() {
   const currentProjectSupportsExecutionWorkspace = Boolean(currentProjectExecutionWorkspacePolicy?.enabled);
   const assigneeOptionsTitle =
     assigneeAdapterType === "claude_local"
-      ? "Claude options"
+      ? t("newIssue.claudeOptions")
       : assigneeAdapterType === "codex_local"
-        ? "Codex options"
+        ? t("newIssue.codexOptions")
         : assigneeAdapterType === "opencode_local"
-          ? "OpenCode options"
-        : "Agent options";
+          ? t("newIssue.opencodeOptions")
+          : t("newIssue.agentOptions");
   const thinkingEffortOptions =
-    assigneeAdapterType === "codex_local"
-      ? ISSUE_THINKING_EFFORT_OPTIONS.codex_local
-      : assigneeAdapterType === "opencode_local"
-        ? ISSUE_THINKING_EFFORT_OPTIONS.opencode_local
-      : ISSUE_THINKING_EFFORT_OPTIONS.claude_local;
+    ISSUE_THINKING_EFFORT_OPTIONS[assigneeAdapterType ?? ""] ??
+    ISSUE_THINKING_EFFORT_OPTIONS.claude_local;
   const recentAssigneeIds = useMemo(() => getRecentAssigneeIds(), [newIssueOpen]);
   const assigneeOptions = useMemo<InlineEntityOption[]>(
     () =>
@@ -583,12 +607,7 @@ export function NewIssueDialog() {
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
-        className={cn(
-          "p-0 gap-0 flex flex-col max-h-[calc(100dvh-2rem)]",
-          expanded
-            ? "sm:max-w-2xl h-[calc(100dvh-2rem)]"
-            : "sm:max-w-lg"
-        )}
+        className={["ui-new-issue-dialog-content", expanded ? "expanded" : ""].filter(Boolean).join(" ")}
         onKeyDown={handleKeyDown}
         onEscapeKeyDown={(event) => {
           if (createIssue.isPending) {
@@ -612,16 +631,15 @@ export function NewIssueDialog() {
           }
         }}
       >
+        <DialogTitle className="sr-only">{t("nav.newIssue")}</DialogTitle>
         {/* Header bar */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="ui-form-dialog-header">
+          <div className="ui-form-dialog-header-left">
             <Popover open={companyOpen} onOpenChange={setCompanyOpen}>
               <PopoverTrigger asChild>
                 <button
-                  className={cn(
-                    "px-1.5 py-0.5 rounded text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity",
-                    !dialogCompany?.brandColor && "bg-muted",
-                  )}
+                  type="button"
+                  className="ui-new-issue-company-trigger"
                   style={
                     dialogCompany?.brandColor
                       ? {
@@ -634,24 +652,19 @@ export function NewIssueDialog() {
                   {(dialogCompany?.name ?? "").slice(0, 3).toUpperCase()}
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-48 p-1" align="start">
+              <PopoverContent className="ui-form-dialog-popover-content w-48" align="start">
                 {companies.filter((c) => c.status !== "archived").map((c) => (
                   <button
                     key={c.id}
-                    className={cn(
-                      "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-                      c.id === effectiveCompanyId && "bg-accent",
-                    )}
+                    type="button"
+                    className={["ui-form-dialog-popover-item", c.id === effectiveCompanyId ? "active" : ""].filter(Boolean).join(" ")}
                     onClick={() => {
                       handleCompanyChange(c.id);
                       setCompanyOpen(false);
                     }}
                   >
                     <span
-                      className={cn(
-                        "px-1 py-0.5 rounded text-[10px] font-semibold leading-none",
-                        !c.brandColor && "bg-muted",
-                      )}
+                      className="ui-new-issue-company-option-badge"
                       style={
                         c.brandColor
                           ? {
@@ -663,41 +676,39 @@ export function NewIssueDialog() {
                     >
                       {c.name.slice(0, 3).toUpperCase()}
                     </span>
-                    <span className="truncate">{c.name}</span>
+                    <span className="ui-new-issue-trigger-inner">{c.name}</span>
                   </button>
                 ))}
               </PopoverContent>
             </Popover>
-            <span className="text-muted-foreground/60">&rsaquo;</span>
-            <span>New issue</span>
+            <span className="ui-form-dialog-header-sep">&rsaquo;</span>
+            <span>{t("newIssue.title")}</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="ui-form-dialog-header-actions">
             <Button
               variant="ghost"
               size="icon-xs"
-              className="text-muted-foreground"
               onClick={() => setExpanded(!expanded)}
               disabled={createIssue.isPending}
             >
-              {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              {expanded ? <Minimize2 /> : <Maximize2 />}
             </Button>
             <Button
               variant="ghost"
               size="icon-xs"
-              className="text-muted-foreground"
               onClick={() => closeNewIssue()}
               disabled={createIssue.isPending}
             >
-              <span className="text-lg leading-none">&times;</span>
+              <span className="ui-form-dialog-close-char">&times;</span>
             </Button>
           </div>
         </div>
 
         {/* Title */}
-        <div className="px-4 pt-4 pb-2 shrink-0">
+        <div className="ui-form-dialog-title-wrap">
           <textarea
-            className="w-full text-lg font-semibold bg-transparent outline-none resize-none overflow-hidden placeholder:text-muted-foreground/50"
-            placeholder="Issue title"
+            className="ui-form-dialog-title-input ui-new-issue-title-textarea"
+            placeholder={t("newIssue.issueTitle")}
             rows={1}
             value={title}
             onChange={(e) => {
@@ -725,19 +736,19 @@ export function NewIssueDialog() {
           />
         </div>
 
-        <div className="px-4 pb-2 shrink-0">
-          <div className="overflow-x-auto overscroll-x-contain">
-            <div className="inline-flex items-center gap-2 text-sm text-muted-foreground flex-wrap sm:flex-nowrap sm:min-w-max">
-              <span>For</span>
+        <div className="ui-new-issue-section">
+          <div className="ui-new-issue-assignee-row">
+            <div className="ui-new-issue-assignee-row-inner">
+              <span>{t("newIssue.for")}</span>
               <InlineEntitySelector
                 ref={assigneeSelectorRef}
                 value={assigneeId}
                 options={assigneeOptions}
-                placeholder="Assignee"
+                placeholder={t("properties.assignee")}
                 disablePortal
-                noneLabel="No assignee"
-                searchPlaceholder="Search assignees..."
-                emptyMessage="No assignees found."
+                noneLabel={t("properties.noAssignee")}
+                searchPlaceholder={t("properties.searchAssignees")}
+                emptyMessage={t("newIssue.noAssigneesFound")}
                 onChange={(id) => { if (id) trackRecentAssignee(id); setAssigneeId(id); }}
                 onConfirm={() => {
                   projectSelectorRef.current?.focus();
@@ -745,34 +756,34 @@ export function NewIssueDialog() {
                 renderTriggerValue={(option) =>
                   option && currentAssignee ? (
                     <>
-                      <AgentIcon icon={currentAssignee.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{option.label}</span>
+                      <AgentIcon icon={currentAssignee.icon} className="ui-new-issue-chip-muted" />
+                      <span className="ui-new-issue-trigger-inner">{option.label}</span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">Assignee</span>
+                    <span className="ui-new-issue-chip-muted">{t("properties.assignee")}</span>
                   )
                 }
                 renderOption={(option) => {
-                  if (!option.id) return <span className="truncate">{option.label}</span>;
+                  if (!option.id) return <span className="ui-new-issue-trigger-inner">{option.label}</span>;
                   const assignee = (agents ?? []).find((agent) => agent.id === option.id);
                   return (
                     <>
-                      <AgentIcon icon={assignee?.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{option.label}</span>
+                      <AgentIcon icon={assignee?.icon} className="ui-new-issue-chip-muted" />
+                      <span className="ui-new-issue-trigger-inner">{option.label}</span>
                     </>
                   );
                 }}
               />
-              <span>in</span>
+              <span>{t("newIssue.in")}</span>
               <InlineEntitySelector
                 ref={projectSelectorRef}
                 value={projectId}
                 options={projectOptions}
-                placeholder="Project"
+                placeholder={t("properties.project")}
                 disablePortal
-                noneLabel="No project"
-                searchPlaceholder="Search projects..."
-                emptyMessage="No projects found."
+                noneLabel={t("properties.noProject")}
+                searchPlaceholder={t("properties.searchProjects")}
+                emptyMessage={t("newIssue.noProjectsFound")}
                 onChange={handleProjectChange}
                 onConfirm={() => {
                   descriptionEditorRef.current?.focus();
@@ -781,25 +792,25 @@ export function NewIssueDialog() {
                   option && currentProject ? (
                     <>
                       <span
-                        className="h-3.5 w-3.5 shrink-0 rounded-sm"
+                        className="ui-new-issue-project-color"
                         style={{ backgroundColor: currentProject.color ?? "#6366f1" }}
                       />
-                      <span className="truncate">{option.label}</span>
+                      <span className="ui-new-issue-trigger-inner">{option.label}</span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">Project</span>
+                    <span className="ui-new-issue-chip-muted">{t("properties.project")}</span>
                   )
                 }
                 renderOption={(option) => {
-                  if (!option.id) return <span className="truncate">{option.label}</span>;
+                  if (!option.id) return <span className="ui-new-issue-trigger-inner">{option.label}</span>;
                   const project = orderedProjects.find((item) => item.id === option.id);
                   return (
                     <>
                       <span
-                        className="h-3.5 w-3.5 shrink-0 rounded-sm"
+                        className="ui-new-issue-project-color"
                         style={{ backgroundColor: project?.color ?? "#6366f1" }}
                       />
-                      <span className="truncate">{option.label}</span>
+                      <span className="ui-new-issue-trigger-inner">{option.label}</span>
                     </>
                   );
                 }}
@@ -809,39 +820,31 @@ export function NewIssueDialog() {
         </div>
 
         {currentProjectSupportsExecutionWorkspace && (
-          <div className="px-4 pb-2 shrink-0">
-            <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-              <div className="space-y-0.5">
-                <div className="text-xs font-medium">Use isolated issue checkout</div>
-                <div className="text-[11px] text-muted-foreground">
-                  Create an issue-specific execution workspace instead of using the project's primary checkout.
+          <div className="ui-new-issue-section">
+            <div className="ui-new-issue-toggle-row">
+              <div className="ui-new-issue-toggle-row-caption">
+                <div className="ui-new-issue-toggle-row-title">{t("newIssue.useIsolatedCheckout")}</div>
+                <div className="ui-new-issue-toggle-row-hint">
+                  {t("newIssue.useIsolatedCheckoutHint")}
                 </div>
               </div>
               <button
-                className={cn(
-                  "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                  useIsolatedExecutionWorkspace ? "bg-green-600" : "bg-muted",
-                )}
-                onClick={() => setUseIsolatedExecutionWorkspace((value) => !value)}
                 type="button"
+                className={["ui-new-issue-toggle", useIsolatedExecutionWorkspace ? "on" : ""].filter(Boolean).join(" ")}
+                onClick={() => setUseIsolatedExecutionWorkspace((value) => !value)}
               >
-                <span
-                  className={cn(
-                    "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
-                    useIsolatedExecutionWorkspace ? "translate-x-4.5" : "translate-x-0.5",
-                  )}
-                />
+                <span className="ui-new-issue-toggle-thumb" />
               </button>
             </div>
           </div>
         )}
 
-        <div className="px-4 pb-2 shrink-0">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Execution label (optional)</label>
+        <div className="ui-new-issue-section">
+          <label className="ui-new-issue-section-label">{t("newIssue.executionLabelOptional")}</label>
           <input
             type="text"
-            className="w-full px-3 py-2 text-sm bg-transparent border border-border rounded-md outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-            placeholder="e.g. Frontend-A"
+            className="ui-new-issue-input"
+            placeholder={t("newIssue.executionLabelPlaceholder")}
             maxLength={64}
             value={executionLabel}
             onChange={(e) => setExecutionLabel(e.target.value)}
@@ -849,39 +852,38 @@ export function NewIssueDialog() {
         </div>
 
         {supportsAssigneeOverrides && (
-          <div className="px-4 pb-2 shrink-0">
+          <div className="ui-new-issue-section">
             <button
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              type="button"
+              className="ui-new-issue-options-trigger"
               onClick={() => setAssigneeOptionsOpen((open) => !open)}
             >
-              {assigneeOptionsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              {assigneeOptionsOpen ? <ChevronDown /> : <ChevronRight />}
               {assigneeOptionsTitle}
             </button>
             {assigneeOptionsOpen && (
-              <div className="mt-2 rounded-md border border-border p-3 bg-muted/20 space-y-3">
-                <div className="space-y-1.5">
-                  <div className="text-xs text-muted-foreground">Model</div>
+              <div className="ui-new-issue-options-panel">
+                <div className="ui-new-issue-options-field">
+                  <div className="ui-new-issue-options-field-label">{t("newIssue.model")}</div>
                   <InlineEntitySelector
                     value={assigneeModelOverride}
                     options={modelOverrideOptions}
-                    placeholder="Default model"
+                    placeholder={t("newIssue.defaultModel")}
                     disablePortal
-                    noneLabel="Default model"
-                    searchPlaceholder="Search models..."
-                    emptyMessage="No models found."
+                    noneLabel={t("newIssue.defaultModel")}
+                    searchPlaceholder={t("newIssue.searchModels")}
+                    emptyMessage={t("newIssue.noModelsFound")}
                     onChange={setAssigneeModelOverride}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <div className="text-xs text-muted-foreground">Thinking effort</div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="ui-new-issue-options-field">
+                  <div className="ui-new-issue-options-field-label">{t("newIssue.thinkingEffort")}</div>
+                  <div className="ui-new-issue-thinking-options">
                     {thinkingEffortOptions.map((option) => (
                       <button
                         key={option.value || "default"}
-                        className={cn(
-                          "px-2 py-1 rounded-md text-xs border border-border hover:bg-accent/50 transition-colors",
-                          assigneeThinkingEffort === option.value && "bg-accent"
-                        )}
+                        type="button"
+                        className={["ui-new-issue-thinking-option", assigneeThinkingEffort === option.value ? "active" : ""].filter(Boolean).join(" ")}
                         onClick={() => setAssigneeThinkingEffort(option.value)}
                       >
                         {option.label}
@@ -890,21 +892,14 @@ export function NewIssueDialog() {
                   </div>
                 </div>
                 {assigneeAdapterType === "claude_local" && (
-                  <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5">
-                    <div className="text-xs text-muted-foreground">Enable Chrome (--chrome)</div>
+                  <div className="ui-new-issue-toggle-row">
+                    <div className="ui-new-issue-options-field-label">{t("newIssue.enableChrome")}</div>
                     <button
-                      className={cn(
-                        "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                        assigneeChrome ? "bg-green-600" : "bg-muted"
-                      )}
+                      type="button"
+                      className={["ui-new-issue-toggle", assigneeChrome ? "on" : ""].filter(Boolean).join(" ")}
                       onClick={() => setAssigneeChrome((value) => !value)}
                     >
-                      <span
-                        className={cn(
-                          "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
-                          assigneeChrome ? "translate-x-4.5" : "translate-x-0.5"
-                        )}
-                      />
+                      <span className="ui-new-issue-toggle-thumb" />
                     </button>
                   </div>
                 )}
@@ -914,15 +909,15 @@ export function NewIssueDialog() {
         )}
 
         {/* Description */}
-        <div className={cn("px-4 pb-2 overflow-y-auto min-h-0 border-t border-border/60 pt-3", expanded ? "flex-1" : "")}>
+        <div className={["ui-new-issue-description-wrap", expanded ? "expanded" : ""].filter(Boolean).join(" ")}>
           <MarkdownEditor
             ref={descriptionEditorRef}
             value={description}
             onChange={setDescription}
-            placeholder="Add description..."
+            placeholder={t("newIssue.addDescription")}
             bordered={false}
             mentions={mentionOptions}
-            contentClassName={cn("text-sm text-muted-foreground pb-12", expanded ? "min-h-[220px]" : "min-h-[120px]")}
+            contentClassName={["ui-form-dialog-content-editor", "pb-12", expanded ? "expanded" : ""].filter(Boolean).join(" ")}
             imageUploadHandler={async (file) => {
               const asset = await uploadDescriptionImage.mutateAsync(file);
               return asset.contentPath;
@@ -931,26 +926,24 @@ export function NewIssueDialog() {
         </div>
 
         {/* Property chips bar */}
-        <div className="flex items-center gap-1.5 px-4 py-2 border-t border-border flex-wrap shrink-0">
+        <div className="ui-new-issue-chips-bar">
           {/* Status chip */}
           <Popover open={statusOpen} onOpenChange={setStatusOpen}>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
-                <CircleDot className={cn("h-3 w-3", currentStatus.color)} />
+              <button type="button" className="ui-form-dialog-chip">
+                <CircleDot className="ui-new-issue-chip-dot" data-status={status} />
                 {currentStatus.label}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-36 p-1" align="start">
+            <PopoverContent className="ui-form-dialog-popover-content w-40" align="start">
               {statuses.map((s) => (
                 <button
                   key={s.value}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-                    s.value === status && "bg-accent"
-                  )}
+                  type="button"
+                  className={["ui-form-dialog-popover-item", s.value === status ? "active" : ""].filter(Boolean).join(" ")}
                   onClick={() => { setStatus(s.value); setStatusOpen(false); }}
                 >
-                  <CircleDot className={cn("h-3 w-3", s.color)} />
+                  <CircleDot className="ui-new-issue-chip-dot" data-status={s.value} />
                   {s.label}
                 </button>
               ))}
@@ -960,31 +953,29 @@ export function NewIssueDialog() {
           {/* Priority chip */}
           <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
+              <button type="button" className="ui-form-dialog-chip">
                 {currentPriority ? (
                   <>
-                    <currentPriority.icon className={cn("h-3 w-3", currentPriority.color)} />
+                    <currentPriority.icon className="ui-new-issue-chip-dot" data-priority={currentPriority.value} />
                     {currentPriority.label}
                   </>
                 ) : (
                   <>
-                    <Minus className="h-3 w-3 text-muted-foreground" />
-                    Priority
+                    <Minus className="ui-new-issue-chip-muted" />
+                    {t("properties.priority")}
                   </>
                 )}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-36 p-1" align="start">
+            <PopoverContent className="ui-form-dialog-popover-content w-40" align="start">
               {priorities.map((p) => (
                 <button
                   key={p.value}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
-                    p.value === priority && "bg-accent"
-                  )}
+                  type="button"
+                  className={["ui-form-dialog-popover-item", p.value === priority ? "active" : ""].filter(Boolean).join(" ")}
                   onClick={() => { setPriority(p.value); setPriorityOpen(false); }}
                 >
-                  <p.icon className={cn("h-3 w-3", p.color)} />
+                  <p.icon className="ui-new-issue-chip-dot" data-priority={p.value} />
                   {p.label}
                 </button>
               ))}
@@ -992,9 +983,9 @@ export function NewIssueDialog() {
           </Popover>
 
           {/* Labels chip (placeholder) */}
-          <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors text-muted-foreground">
-            <Tag className="h-3 w-3" />
-            Labels
+          <button type="button" className="ui-form-dialog-chip ui-new-issue-chip-muted">
+            <Tag className="ui-new-issue-chip-muted" />
+            {t("newIssue.labels")}
           </button>
 
           {/* Attach image chip */}
@@ -1002,70 +993,71 @@ export function NewIssueDialog() {
             ref={attachInputRef}
             type="file"
             accept="image/png,image/jpeg,image/webp,image/gif"
-            className="hidden"
+            className="ui-new-issue-file-input"
             onChange={handleAttachImage}
           />
           <button
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors text-muted-foreground"
+            type="button"
+            className="ui-form-dialog-chip ui-new-issue-chip-muted"
             onClick={() => attachInputRef.current?.click()}
             disabled={uploadDescriptionImage.isPending}
           >
-            <Paperclip className="h-3 w-3" />
-            {uploadDescriptionImage.isPending ? "Uploading..." : "Image"}
+            <Paperclip />
+            {uploadDescriptionImage.isPending ? t("newIssue.uploading") : t("newIssue.image")}
           </button>
 
           {/* More (dates) */}
           <Popover open={moreOpen} onOpenChange={setMoreOpen}>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center justify-center rounded-md border border-border p-1 text-xs hover:bg-accent/50 transition-colors text-muted-foreground">
-                <MoreHorizontal className="h-3 w-3" />
+              <button type="button" className="ui-form-dialog-chip ui-new-issue-chip-muted ui-new-issue-more-trigger">
+                <MoreHorizontal />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-44 p-1" align="start">
-              <button className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground">
-                <Calendar className="h-3 w-3" />
-                Start date
+            <PopoverContent className="ui-form-dialog-popover-content w-44" align="start">
+              <button type="button" className="ui-form-dialog-popover-item ui-form-dialog-popover-item-muted">
+                <Calendar className="ui-new-issue-chip-muted" />
+                {t("newIssue.startDate")}
               </button>
-              <button className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground">
-                <Calendar className="h-3 w-3" />
-                Due date
+              <button type="button" className="ui-form-dialog-popover-item ui-form-dialog-popover-item-muted">
+                <Calendar className="ui-new-issue-chip-muted" />
+                {t("newIssue.dueDate")}
               </button>
             </PopoverContent>
           </Popover>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border shrink-0">
+        <div className="ui-form-dialog-footer ui-form-dialog-footer-between">
           <Button
             variant="ghost"
             size="sm"
-            className="text-muted-foreground"
+            className="ui-new-issue-chip-muted"
             onClick={discardDraft}
             disabled={createIssue.isPending || !canDiscardDraft}
           >
-            Discard Draft
+            {t("newIssue.discardDraft")}
           </Button>
-          <div className="flex items-center gap-3">
-            <div className="min-h-5 text-right">
+          <div className="ui-new-issue-footer-actions">
+            <div className="ui-new-issue-footer-status">
               {createIssue.isPending ? (
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Creating issue...
+                <span className="ui-new-issue-footer-loading">
+                  <Loader2 className="ui-new-issue-spin" />
+                  {t("newIssue.creatingIssue")}
                 </span>
               ) : createIssue.isError ? (
-                <span className="text-xs text-destructive">{createIssueErrorMessage}</span>
+                <span className="ui-form-dialog-footer-error">{createIssueErrorMessage}</span>
               ) : null}
             </div>
             <Button
               size="sm"
-              className="min-w-[8.5rem] disabled:opacity-100"
+              className="ui-new-issue-submit-btn"
               disabled={!title.trim() || createIssue.isPending}
               onClick={handleSubmit}
               aria-busy={createIssue.isPending}
             >
-              <span className="inline-flex items-center justify-center gap-1.5">
-                {createIssue.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                <span>{createIssue.isPending ? "Creating..." : "Create Issue"}</span>
+              <span className="ui-new-issue-submit-inner">
+                {createIssue.isPending ? <Loader2 className="ui-new-issue-spin" /> : null}
+                <span>{createIssue.isPending ? t("newIssue.creating") : t("newIssue.createIssue")}</span>
               </span>
             </Button>
           </div>

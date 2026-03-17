@@ -1,32 +1,10 @@
 import type { PaperclipConfig } from "../config/schema.js";
 import type { CheckResult } from "./index.js";
 
-function isLoopbackHost(host: string) {
-  const normalized = host.trim().toLowerCase();
-  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
-}
-
 export function deploymentAuthCheck(config: PaperclipConfig): CheckResult {
   const mode = config.server.deploymentMode;
   const exposure = config.server.exposure;
   const auth = config.auth;
-
-  if (mode === "local_trusted") {
-    if (!isLoopbackHost(config.server.host)) {
-      return {
-        name: "Deployment/auth mode",
-        status: "fail",
-        message: `local_trusted requires loopback host binding (found ${config.server.host})`,
-        canRepair: false,
-        repairHint: "Run `paperclipai configure --section server` and set host to 127.0.0.1",
-      };
-    }
-    return {
-      name: "Deployment/auth mode",
-      status: "pass",
-      message: "local_trusted mode is configured for loopback-only access",
-    };
-  }
 
   const secret =
     process.env.BETTER_AUTH_SECRET?.trim() ??

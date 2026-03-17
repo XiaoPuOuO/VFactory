@@ -1,10 +1,17 @@
 import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companies, companyMemberships, instanceUserRoles } from "@paperclipai/db";
+import {
+  authUsers,
+  companies,
+  companyMemberships,
+  instanceGroupPermissions,
+  instanceGroups,
+} from "@paperclipai/db";
 import type { DeploymentMode } from "@paperclipai/shared";
 
 const LOCAL_BOARD_USER_ID = "local-board";
+const ADMIN_GROUP_NAME = "admin";
 const CLAIM_TTL_MS = 1000 * 60 * 60 * 24;
 
 type ChallengeStatus = "available" | "claimed" | "expired" | "invalid";
@@ -40,6 +47,34 @@ function getChallengeStatus(token: string, code: string | undefined): ChallengeS
   return "available";
 }
 
+/** 確保 instance 存在 admin 身分組且具 * 權限（供 claim 時使用） */
+async function ensureAdminGroupExists(
+  tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+): Promise<void> {
+  let groupRow = await tx
+    .select({ id: instanceGroups.id })
+    .from(instanceGroups)
+    .where(eq(instanceGroups.name, ADMIN_GROUP_NAME))
+    .then((rows) => rows[0] ?? null);
+  if (!groupRow) {
+    const inserted = await tx
+      .insert(instanceGroups)
+      .values({ name: ADMIN_GROUP_NAME })
+      .returning({ id: instanceGroups.id });
+    groupRow = inserted[0] ?? null;
+  }
+  if (!groupRow) return;
+  const groupId = groupRow.id;
+  const hasWildcard = await tx
+    .select({ id: instanceGroupPermissions.id })
+    .from(instanceGroupPermissions)
+    .where(and(eq(instanceGroupPermissions.groupId, groupId), eq(instanceGroupPermissions.permissionKey, "*")))
+    .then((rows) => rows[0] ?? null);
+  if (!hasWildcard) {
+    await tx.insert(instanceGroupPermissions).values({ groupId, permissionKey: "*" });
+  }
+}
+
 export async function initializeBoardClaimChallenge(
   db: Db,
   opts: { deploymentMode: DeploymentMode },
@@ -49,12 +84,13 @@ export async function initializeBoardClaimChallenge(
     return;
   }
 
-  const admins = await db
-    .select({ userId: instanceUserRoles.userId })
-    .from(instanceUserRoles)
-    .where(eq(instanceUserRoles.role, "instance_admin"));
+  const usersWithAdminGroup = await db
+    .select({ userId: authUsers.id })
+    .from(authUsers)
+    .where(eq(authUsers.group, ADMIN_GROUP_NAME));
 
-  const onlyLocalBoardAdmin = admins.length === 1 && admins[0]?.userId === LOCAL_BOARD_USER_ID;
+  const onlyLocalBoardAdmin =
+    usersWithAdminGroup.length === 1 && usersWithAdminGroup[0]?.userId === LOCAL_BOARD_USER_ID;
   if (!onlyLocalBoardAdmin) {
     activeChallenge = null;
     return;
@@ -90,21 +126,19 @@ export async function claimBoardOwnership(
   if (status !== "available") return { status };
 
   await db.transaction(async (tx) => {
-    const existingTargetAdmin = await tx
-      .select({ id: instanceUserRoles.id })
-      .from(instanceUserRoles)
-      .where(and(eq(instanceUserRoles.userId, opts.userId), eq(instanceUserRoles.role, "instance_admin")))
-      .then((rows) => rows[0] ?? null);
-    if (!existingTargetAdmin) {
-      await tx.insert(instanceUserRoles).values({
-        userId: opts.userId,
-        role: "instance_admin",
-      });
-    }
+    await ensureAdminGroupExists(tx);
 
     await tx
-      .delete(instanceUserRoles)
-      .where(and(eq(instanceUserRoles.userId, LOCAL_BOARD_USER_ID), eq(instanceUserRoles.role, "instance_admin")));
+      .update(authUsers)
+      .set({ group: ADMIN_GROUP_NAME, updatedAt: new Date() })
+      .where(eq(authUsers.id, opts.userId));
+
+    if (LOCAL_BOARD_USER_ID !== opts.userId) {
+      await tx
+        .update(authUsers)
+        .set({ group: null, updatedAt: new Date() })
+        .where(eq(authUsers.id, LOCAL_BOARD_USER_ID));
+    }
 
     const allCompanies = await tx.select({ id: companies.id }).from(companies);
     for (const company of allCompanies) {

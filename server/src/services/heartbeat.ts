@@ -1,12 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lte, not, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
   agentRuntimeState,
   agentTaskSessions,
   agentWakeupRequests,
+  companies,
+  goals,
   heartbeatRunEvents,
   heartbeatRuns,
   issues,
@@ -32,6 +34,7 @@ import {
   realizeExecutionWorkspace,
   releaseRuntimeServicesForRun,
 } from "./workspace-runtime.js";
+import { agentMemoriesService } from "./agent-memories.js";
 import { issueService } from "./issues.js";
 import {
   buildExecutionWorkspaceAdapterConfig,
@@ -108,7 +111,7 @@ async function withAgentStartLock<T>(agentId: string, fn: () => Promise<T>) {
 
 interface WakeupOptions {
   source?: "timer" | "assignment" | "on_demand" | "automation";
-  triggerDetail?: "manual" | "ping" | "callback" | "system";
+  triggerDetail?: "manual" | "ping" | "callback" | "system" | "scheduled";
   reason?: string | null;
   payload?: Record<string, unknown> | null;
   idempotencyKey?: string | null;
@@ -140,6 +143,13 @@ export type ResolvedWorkspaceForRun = {
 
 function readNonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+/** 從 run.contextSnapshot 讀出 taskKey，供 live event payload 與 client 判斷是否為聊天觸發。 */
+function readTaskKeyFromSnapshot(contextSnapshot: unknown): string | null {
+  if (contextSnapshot == null || typeof contextSnapshot !== "object") return null;
+  const taskKey = (contextSnapshot as Record<string, unknown>).taskKey;
+  return readNonEmptyString(taskKey);
 }
 
 export function resolveRuntimeSessionParamsForWorkspace(input: {
@@ -817,6 +827,7 @@ export function heartbeatService(db: Db) {
       .then((rows) => rows[0] ?? null);
 
     if (updated) {
+      const taskKey = readTaskKeyFromSnapshot(updated.contextSnapshot);
       publishLiveEvent({
         companyId: updated.companyId,
         type: "heartbeat.run.status",
@@ -830,6 +841,7 @@ export function heartbeatService(db: Db) {
           errorCode: updated.errorCode ?? null,
           startedAt: updated.startedAt ? new Date(updated.startedAt).toISOString() : null,
           finishedAt: updated.finishedAt ? new Date(updated.finishedAt).toISOString() : null,
+          ...(taskKey ? { taskKey } : {}),
         },
       });
     }
@@ -929,6 +941,7 @@ export function heartbeatService(db: Db) {
       .then((rows) => rows[0] ?? null);
     if (!claimed) return null;
 
+    const taskKey = readTaskKeyFromSnapshot(claimed.contextSnapshot);
     publishLiveEvent({
       companyId: claimed.companyId,
       type: "heartbeat.run.status",
@@ -942,6 +955,7 @@ export function heartbeatService(db: Db) {
         errorCode: claimed.errorCode ?? null,
         startedAt: claimed.startedAt ? new Date(claimed.startedAt).toISOString() : null,
         finishedAt: claimed.finishedAt ? new Date(claimed.finishedAt).toISOString() : null,
+        ...(taskKey ? { taskKey } : {}),
       },
     });
 
@@ -1055,10 +1069,21 @@ export function heartbeatService(db: Db) {
   ) {
     await ensureRuntimeState(agent);
     const usage = result.usage;
-    const inputTokens = usage?.inputTokens ?? 0;
-    const outputTokens = usage?.outputTokens ?? 0;
-    const cachedInputTokens = usage?.cachedInputTokens ?? 0;
-    const additionalCostCents = Math.max(0, Math.round((result.costUsd ?? 0) * 100));
+    const runUsage = (run.usageJson ?? {}) as Record<string, unknown>;
+    const inputTokens =
+      (usage?.inputTokens ?? 0) || (Number(runUsage.inputTokens) || 0);
+    const outputTokens =
+      (usage?.outputTokens ?? 0) || (Number(runUsage.outputTokens) || 0);
+    const cachedInputTokens =
+      (usage?.cachedInputTokens ?? 0) || (Number(runUsage.cachedInputTokens) || 0);
+    const costUsdFromRun =
+      typeof runUsage.costUsd === "number"
+        ? runUsage.costUsd
+        : Number(runUsage.costUsd) || 0;
+    const additionalCostCents = Math.max(
+      0,
+      Math.round((result.costUsd ?? costUsdFromRun ?? 0) * 100),
+    );
     const hasTokenUsage = inputTokens > 0 || outputTokens > 0 || cachedInputTokens > 0;
 
     await db
@@ -1159,6 +1184,10 @@ export function heartbeatService(db: Db) {
     const taskKey = deriveTaskKey(context, null);
     const sessionCodec = getAdapterSessionCodec(agent.adapterType);
     const issueId = readNonEmptyString(context.issueId);
+    const isChatLightMode =
+      readNonEmptyString(context.chatMode) === "light" &&
+      !readNonEmptyString(context.issueId) &&
+      !readNonEmptyString(context.projectId);
     const issueAssigneeConfig = issueId
       ? await db
           .select({
@@ -1198,7 +1227,17 @@ export function heartbeatService(db: Db) {
     const previousSessionParams = normalizeSessionParams(
       sessionCodec.deserialize(taskSessionForRun?.sessionParamsJson ?? null),
     );
-    const config = parseObject(agent.adapterConfig);
+    const config = parseObject(agent.adapterConfig) as Record<string, unknown>;
+    // 輕量聊天模式下，強制使用 project_primary 策略，避免觸發 git worktree 等重型 workspace 操作。
+    if (isChatLightMode) {
+      const rawStrategy = parseObject(config.workspaceStrategy);
+      if (Object.keys(rawStrategy).length > 0) {
+        config.workspaceStrategy = {
+          ...rawStrategy,
+          type: "project_primary",
+        };
+      }
+    }
     const executionWorkspaceMode = resolveExecutionWorkspaceMode({
       projectPolicy: projectExecutionWorkspacePolicy,
       issueSettings: issueExecutionWorkspaceSettings,
@@ -1290,14 +1329,16 @@ export function heartbeatService(db: Db) {
       worktreePath: executionWorkspace.worktreePath,
     };
     context.paperclipWorkspaces = resolvedWorkspace.workspaceHints;
-    const runtimeServiceIntents = (() => {
-      const runtimeConfig = parseObject(resolvedConfig.workspaceRuntime);
-      return Array.isArray(runtimeConfig.services)
-        ? runtimeConfig.services.filter(
-            (value): value is Record<string, unknown> => typeof value === "object" && value !== null,
-          )
-        : [];
-    })();
+    const runtimeServiceIntents = isChatLightMode
+      ? []
+      : (() => {
+          const runtimeConfig = parseObject(resolvedConfig.workspaceRuntime);
+          return Array.isArray(runtimeConfig.services)
+            ? runtimeConfig.services.filter(
+                (value): value is Record<string, unknown> => typeof value === "object" && value !== null,
+              )
+            : [];
+        })();
     if (runtimeServiceIntents.length > 0) {
       context.paperclipRuntimeServiceIntents = runtimeServiceIntents;
     } else {
@@ -1306,6 +1347,24 @@ export function heartbeatService(db: Db) {
     if (executionWorkspace.projectId && !readNonEmptyString(context.projectId)) {
       context.projectId = executionWorkspace.projectId;
     }
+    const companyRow = await db
+      .select({
+        id: companies.id,
+        name: companies.name,
+        description: companies.description,
+        issuePrefix: companies.issuePrefix,
+      })
+      .from(companies)
+      .where(eq(companies.id, agent.companyId))
+      .then((rows) => rows[0] ?? null);
+    context.paperclipCompany = companyRow
+      ? {
+          id: companyRow.id,
+          name: companyRow.name,
+          description: companyRow.description ?? null,
+          issuePrefix: companyRow.issuePrefix,
+        }
+      : { id: agent.companyId, name: "", description: null, issuePrefix: "PAP" };
     const runtimeSessionFallback = taskKey || resetTaskSession ? null : runtime.sessionId;
     const previousSessionDisplayId = truncateDisplayId(
       taskSessionForRun?.sessionDisplayId ??
@@ -1347,6 +1406,7 @@ export function heartbeatService(db: Db) {
         .then((rows) => rows[0] ?? null);
 
       if (runningAgent) {
+        const taskKey = readTaskKeyFromSnapshot(run.contextSnapshot);
         publishLiveEvent({
           companyId: runningAgent.companyId,
           type: "agent.status",
@@ -1354,6 +1414,7 @@ export function heartbeatService(db: Db) {
             agentId: runningAgent.id,
             status: runningAgent.status,
             outcome: "running",
+            ...(taskKey ? { taskKey } : {}),
           },
         });
       }
@@ -1421,20 +1482,22 @@ export function heartbeatService(db: Db) {
           (entry): entry is [string, string] => typeof entry[0] === "string" && typeof entry[1] === "string",
         ),
       );
-      const runtimeServices = await ensureRuntimeServicesForRun({
-        db,
-        runId: run.id,
-        agent: {
-          id: agent.id,
-          name: agent.name,
-          companyId: agent.companyId,
-        },
-        issue: issueRef,
-        workspace: executionWorkspace,
-        config: resolvedConfig,
-        adapterEnv,
-        onLog,
-      });
+      const runtimeServices = isChatLightMode
+        ? []
+        : await ensureRuntimeServicesForRun({
+            db,
+            runId: run.id,
+            agent: {
+              id: agent.id,
+              name: agent.name,
+              companyId: agent.companyId,
+            },
+            issue: issueRef,
+            workspace: executionWorkspace,
+            config: resolvedConfig,
+            adapterEnv,
+            onLog,
+          });
       if (runtimeServices.length > 0) {
         context.paperclipRuntimeServices = runtimeServices;
         context.paperclipRuntimePrimaryUrl =
@@ -1478,6 +1541,21 @@ export function heartbeatService(db: Db) {
           payload: meta as unknown as Record<string, unknown>,
         });
       };
+
+      if (isChatLightMode) {
+        const memoriesSvc = agentMemoriesService(db);
+        const crossChatSummary = await memoriesSvc.getRecentSummary(agent.companyId, agent.id).catch(() => null);
+        if (crossChatSummary != null && crossChatSummary.trim() !== "") {
+          context.crossChatMemorySummary = crossChatSummary;
+        }
+        const roomId = readNonEmptyString(context.roomId);
+        if (roomId) {
+          const roomSummary = await memoriesSvc.getRoomEarlierSummary(agent.companyId, agent.id, roomId).catch(() => null);
+          if (roomSummary != null && roomSummary.trim() !== "") {
+            context.roomEarlierSummary = roomSummary;
+          }
+        }
+      }
 
       const adapter = getServerAdapter(agent.adapterType);
       const authToken = adapter.supportsLocalAgentJwt
@@ -1697,38 +1775,55 @@ export function heartbeatService(db: Db) {
       });
 
       if (failedRun) {
-        await appendRunEvent(failedRun, seq++, {
-          eventType: "error",
-          stream: "system",
-          level: "error",
-          message,
-        });
-        await releaseIssueExecutionAndPromote(failedRun);
-
-        await updateRuntimeState(agent, failedRun, {
-          exitCode: null,
-          signal: null,
-          timedOut: false,
-          errorMessage: message,
-        }, {
-          legacySessionId: runtimeForAdapter.sessionId,
-        });
-
-        if (taskKey && (previousSessionParams || previousSessionDisplayId || taskSession)) {
-          await upsertTaskSession({
-            companyId: agent.companyId,
-            agentId: agent.id,
-            adapterType: agent.adapterType,
-            taskKey,
-            sessionParamsJson: previousSessionParams,
-            sessionDisplayId: previousSessionDisplayId,
-            lastRunId: failedRun.id,
-            lastError: message,
+        try {
+          await appendRunEvent(failedRun, seq++, {
+            eventType: "error",
+            stream: "system",
+            level: "error",
+            message,
           });
+          await releaseIssueExecutionAndPromote(failedRun);
+
+          const failedResult: AdapterExecutionResult = {
+            exitCode: null,
+            signal: null,
+            timedOut: false,
+            errorMessage: message,
+            usage: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 },
+            costUsd: 0,
+            provider: "unknown",
+            model: "unknown",
+          };
+          // 使用 runtime（外層 scope），勿用 runtimeForAdapter（僅在 try 內定義，catch 中會 ReferenceError）
+          await updateRuntimeState(agent, failedRun, failedResult, {
+            legacySessionId: runtime?.sessionId ?? null,
+          });
+
+          if (taskKey && (previousSessionParams || previousSessionDisplayId || taskSession)) {
+            await upsertTaskSession({
+              companyId: agent.companyId,
+              agentId: agent.id,
+              adapterType: agent.adapterType,
+              taskKey,
+              sessionParamsJson: previousSessionParams,
+              sessionDisplayId: previousSessionDisplayId,
+              lastRunId: failedRun.id,
+              lastError: message,
+            });
+          }
+        } catch (catchErr) {
+          logger.error(
+            { err: catchErr, runId: failedRun.id, agentId: agent.id },
+            "heartbeat error-handling path failed; run already marked failed",
+          );
         }
       }
 
-      await finalizeAgentStatus(agent.id, "failed");
+      try {
+        await finalizeAgentStatus(agent.id, "failed");
+      } catch (finalizeErr) {
+        logger.error({ err: finalizeErr, agentId: agent.id }, "finalizeAgentStatus failed in error path");
+      }
     } finally {
       await releaseRuntimeServicesForRun(run.id);
       await startNextQueuedRunForAgent(agent.id);
@@ -2039,7 +2134,9 @@ export function heartbeatService(db: Db) {
 
     const bypassIssueExecutionLock =
       reason === "issue_comment_mentioned" ||
-      readNonEmptyString(enrichedContextSnapshot.wakeReason) === "issue_comment_mentioned";
+      readNonEmptyString(enrichedContextSnapshot.wakeReason) === "issue_comment_mentioned" ||
+      reason === "chat_message_mentioned" ||
+      readNonEmptyString(enrichedContextSnapshot.wakeReason) === "chat_message_mentioned";
 
     if (issueId && !bypassIssueExecutionLock) {
       const agentNameKey = normalizeAgentNameKey(agent.name);
@@ -2634,6 +2731,38 @@ export function heartbeatService(db: Db) {
       let checked = 0;
       let enqueued = 0;
       let skipped = 0;
+      let skippedNoWork = 0;
+
+      /** 該公司是否有未完成目標（planned/active，且非「等待刷新」）或未完成 issue；定期目標 now >= next_refresh_at 才計入。 */
+      async function companyHasUnfinishedWork(companyId: string): Promise<boolean> {
+        const [unfinishedGoal] = await db
+          .select({ id: goals.id })
+          .from(goals)
+          .where(
+            and(
+              eq(goals.companyId, companyId),
+              inArray(goals.status, ["planned", "active"]),
+              or(
+                eq(goals.recurrence, "one_time"),
+                isNull(goals.recurrenceNextRefreshAt),
+                lte(goals.recurrenceNextRefreshAt, now),
+              )!,
+            ),
+          )
+          .limit(1);
+        if (unfinishedGoal) return true;
+        const [unfinishedIssue] = await db
+          .select({ id: issues.id })
+          .from(issues)
+          .where(
+            and(
+              eq(issues.companyId, companyId),
+              not(inArray(issues.status, ["done", "cancelled"])),
+            ),
+          )
+          .limit(1);
+        return !!unfinishedIssue;
+      }
 
       for (const agent of allAgents) {
         if (agent.status === "paused" || agent.status === "terminated" || agent.status === "pending_approval") continue;
@@ -2644,6 +2773,16 @@ export function heartbeatService(db: Db) {
         const baseline = new Date(agent.lastHeartbeatAt ?? agent.createdAt).getTime();
         const elapsedMs = now.getTime() - baseline;
         if (elapsedMs < policy.intervalSec * 1000) continue;
+
+        const hasWork = await companyHasUnfinishedWork(agent.companyId);
+        if (!hasWork) {
+          await db
+            .update(agents)
+            .set({ lastHeartbeatAt: now, updatedAt: now })
+            .where(eq(agents.id, agent.id));
+          skippedNoWork += 1;
+          continue;
+        }
 
         const run = await enqueueWakeup(agent.id, {
           source: "timer",
@@ -2661,7 +2800,7 @@ export function heartbeatService(db: Db) {
         else skipped += 1;
       }
 
-      return { checked, enqueued, skipped };
+      return { checked, enqueued, skipped, skippedNoWork };
     },
 
     cancelRun: async (runId: string) => {

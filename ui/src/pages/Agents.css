@@ -1,0 +1,420 @@
+/**
+ * Agents 頁面 — 原生 CSS（無 Tailwind）
+ */
+
+.agents-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.agents-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .agents-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.agents-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.agents-filters-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.agents-filters-trigger:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.agents-filters-trigger.active {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+.agents-filters-trigger svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.agents-filters-badge {
+  margin-left: 0.125rem;
+  padding: 0 0.25rem;
+  font-size: 10px;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+  border-radius: 0.25rem;
+}
+
+.agents-filters-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 0.25rem;
+  z-index: 50;
+  width: 14rem;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  padding: 0.25rem;
+}
+
+.agents-filters-dropdown-label {
+  padding: 0.375rem 0.5rem;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--muted-foreground);
+}
+
+.agents-filters-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  text-align: left;
+  border: none;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agents-filters-dropdown-item:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.agents-filters-dropdown-item.active {
+  background: var(--accent);
+}
+
+.agents-filters-dropdown-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agents-filters-divider {
+  border-top: 1px solid var(--border);
+  margin: 0.25rem 0;
+}
+
+.agents-filters-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.agents-filters-checkbox-row:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.agents-filters-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 0.875rem;
+  width: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 0.125rem;
+  flex-shrink: 0;
+}
+
+.agents-filters-checkbox.checked {
+  background: var(--foreground);
+}
+
+.agents-filters-checkbox.checked span {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--background);
+}
+
+.agents-view-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+}
+
+.agents-view-toggle button {
+  padding: 0.375rem;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.agents-view-toggle button:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.agents-view-toggle button.active {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.agents-view-toggle button svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.agents-list-wrap {
+  border: 1px solid var(--border);
+}
+
+.agents-org-wrap {
+  border: 1px solid var(--border);
+  padding: 0.25rem 0;
+}
+
+.agents-org-node {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.agents-org-node:hover {
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+}
+
+.agents-org-node-dot {
+  position: relative;
+  flex-shrink: 0;
+  height: 0.625rem;
+  width: 0.625rem;
+}
+
+.agents-org-node-dot span {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+}
+
+.agents-org-node-body {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.agents-org-node-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.agents-org-node-meta {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin-left: 0.5rem;
+}
+
+.agents-org-node-trailing {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.agents-org-node-adapter {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  font-family: ui-monospace, monospace;
+  width: 3.5rem;
+  text-align: right;
+}
+
+.agents-org-node-time {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  width: 4rem;
+  text-align: right;
+}
+
+.agents-org-children {
+  border-left: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+  margin-left: 1rem;
+}
+
+@media (max-width: 639px) {
+  .agents-org-node-desktop {
+    display: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .agents-org-node-mobile {
+    display: none;
+  }
+}
+
+.agents-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.agents-list-adapter {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  font-family: ui-monospace, monospace;
+  width: 3.5rem;
+  text-align: right;
+}
+
+.agents-list-time {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  width: 4rem;
+  text-align: right;
+}
+
+.agents-list-status-wrap {
+  width: 5rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.agents-status-dot {
+  position: relative;
+  display: flex;
+  height: 0.625rem;
+  width: 0.625rem;
+}
+
+.agents-status-dot span {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: #a3a3a3;
+}
+
+.agents-status-dot[data-status="running"] span {
+  background: #22d3ee;
+  animation: agents-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.agents-status-dot[data-status="active"] span {
+  background: #4ade80;
+}
+
+.agents-status-dot[data-status="paused"] span,
+.agents-status-dot[data-status="idle"] span {
+  background: #facc15;
+}
+
+.agents-status-dot[data-status="pending_approval"] span {
+  background: #fbbf24;
+}
+
+.agents-status-dot[data-status="error"] span {
+  background: #f87171;
+}
+
+.agents-status-dot[data-status="archived"] span {
+  background: #a3a3a3;
+}
+
+.dark .agents-status-dot[data-status="running"] span {
+  background: #22d3ee;
+}
+
+.dark .agents-status-dot[data-status="active"] span {
+  background: #4ade80;
+}
+
+.dark .agents-status-dot[data-status="error"] span {
+  background: #f87171;
+}
+
+.agents-live-run-link {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: color-mix(in oklab, #3b82f6 10%, transparent);
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.agents-live-run-link:hover {
+  background: color-mix(in oklab, #3b82f6 20%, transparent);
+}
+
+.agents-live-run-dot {
+  position: relative;
+  display: flex;
+  height: 0.5rem;
+  width: 0.5rem;
+}
+
+.agents-live-run-dot-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: #60a5fa;
+  opacity: 0.75;
+  animation: agents-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.agents-live-run-dot-ping::after {
+  content: "";
+  position: relative;
+  display: inline-flex;
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 9999px;
+  background: #3b82f6;
+}
+
+.agents-live-run-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #2563eb;
+}
+
+.dark .agents-live-run-label {
+  color: #60a5fa;
+}
+
+@keyframes agents-ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
