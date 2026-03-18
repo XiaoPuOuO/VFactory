@@ -1,0 +1,70 @@
+# Change Log: 2026-03-18 12:56
+
+## 變更概述
+本批次實作「Agent Chat Memories 可視化與管理」：在 Agent 詳細頁新增 Memories 分頁、Server 端記憶列表支援 q / sourceRoomId / limit 篩選、Configuration 區塊改為預覽與入口、空狀態說明與搜尋區 UI 優化，並更新相關文件與語系。
+
+---
+
+## [Modified] docs/api/chat.md
+- 第 76 行：將「Board users can view and delete an agent's memories from the Agent configuration page」改為「Board users can view and delete an agent's memories in the Agent detail page, **Memories** tab (with search and room filter)」。
+- 第 90 行：List memories 的 GET 範例由單行路徑改為帶查詢參數 `?q=<string>&sourceRoomId=<uuid>&limit=<number>`。
+- 第 93 行：說明由「Returns all memory entries...」改為「Returns memory entries...」，並補充 optional query params：`q`（content 搜尋、不分大小寫）、`sourceRoomId`（依聊天室篩選）、`limit`（預設 100、最大 500）。
+
+## [Modified] docs/guides/agent-developer/chat.md
+- 第 59 行：將「Board users can view and delete your memories in your Agent configuration page」改為「Board users can view and delete your memories in the Agent detail page, under the **Memories** tab」，並補充 board UI 支援 content 搜尋（q）、room 篩選（sourceRoomId）與可設定 result limit。
+
+## [Modified] documents/backup.md
+- 「Agent Chat Memories 可視化與管理」條目標題後加上「（已實作）」。
+- 同條目下新增「**實作**」說明：Memories tab 已上線，支援 server 端 q / sourceRoomId / limit；Configuration 區塊改為預覽與「檢視全部記憶」入口。
+
+## [Modified] server/src/routes/agents.ts
+- GET `/companies/:companyId/agents/:agentId/memories` 註解改為「支援 query: q, sourceRoomId, limit」。
+- 在呼叫 `memoriesSvc.list` 前新增從 `req.query` 讀取 `q`、`sourceRoomId`、`limit`；`limit` 使用既有 `parseNumberLike` 並限制在 1～500。
+- 將 `memoriesSvc.list(companyId, agentId)` 改為 `memoriesSvc.list(companyId, agentId, { q, sourceRoomId, limit })`。
+
+## [Modified] server/src/services/agent-memories.ts
+- 從 drizzle-orm 新增 import `sql`。
+- 新增常數 `DEFAULT_LIST_LIMIT = 100`、`MAX_LIST_LIMIT = 500`。
+- 新增並匯出介面 `ListMemoriesOptions`（`q?`, `sourceRoomId?`, `limit?`）。
+- `list` 簽名改為接受第三參數 `options?: ListMemoriesOptions`。
+- `list` 內：依 options 解析 `qTrim`、`sourceRoomId`、`limit`（limit 限制在 1～MAX_LIST_LIMIT）；組 `conditions` 陣列，若有 `qTrim` 則加入 `content ILIKE` 條件，若有 `sourceRoomId` 則加入 `eq(sourceRoomId)`；查詢改為 `where(and(...conditions))` 並加上 `.limit(limit)`。
+
+## [Modified] ui/src/api/agents.ts
+- `listMemories` 由兩參數改為三參數，第三參數為可選 `params?: { q?, sourceRoomId?, limit? }`。
+- 實作改為先組 base URL，再以 `URLSearchParams` 組查詢字串（僅在參數有值時加入），最後回傳 `api.get(base + queryString)`。
+
+## [Modified] ui/src/lib/queryKeys.ts
+- `agents.memories` 由 `(companyId, agentId)` 改為 `(companyId, agentId, filters?)`，回傳的 queryKey 陣列最後一項改為 `filters ?? null`，以支援依篩選條件快取。
+
+## [Modified] ui/src/locales/en.json
+- agents 命名空間新增：`memoriesFiltersLabel`（"Search and filter"）、`memories`、`memoriesTabTitle`、`memoriesSearchPlaceholder`、`memoriesRoomFilterPlaceholder`、`noMemories`、`noMemoriesHint`、`clearAllMemoriesConfirm`、`showingMemoriesCount`、`viewAllMemories`、`memoryExpand`、`memoryCollapse`。
+
+## [Modified] ui/src/locales/zh-TW.json
+- agents 命名空間新增同上鍵，對應繁體中文文案（如「搜尋與篩選」、「記憶」、「跨聊天記憶」、「搜尋記憶內容…」、「房間 ID（選填）」、空狀態與提示、展開/收合等）。
+
+## [Modified] ui/src/pages/AgentDetail.css
+- 新增「Memories tab」區塊樣式：
+  - `.agent-detail-memories-page`：flex 直向、gap、max-width 48rem。
+  - `.agent-detail-memories-header`、`.agent-detail-memories-title`、`.agent-detail-memories-description`：標題與說明排版。
+  - `.agent-detail-memories-filters`、`.agent-detail-memories-filters-label`：搜尋區外層與「搜尋與篩選」小標。
+  - `.agent-detail-memories-toolbar`：工具列背景、邊框、圓角、內距。
+  - `.agent-detail-memories-search-wrap`、`.agent-detail-memories-search-icon`、`.agent-detail-memories-search-input`：搜尋框與圖示。
+  - `.agent-detail-memories-room-input`：房間 ID 輸入框（等寬字型）。
+  - `.agent-detail-memories-count`：筆數說明段落樣式。
+  - `.agent-detail-memories-loading`：載入中文案。
+  - `.agent-detail-memories-empty`、`.agent-detail-memories-empty-icon`、`.agent-detail-memories-empty-text`、`.agent-detail-memories-empty-hint`：空狀態區塊與提示。
+  - `.agent-detail-memories-list`、`.agent-detail-memory-row`、`.agent-detail-memory-row-content`、`.agent-detail-memory-row-body`、`.agent-detail-memory-row-expand`、`.agent-detail-memory-row-meta`、`.agent-detail-memory-row-room`、`.agent-detail-memory-row-delete`：列表與單筆記憶列（含 hover、展開按鈕、metadata、刪除按鈕）。
+  - `.agent-detail-memories-footer`、`.agent-detail-memories-clear-all`：清空全部按鈕區與樣式。
+
+## [Modified] ui/src/pages/AgentDetail.tsx
+- 從 lucide-react 新增 import `Brain`、`Search`。
+- `AgentDetailView` 型別新增 `"memories"`；`parseAgentDetailView` 對 `"memories"` 回傳 `"memories"`。
+- 導向 canonical tab 的 useEffect 中，`canonicalTab` 新增 `activeView === "memories" ? "memories"` 分支。
+- Breadcrumbs 的 effect 中，`activeView === "memories"` 時 push `t("agents:memories")`。
+- PageTabBar items 新增 `{ value: "memories", label: t("agents:memories") }`。
+- 主內容區新增 `activeView === "memories"` 時渲染 `AgentMemoriesPage`（傳入 `agentId`、`companyId`）。
+- 新增 `AgentMemoriesPage` 元件：搜尋／房間篩選 state、debounce 300ms、`filters` 傳入 `listMemories` 與 queryKey；工具列改為包在 `agent-detail-memories-filters` 下，含「搜尋與篩選」標籤、搜尋框、房間 ID 輸入、筆數段落；空狀態含 Brain 圖示、主文案與 `noMemoriesHint`；有資料時使用 `AgentMemoriesList` 與 `MemoryRow`，底部為清空全部按鈕（含 confirm）。
+- 新增 `MemoryRow` 元件：顯示單筆記憶內容、超過 200 字可展開/收合、metadata（sourceRoomId 縮寫與 createdAt）、刪除按鈕；使用 `agent-detail-memory-row` 等 class。
+- `AgentConfigurePage` 新增 prop `agentRouteId`；Configuration 內「跨聊天記憶」區改為使用 `AgentMemoriesTab` 並傳入 `agentRouteId`。
+- `AgentMemoriesTab`（Configuration 區）：改為接受 `agentId`、`agentRouteId`、`companyId`；以 `limit: 3` 呼叫 `listMemories` 做預覽；僅顯示最近 3 筆只讀、下方為「檢視全部記憶」按鈕導向 `/agents/${agentRouteId}/memories`；無資料時顯示 `noCrossChatMemories`。
+- 呼叫 `AgentConfigurePage` 時傳入 `agentRouteId={canonicalAgentRef}`。

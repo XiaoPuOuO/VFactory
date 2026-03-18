@@ -56,6 +56,8 @@ import {
   ChevronRight,
   ChevronDown,
   ArrowLeft,
+  Search,
+  Brain,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AgentIcon, AgentIconPicker } from "../components/AgentIconPicker";
@@ -177,11 +179,12 @@ function scrollToContainerBottom(container: ScrollContainer, behavior: ScrollBeh
   container.scrollTo({ top: container.scrollHeight, behavior });
 }
 
-type AgentDetailView = "dashboard" | "configuration" | "runs";
+type AgentDetailView = "dashboard" | "configuration" | "runs" | "memories";
 
 function parseAgentDetailView(value: string | null): AgentDetailView {
   if (value === "configure" || value === "configuration") return "configuration";
-  if (value === "runs") return value;
+  if (value === "runs") return "runs";
+  if (value === "memories") return "memories";
   return "dashboard";
 }
 
@@ -320,7 +323,9 @@ export function AgentDetail() {
         ? "configuration"
         : activeView === "runs"
           ? "runs"
-          : "dashboard";
+          : activeView === "memories"
+            ? "memories"
+            : "dashboard";
     if (routeAgentRef !== canonicalAgentRef || urlTab !== canonicalTab) {
       navigate(`/agents/${canonicalAgentRef}/${canonicalTab}`, { replace: true });
       return;
@@ -419,6 +424,8 @@ export function AgentDetail() {
         crumbs.push({ label: t("agents:configuration") });
       } else if (activeView === "runs") {
         crumbs.push({ label: t("agents:runs") });
+      } else if (activeView === "memories") {
+        crumbs.push({ label: t("agents:memories") });
       } else {
         crumbs.push({ label: t("agents:dashboard") });
       }
@@ -576,6 +583,7 @@ export function AgentDetail() {
               { value: "dashboard", label: t("agents:dashboard") },
               { value: "configuration", label: t("agents:configuration") },
               { value: "runs", label: t("agents:runs") },
+              { value: "memories", label: t("agents:memories") },
             ]}
             value={activeView}
             onValueChange={(value) => navigate(`/agents/${canonicalAgentRef}/${value}`)}
@@ -653,6 +661,7 @@ export function AgentDetail() {
         <AgentConfigurePage
           agent={agent}
           agentId={agent.id}
+          agentRouteId={canonicalAgentRef}
           companyId={resolvedCompanyId ?? undefined}
           onDirtyChange={setConfigDirty}
           onSaveActionChange={setSaveConfigAction}
@@ -670,6 +679,13 @@ export function AgentDetail() {
           agentRouteId={canonicalAgentRef}
           selectedRunId={urlRunId ?? null}
           adapterType={agent.adapterType}
+        />
+      )}
+
+      {activeView === "memories" && resolvedCompanyId && (
+        <AgentMemoriesPage
+          agentId={agent.id}
+          companyId={resolvedCompanyId}
         />
       )}
     </div>
@@ -902,6 +918,7 @@ function CostsSection({
 function AgentConfigurePage({
   agent,
   agentId,
+  agentRouteId,
   companyId,
   onDirtyChange,
   onSaveActionChange,
@@ -911,6 +928,7 @@ function AgentConfigurePage({
 }: {
   agent: Agent;
   agentId: string;
+  agentRouteId: string;
   companyId?: string;
   onDirtyChange: (dirty: boolean) => void;
   onSaveActionChange: (save: (() => void) | null) => void;
@@ -955,7 +973,7 @@ function AgentConfigurePage({
       {companyId && (
         <div>
           <h3 className="agent-detail-config-section-title">{t("agents:crossChatMemory")}</h3>
-          <AgentMemoriesTab agentId={agentId} companyId={companyId} />
+          <AgentMemoriesTab agentId={agentId} agentRouteId={agentRouteId} companyId={companyId} />
         </div>
       )}
 
@@ -2216,73 +2234,236 @@ function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: strin
   );
 }
 
-/* ---- Agent memories (cross-chat) ---- */
+/* ---- Agent Memories Page (full tab with search & filters) ---- */
 
-function AgentMemoriesTab({ agentId, companyId }: { agentId: string; companyId: string }) {
+const MEMORIES_PAGE_LIMIT = 100;
+
+function AgentMemoriesPage({ agentId, companyId }: { agentId: string; companyId: string }) {
   const { t } = useTranslation("agents");
   const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [roomFilter, setRoomFilter] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedRoomFilter, setDebouncedRoomFilter] = useState("");
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedRoomFilter(roomFilter), 300);
+    return () => window.clearTimeout(id);
+  }, [roomFilter]);
+
+  const filters = useMemo(
+    () => ({
+      q: debouncedSearch.trim() || undefined,
+      sourceRoomId: debouncedRoomFilter.trim() || undefined,
+      limit: MEMORIES_PAGE_LIMIT,
+    }),
+    [debouncedSearch, debouncedRoomFilter],
+  );
 
   const { data: memories, isLoading } = useQuery({
-    queryKey: queryKeys.agents.memories(companyId, agentId),
-    queryFn: () => agentsApi.listMemories(companyId, agentId),
+    queryKey: queryKeys.agents.memories(companyId, agentId, filters),
+    queryFn: () => agentsApi.listMemories(companyId, agentId, filters),
     enabled: !!companyId && !!agentId,
   });
 
+  const invalidateMemories = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["agents", "memories", companyId, agentId] });
+  }, [queryClient, companyId, agentId]);
+
   const deleteOne = useMutation({
     mutationFn: (memoryId: string) => agentsApi.deleteMemory(companyId, agentId, memoryId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.agents.memories(companyId, agentId) });
-    },
+    onSuccess: invalidateMemories,
   });
 
   const deleteAll = useMutation({
     mutationFn: () => agentsApi.deleteAllMemories(companyId, agentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.agents.memories(companyId, agentId) });
-    },
+    onSuccess: invalidateMemories,
   });
 
   const list = memories ?? [];
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        {t("crossChatMemoryDescription")}
-      </p>
-      {isLoading && <p className="text-sm text-muted-foreground">{t("loadingKeys")}</p>}
+    <div className="agent-detail-memories-page">
+      <header className="agent-detail-memories-header">
+        <h3 className="agent-detail-memories-title">{t("agents:memoriesTabTitle")}</h3>
+        <p className="agent-detail-memories-description">{t("agents:crossChatMemoryDescription")}</p>
+      </header>
+
+      <div className="agent-detail-memories-filters">
+        <span className="agent-detail-memories-filters-label">{t("agents:memoriesFiltersLabel")}</span>
+        <div className="agent-detail-memories-toolbar">
+          <div className="agent-detail-memories-search-wrap">
+            <Search className="agent-detail-memories-search-icon" aria-hidden />
+            <Input
+              placeholder={t("agents:memoriesSearchPlaceholder")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="agent-detail-memories-search-input"
+            />
+          </div>
+          <Input
+            placeholder={t("agents:memoriesRoomFilterPlaceholder")}
+            value={roomFilter}
+            onChange={(e) => setRoomFilter(e.target.value)}
+            className="agent-detail-memories-room-input"
+          />
+        </div>
+        <p className="agent-detail-memories-count">
+          {t("agents:showingMemoriesCount", { count: list.length, limit: MEMORIES_PAGE_LIMIT })}
+        </p>
+      </div>
+
+      {isLoading && (
+        <div className="agent-detail-memories-loading">{t("agents:loadingKeys")}</div>
+      )}
       {!isLoading && list.length === 0 && (
-        <p className="text-sm text-muted-foreground">{t("noCrossChatMemories")}</p>
+        <div className="agent-detail-memories-empty">
+          <Brain className="agent-detail-memories-empty-icon" aria-hidden />
+          <p className="agent-detail-memories-empty-text">{t("agents:noMemories")}</p>
+          <p className="agent-detail-memories-empty-hint">{t("agents:noMemoriesHint")}</p>
+        </div>
       )}
       {!isLoading && list.length > 0 && (
         <>
-          <div className="border border-border rounded-lg divide-y divide-border">
+          <div className="agent-detail-memories-list">
             {list.map((m) => (
-              <div key={m.id} className="flex items-start justify-between gap-2 px-4 py-2.5">
-                <p className="text-sm flex-1 min-w-0 break-words">{m.content}</p>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="flex-shrink-0 text-destructive hover:text-destructive"
-                  onClick={() => deleteOne.mutate(m.id)}
-                  disabled={deleteOne.isPending}
-                  aria-label={t("deleteMemory")}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              <MemoryRow
+                key={m.id}
+                memory={m}
+                onDelete={() => deleteOne.mutate(m.id)}
+                isDeleting={deleteOne.isPending}
+                deleteLabel={t("agents:deleteMemory")}
+                expandLabel={t("agents:memoryExpand")}
+                collapseLabel={t("agents:memoryCollapse")}
+              />
             ))}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-destructive border-destructive/50 hover:bg-destructive/10"
-            onClick={() => deleteAll.mutate()}
-            disabled={deleteAll.isPending}
-          >
-            {deleteAll.isPending ? t("loadingKeys") : t("clearAllMemories")}
-          </Button>
+          <div className="agent-detail-memories-footer">
+            <Button
+              variant="outline"
+              size="sm"
+              className="agent-detail-memories-clear-all"
+              onClick={() => {
+                if (window.confirm(t("agents:clearAllMemoriesConfirm"))) {
+                  deleteAll.mutate();
+                }
+              }}
+              disabled={deleteAll.isPending}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleteAll.isPending ? t("agents:loadingKeys") : t("agents:clearAllMemories")}
+            </Button>
+          </div>
         </>
       )}
+    </div>
+  );
+}
+
+function MemoryRow({
+  memory,
+  onDelete,
+  isDeleting,
+  deleteLabel,
+  expandLabel,
+  collapseLabel,
+}: {
+  memory: { id: string; content: string; sourceRoomId: string | null; createdAt: string };
+  onDelete: () => void;
+  isDeleting: boolean;
+  deleteLabel: string;
+  expandLabel: string;
+  collapseLabel: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const needsExpand = memory.content.length > 200;
+  const displayContent = expanded || !needsExpand ? memory.content : `${memory.content.slice(0, 200)}…`;
+
+  return (
+    <div className="agent-detail-memory-row">
+      <div className="agent-detail-memory-row-content">
+        <p className="agent-detail-memory-row-body">{displayContent}</p>
+        {needsExpand && (
+          <button
+            type="button"
+            className="agent-detail-memory-row-expand"
+            onClick={() => setExpanded((e) => !e)}
+          >
+            {expanded ? collapseLabel : expandLabel}
+          </button>
+        )}
+        <div className="agent-detail-memory-row-meta">
+          {memory.sourceRoomId && (
+            <span className="agent-detail-memory-row-room" title={memory.sourceRoomId}>
+              {memory.sourceRoomId.slice(0, 8)}…
+            </span>
+          )}
+          <span>{formatDate(memory.createdAt)}</span>
+        </div>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="agent-detail-memory-row-delete"
+        onClick={onDelete}
+        disabled={isDeleting}
+        aria-label={deleteLabel}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+/* ---- Agent memories (cross-chat) [Configuration section: summary + link to Memories tab] ---- */
+
+function AgentMemoriesTab({
+  agentId,
+  agentRouteId,
+  companyId,
+}: {
+  agentId: string;
+  agentRouteId: string;
+  companyId: string;
+}) {
+  const { t } = useTranslation("agents");
+  const navigate = useNavigate();
+
+  const { data: memories, isLoading } = useQuery({
+    queryKey: queryKeys.agents.memories(companyId, agentId, { limit: 3 }),
+    queryFn: () => agentsApi.listMemories(companyId, agentId, { limit: 3 }),
+    enabled: !!companyId && !!agentId,
+  });
+
+  const preview = (memories ?? []).slice(0, 3);
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">{t("crossChatMemoryDescription")}</p>
+      {isLoading && <p className="text-sm text-muted-foreground">{t("loadingKeys")}</p>}
+      {!isLoading && preview.length > 0 && (
+        <div className="border border-border rounded-lg divide-y divide-border">
+          {preview.map((m) => (
+            <div key={m.id} className="px-4 py-2 text-sm text-muted-foreground line-clamp-2">
+              {m.content}
+            </div>
+          ))}
+        </div>
+      )}
+      {!isLoading && (memories ?? []).length === 0 && (
+        <p className="text-sm text-muted-foreground">{t("noCrossChatMemories")}</p>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => navigate(`/agents/${agentRouteId}/memories`)}
+      >
+        {t("agents:viewAllMemories")}
+      </Button>
     </div>
   );
 }

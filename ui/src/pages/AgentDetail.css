@@ -1165,3 +1165,229 @@
 .agent-detail-log-viewer-msg {
   word-break: break-all;
 }
+
+/* ---- Memories tab ---- */
+.agent-detail-memories-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 48rem;
+}
+
+.agent-detail-memories-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.agent-detail-memories-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--foreground);
+}
+
+.agent-detail-memories-description {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.agent-detail-memories-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.agent-detail-memories-filters-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.agent-detail-memories-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: color-mix(in oklch, var(--accent) 15%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.agent-detail-memories-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 12rem;
+  max-width: 20rem;
+}
+
+.agent-detail-memories-search-icon {
+  position: absolute;
+  left: 0.625rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.agent-detail-memories-search-input {
+  height: 2rem;
+  font-size: 0.875rem;
+  padding-left: 1.75rem;
+}
+
+.agent-detail-memories-room-input {
+  height: 2rem;
+  width: 10rem;
+  font-size: 0.875rem;
+  font-family: ui-monospace, monospace;
+}
+
+.agent-detail-memories-count {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+
+.agent-detail-memories-loading {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  padding: 0.5rem 0;
+}
+
+.agent-detail-memories-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  background: color-mix(in oklch, var(--accent) 8%, transparent);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.agent-detail-memories-empty-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+
+.agent-detail-memories-empty-text {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  margin: 0;
+  text-align: center;
+}
+
+.agent-detail-memories-empty-hint {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin: 0.5rem 0 0;
+  max-width: 28rem;
+  line-height: 1.45;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.agent-detail-memories-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.agent-detail-memory-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s ease;
+}
+
+.agent-detail-memory-row:last-child {
+  border-bottom: 0;
+}
+
+.agent-detail-memory-row:hover {
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+}
+
+.agent-detail-memory-row-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-detail-memory-row-body {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agent-detail-memory-row-expand {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  background: none;
+  border: none;
+  padding: 0.25rem 0;
+  margin-top: 0.25rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.12s ease;
+}
+
+.agent-detail-memory-row-expand:hover {
+  color: var(--foreground);
+}
+
+.agent-detail-memory-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.agent-detail-memory-row-room {
+  font-family: ui-monospace, monospace;
+  max-width: 6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-detail-memory-row-delete {
+  flex-shrink: 0;
+  color: var(--destructive);
+}
+
+.agent-detail-memory-row-delete:hover {
+  color: var(--destructive);
+  background: color-mix(in oklch, var(--destructive) 12%, transparent);
+}
+
+.agent-detail-memories-footer {
+  padding-top: 0.25rem;
+}
+
+.agent-detail-memories-clear-all {
+  color: var(--destructive);
+  border-color: color-mix(in oklch, var(--destructive) 50%, transparent);
+}
+
+.agent-detail-memories-clear-all:hover {
+  background: color-mix(in oklch, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}

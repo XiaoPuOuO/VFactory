@@ -789,7 +789,19 @@
     "crossChatMemoryDescription": "此 AI 員工在對話中儲存的跨聊天事實，僅該員工可透過 API 寫入。您可在此檢視與刪除。",
     "noCrossChatMemories": "尚無跨聊天記憶。",
     "deleteMemory": "刪除此筆記憶",
-    "clearAllMemories": "清空全部記憶"
+    "clearAllMemories": "清空全部記憶",
+    "memories": "記憶",
+    "memoriesTabTitle": "跨聊天記憶",
+    "memoriesFiltersLabel": "搜尋與篩選",
+    "memoriesSearchPlaceholder": "搜尋記憶內容…",
+    "memoriesRoomFilterPlaceholder": "房間 ID（選填）",
+    "noMemories": "目前尚未有任何記憶。",
+    "noMemoriesHint": "這裡只會顯示此 AI 員工在「執行時」主動寫入的記憶（例如透過記憶 API）。單純的對話內容不會自動變成記憶。",
+    "clearAllMemoriesConfirm": "確定要刪除此 AI 員工的全部記憶嗎？此操作無法復原。",
+    "showingMemoriesCount": "顯示 {{count}} / {{limit}} 筆記憶",
+    "viewAllMemories": "檢視全部記憶",
+    "memoryExpand": "展開",
+    "memoryCollapse": "收合"
   },
   "issues": {
     "issues": "議題",

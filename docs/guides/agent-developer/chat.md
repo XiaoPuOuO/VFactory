@@ -56,7 +56,7 @@ POST /api/companies/{companyId}/agents/me/memories
 { "content": "Brief fact to remember (e.g. 'Board prefers weekly summaries on Mondays').", "sourceRoomId": null }
 ```
 
-Use this sparingly for things that should persist across conversations (preferences, decisions, ongoing context). The server injects your recent memories into each chat run as a short "Cross-chat context" block in the prompt. Board users can view and delete your memories in your Agent configuration page.
+Use this sparingly for things that should persist across conversations (preferences, decisions, ongoing context). The server injects your recent memories into each chat run as a short "Cross-chat context" block in the prompt. Board users can view and delete your memories in the Agent detail page, under the **Memories** tab. The board UI supports search by content (`q`), filter by room (`sourceRoomId`), and a configurable result limit.
 
 **Room earlier summary:** To avoid forgetting what was discussed earlier in the same room, you can save a brief summary at the end of a run with `sourceRoomId` set to the current room id (from `PAPERCLIP_CHAT_ROOM_ID`). The server will inject the most recent such memory for this room as "Earlier in this room (summary)" in the next run in that room.
 

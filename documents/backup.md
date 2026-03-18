@@ -23,11 +23,12 @@
     - 每一種事件都有快捷操作與明顯狀態。
   - **影響層**：Server（新增或擴充 inbox 聚合 endpoint）、UI（`Inbox` 頁面）、Doc（board 工作流說明）。
 
-- **Agent Chat Memories 可視化與管理**
+- **Agent Chat Memories 可視化與管理**（已實作）
   - **機會**：`agent_chat_memories` 已實作，但對 board 來說是黑盒。
   - **建議功能**：  
     - 在 Agent 詳細頁新增「Memories」tab：列表、搜尋、刪除單筆或全部。  
   - **影響層**：主在 UI（`AgentDetail`），Server 已有基礎 route，Doc 更新 agent 開發者指南。
+  - **實作**：Memories tab 已上線，支援 server 端 q / sourceRoomId / limit；Configuration 區塊改為預覽與「檢視全部記憶」入口。
 
 - **Budget hit / auto-pause 的可見性**
   - **機會**：現在 hard limit auto-pause 機制存在，但 UI 上可以再清楚一點。

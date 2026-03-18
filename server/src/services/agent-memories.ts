@@ -1,10 +1,20 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agentChatMemories, agents } from "@paperclipai/db";
 import type { AgentChatMemory } from "@paperclipai/shared";
 import { notFound } from "../errors.js";
 
 const DEFAULT_RECENT_LIMIT = 20;
+
+/** 列表 API 預設與最大筆數。 */
+const DEFAULT_LIST_LIMIT = 100;
+const MAX_LIST_LIMIT = 500;
+
+export interface ListMemoriesOptions {
+  q?: string | null;
+  sourceRoomId?: string | null;
+  limit?: number | null;
+}
 
 export function agentMemoriesService(db: Db) {
   return {
@@ -79,8 +89,12 @@ export function agentMemoriesService(db: Db) {
       return lines.length > 0 ? lines.join("\n") : null;
     },
 
-    /** 列出該 agent 的記憶（board 或 agent 本人檢視用）。 */
-    list: async (companyId: string, agentId: string): Promise<AgentChatMemory[]> => {
+    /** 列出該 agent 的記憶（board 或 agent 本人檢視用）。支援 q / sourceRoomId / limit 篩選。 */
+    list: async (
+      companyId: string,
+      agentId: string,
+      options?: ListMemoriesOptions,
+    ): Promise<AgentChatMemory[]> => {
       const agentRow = await db
         .select({ id: agents.id })
         .from(agents)
@@ -88,16 +102,31 @@ export function agentMemoriesService(db: Db) {
         .then((rows) => rows[0] ?? null);
       if (!agentRow) throw notFound("Agent not found");
 
+      const qTrim = options?.q?.trim();
+      const sourceRoomId = options?.sourceRoomId?.trim() || null;
+      const rawLimit = options?.limit;
+      const limit =
+        rawLimit != null && Number.isFinite(Number(rawLimit))
+          ? Math.min(MAX_LIST_LIMIT, Math.max(1, Number(rawLimit)))
+          : DEFAULT_LIST_LIMIT;
+
+      const conditions = [
+        eq(agentChatMemories.companyId, companyId),
+        eq(agentChatMemories.agentId, agentId),
+      ];
+      if (qTrim) {
+        conditions.push(sql`${agentChatMemories.content} ILIKE ${`%${qTrim}%`}`);
+      }
+      if (sourceRoomId) {
+        conditions.push(eq(agentChatMemories.sourceRoomId, sourceRoomId));
+      }
+
       const rows = await db
         .select()
         .from(agentChatMemories)
-        .where(
-          and(
-            eq(agentChatMemories.companyId, companyId),
-            eq(agentChatMemories.agentId, agentId),
-          ),
-        )
-        .orderBy(desc(agentChatMemories.createdAt));
+        .where(and(...conditions))
+        .orderBy(desc(agentChatMemories.createdAt))
+        .limit(limit);
       return rows.map((r) => ({
         id: r.id,
         companyId: r.companyId,

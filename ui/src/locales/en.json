@@ -789,7 +789,19 @@
     "crossChatMemoryDescription": "Facts this agent has saved across conversations. Only this agent can add memories (via API during a run). You can view and delete them here.",
     "noCrossChatMemories": "No cross-chat memories yet.",
     "deleteMemory": "Delete this memory",
-    "clearAllMemories": "Clear all memories"
+    "clearAllMemories": "Clear all memories",
+    "memories": "Memories",
+    "memoriesTabTitle": "Cross-chat memories",
+    "memoriesFiltersLabel": "Search and filter",
+    "memoriesSearchPlaceholder": "Search memories…",
+    "memoriesRoomFilterPlaceholder": "Room ID (optional)",
+    "noMemories": "No memories saved yet.",
+    "noMemoriesHint": "Memories appear here only when this agent explicitly saves them during a run (e.g. by calling the memory API). Chat messages are not automatically stored as memories.",
+    "clearAllMemoriesConfirm": "Are you sure you want to delete all memories for this agent? This cannot be undone.",
+    "showingMemoriesCount": "Showing {{count}} / {{limit}} memories",
+    "viewAllMemories": "View all memories",
+    "memoryExpand": "Show more",
+    "memoryCollapse": "Collapse"
   },
   "issues": {
     "issues": "Issues",

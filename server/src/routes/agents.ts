@@ -623,7 +623,7 @@ export function agentRoutes(db: Db) {
     },
   );
 
-  /** 列出該 agent 的跨聊天記憶（board 或 agent 本人；agentId 可為 "me" 表示本人）。 */
+  /** 列出該 agent 的跨聊天記憶（board 或 agent 本人；agentId 可為 "me" 表示本人）。支援 query: q, sourceRoomId, limit。 */
   router.get("/companies/:companyId/agents/:agentId/memories", async (req, res) => {
     const companyId = req.params.companyId as string;
     let agentId = req.params.agentId as string;
@@ -638,7 +638,13 @@ export function agentRoutes(db: Db) {
       res.status(403).json({ error: "Agent can only read own memories" });
       return;
     }
-    const list = await memoriesSvc.list(companyId, agentId);
+    const q = typeof req.query.q === "string" ? req.query.q.trim() || undefined : undefined;
+    const sourceRoomId =
+      typeof req.query.sourceRoomId === "string" ? req.query.sourceRoomId.trim() || undefined : undefined;
+    const limitParam = parseNumberLike(req.query.limit);
+    const limit =
+      limitParam != null && limitParam > 0 ? Math.min(500, Math.max(1, limitParam)) : undefined;
+    const list = await memoriesSvc.list(companyId, agentId, { q, sourceRoomId, limit });
     res.json(list);
   });
 

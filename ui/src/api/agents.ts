@@ -145,8 +145,19 @@ export const agentsApi = {
   ) => api.post<HeartbeatRun | { status: "skipped" }>(agentPath(id, companyId, "/wakeup"), data),
   loginWithClaude: (id: string, companyId?: string) =>
     api.post<ClaudeLoginResult>(agentPath(id, companyId, "/claude-login"), {}),
-  listMemories: (companyId: string, agentId: string) =>
-    api.get<AgentChatMemory[]>(`/companies/${encodeURIComponent(companyId)}/agents/${encodeURIComponent(agentId)}/memories`),
+  listMemories: (
+    companyId: string,
+    agentId: string,
+    params?: { q?: string; sourceRoomId?: string; limit?: number },
+  ) => {
+    const base = `/companies/${encodeURIComponent(companyId)}/agents/${encodeURIComponent(agentId)}/memories`;
+    const search = new URLSearchParams();
+    if (params?.q != null && params.q !== "") search.set("q", params.q);
+    if (params?.sourceRoomId != null && params.sourceRoomId !== "") search.set("sourceRoomId", params.sourceRoomId);
+    if (params?.limit != null && params.limit > 0) search.set("limit", String(params.limit));
+    const query = search.toString();
+    return api.get<AgentChatMemory[]>(query ? `${base}?${query}` : base);
+  },
   deleteMemory: (companyId: string, agentId: string, memoryId: string) =>
     api.delete(`/companies/${encodeURIComponent(companyId)}/agents/${encodeURIComponent(agentId)}/memories/${encodeURIComponent(memoryId)}`),
   deleteAllMemories: (companyId: string, agentId: string) =>

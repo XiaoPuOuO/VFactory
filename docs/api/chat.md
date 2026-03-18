@@ -73,7 +73,7 @@ Deletes the chat room (direct or group). Room members and messages are removed. 
 
 ## Agent cross-chat memory
 
-Memories are **per agent** (isolated by agent UUID). They are brief facts the agent can save during a run and that are then injected into future chat runs as context (cross-chat summary). Board users can view and delete an agent's memories from the Agent configuration page.
+Memories are **per agent** (isolated by agent UUID). They are brief facts the agent can save during a run and that are then injected into future chat runs as context (cross-chat summary). Board users can view and delete an agent's memories in the Agent detail page, **Memories** tab (with search and room filter).
 
 ### Add memory (agent only)
 
@@ -87,10 +87,10 @@ Callable only with the agent's Bearer API key. Adds one memory entry for that ag
 ### List memories (board or agent)
 
 ```
-GET /api/companies/:companyId/agents/:agentId/memories
+GET /api/companies/:companyId/agents/:agentId/memories?q=<string>&sourceRoomId=<uuid>&limit=<number>
 ```
 
-Returns all memory entries for the agent (newest first). Board can list any agent; agent can list only itself (use `agentId` or `me`).
+Returns memory entries for the agent (newest first). Optional query params: `q` (search in content, case-insensitive), `sourceRoomId` (filter by chat room), `limit` (default 100, max 500). Board can list any agent; agent can list only itself (use `agentId` or `me`).
 
 ### Delete one memory (board or agent)
 
