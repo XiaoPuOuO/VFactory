@@ -1,7 +1,17 @@
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agents, approvals, companies, costEvents, issues } from "@paperclipai/db";
+import {
+  agents,
+  approvals,
+  companies,
+  costEvents,
+  issues,
+  limitBreachEvents,
+} from "@paperclipai/db";
 import { notFound } from "../errors.js";
+
+const DASHBOARD_BREACH_LOOKBACK_DAYS = 30;
+const DASHBOARD_BREACH_LIMIT = 8;
 
 export function dashboardService(db: Db) {
   return {
@@ -79,6 +89,50 @@ export function dashboardService(db: Db) {
           ? (monthSpendCents / company.budgetMonthlyCents) * 100
           : 0;
 
+      const breachFrom = new Date();
+      breachFrom.setDate(breachFrom.getDate() - DASHBOARD_BREACH_LOOKBACK_DAYS);
+
+      const [{ budgetPausedCount }] = await db
+        .select({
+          budgetPausedCount: sql<number>`count(*)::int`,
+        })
+        .from(agents)
+        .where(
+          and(
+            eq(agents.companyId, companyId),
+            eq(agents.status, "paused"),
+            inArray(agents.autoPauseReason, ["budget_limit", "budget_policy"]),
+          ),
+        );
+
+      const breachRows = await db
+        .select()
+        .from(limitBreachEvents)
+        .where(
+          and(
+            eq(limitBreachEvents.companyId, companyId),
+            gte(limitBreachEvents.occurredAt, breachFrom),
+          ),
+        )
+        .orderBy(desc(limitBreachEvents.occurredAt))
+        .limit(DASHBOARD_BREACH_LIMIT);
+
+      const recentBreaches = breachRows.map((r) => ({
+        id: r.id,
+        companyId: r.companyId,
+        type: r.type as
+          | "budget_breach"
+          | "token_limit_breach"
+          | "price_limit_breach"
+          | "budget_policy_breach",
+        occurredAt: r.occurredAt,
+        amountCents: r.amountCents,
+        tokenUsage: r.tokenUsage != null ? Number(r.tokenUsage) : null,
+        agentId: r.agentId,
+        details: (r.details as Record<string, unknown>) ?? null,
+        createdAt: r.createdAt,
+      }));
+
       return {
         companyId,
         agents: {
@@ -92,6 +146,10 @@ export function dashboardService(db: Db) {
           monthSpendCents,
           monthBudgetCents: company.budgetMonthlyCents,
           monthUtilizationPercent: Number(utilization.toFixed(2)),
+        },
+        governance: {
+          agentsPausedByBudgetCount: Number(budgetPausedCount ?? 0),
+          recentBreaches,
         },
         pendingApprovals,
       };

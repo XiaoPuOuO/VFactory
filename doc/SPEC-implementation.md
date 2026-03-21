@@ -41,7 +41,7 @@ These decisions close open questions from `SPEC.md` for V1.
 | Agent adapters | Built-in `process` and `http` adapters |
 | Auth | Human auth via Better Auth sessions (login required); API keys for agents |
 | Budget period | Monthly UTC calendar window |
-| Budget enforcement | Soft alerts + hard limit auto-pause |
+| Budget enforcement | Soft alerts + hard limit auto-pause; company token/price limits block new runs when exceeded |
 | Deployment modes | `authenticated` only, with `private/public` exposure policy (see `doc/DEPLOYMENT-MODES.md`) |
 
 ## 4. Current Baseline (Repo Snapshot)
@@ -77,8 +77,9 @@ V1 implementation extends this baseline into a company-centric, governance-aware
 - Revenue/expense accounting beyond model/token costs
 - Knowledge base subsystem
 - Public marketplace (ClipHub)
-- Multi-board governance or role-based human permission granularity
 - Automatic self-healing orchestration (auto-reassign/retry planners)
+
+**Post-V1 governance (implemented per milestone, not V1 baseline):** Multi-board / company-scoped human roles, delegated auto-approval policies, and approval decision-source auditing are specified in [`doc/plans/governance-v2.md`](plans/governance-v2.md).
 
 ## 6. Architecture
 
@@ -234,6 +235,7 @@ Invariant: at least one root `company` level goal per company.
 - `started_at` timestamptz null
 - `completed_at` timestamptz null
 - `cancelled_at` timestamptz null
+- `execution_workspace_settings` jsonb null（可含 `mode`、`projectWorkspaceId` 指向 `project_workspaces.id`、`workspaceStrategy` 等；見 [`doc/execution-workspace.md`](execution-workspace.md)）
 
 Invariants:
 
@@ -478,6 +480,7 @@ All endpoints are under `/api` and return JSON. Requests may include `X-Tenant-S
 - `GET /companies/:companyId/goals`
 - `POST /companies/:companyId/goals` — body: `title`, `description`, `level`, `parentId`, `status`, **recurrence** (`one_time` | `daily` | `weekly` | `monthly` | `custom`); for `custom` also `recurrenceIntervalDays/Hours/Minutes/Seconds` (at least one &gt; 0)
 - `GET /goals/:goalId`
+- `GET /goals/:goalId/progress` — 可選 query `from`、`to`（ISO 8601）；省略則成本為全時段。回傳該 goal 範圍內議題狀態計數、連結專案列（含專案維度 `cost_events.project_id` 支出）、子 goal 列表，以及成本加總（`cost_events` 上 `goal_id`、納入專案、或納入議題之列，每列計一次）。
 - `PATCH /goals/:goalId`
 - `DELETE /goals/:goalId` (soft delete optional, hard delete board-only)
 
@@ -555,10 +558,13 @@ When an agent is woken with reason `chat_message` (board sent a message to the r
 ## 10.7 Cost and Budgets
 
 - `POST /companies/:companyId/cost-events`
-- `GET /companies/:companyId/costs/summary`
+- `GET /companies/:companyId/costs/summary` — includes optional `tokenUsage`, `tokenLimit`, `priceLimitCents`, `breachEvents` (limit breach history, last 90 days)
 - `GET /companies/:companyId/costs/by-agent`
 - `GET /companies/:companyId/costs/by-project`
+- `GET /companies/:companyId/costs/by-billing-code` — optional query `from`, `to` (ISO 8601); aggregates `cost_events` by `billing_code` (nulls grouped as unlabeled)
+- `GET /companies/:companyId/costs/by-request-depth` — optional query `from`, `to`; aggregates spend by linked issue’s `request_depth` (via `cost_events.issue_id` → `issues`; events without a linked issue roll up under unknown depth)
 - `PATCH /companies/:companyId/budgets`
+- `PATCH /companies/:companyId/limits` — set/clear company `tokenLimit` and/or `priceLimitCents`; when either is exceeded, new runs are blocked (existing runs continue)
 - `PATCH /agents/:agentId/budgets`
 
 ## 10.8 Activity and Dashboard
@@ -697,9 +703,16 @@ Board can at any time:
 
 ## 13.1 Budget Layers
 
-- company monthly budget
+- company monthly budget (utilization / monitoring; not a separate hard-stop unless mirrored by a company-scoped budget policy with `block_new_runs_for_scope`)
 - agent monthly budget
-- optional project budget (if configured)
+- **budget policies** — optional caps per `project`, `billing_code`, or `company` for the current UTC calendar month (`budget_policies` table). Each policy has `limitCents` and `onExceed`: `record_only` | `block_new_runs_for_scope` | `pause_agents`.
+
+## 13.1.1 Budget policy evaluation
+
+- Policies are evaluated on cost event ingestion when the event’s `projectId` / `billingCode` (or company-wide) matches an enabled policy. Spend is the sum of `cost_events` in the policy’s scope for the month.
+- When spend first crosses the limit in a month, a `limit_breach_events` row is written with `type` = `budget_policy_breach` and `details` including `policyId`, `scopeType`, `limitCents`, `spentCents`.
+- `pause_agents` pauses the agent that reported the crossing cost event (`auto_pause_reason` = `budget_policy`).
+- `block_new_runs_for_scope` blocks new heartbeat wakeups when the scope is already at or over limit: company-wide; project (from linked issue’s `projectId` or `contextSnapshot.projectId`); billing code when `contextSnapshot.billingCode` matches.
 
 ## 13.2 Enforcement Rules
 
@@ -879,7 +892,7 @@ V1 is complete only when all criteria are true:
 
 ## 20. Post-V1 Backlog (Explicitly Deferred)
 
-- plugin architecture
+- plugin architecture (dynamic loading / marketplace remains deferred; **built-in** company-scoped plugins with DB enablement and live-event hooks are documented in [`docs/plugins/built-in-plugins.md`](../docs/plugins/built-in-plugins.md))
 - richer workflow-state customization per team
 - milestones/labels/dependency graph depth beyond V1 minimum
 - realtime transport optimization (SSE/WebSockets)
@@ -906,3 +919,10 @@ Export/import behavior in V1:
   - import into an existing company
 - import supports collision strategies: `rename`, `skip`, `replace`
 - import supports preview (dry-run) before apply
+
+Board UI (productization):
+
+- **Onboarding**: choose **blank company** or **official template**; template flow calls `POST /api/companies/import/preview` then `POST /api/companies/import` with `target.mode = new_company` and `source.type = inline` (manifest + files loaded from the app’s static catalog).
+- **Company settings**: **Export portable zip** — calls `POST /api/companies/:companyId/export` and downloads a CLI-compatible zip (`paperclip.manifest.json` + markdown files). Uses the `fflate` library in the browser.
+- **Instance → Company management**: shortcuts to open onboarding with **template** or **blank** default.
+- **Built-in templates** ship as static assets under `ui/public/templates/` (`catalog.json`, per-template `paperclip.manifest.json` and markdown). Future marketplace (ClipHub) can replace or extend the catalog source without changing the import contract.

@@ -62,7 +62,10 @@ export function PageSkeleton({ variant = "list" }: PageSkeletonProps) {
           ))}
         </div>
 
-        <Skeleton className="costs-skeleton-chart" />
+        <div className="costs-skeleton-insights">
+          <Skeleton className="costs-skeleton-insight" />
+          <Skeleton className="costs-skeleton-insight" />
+        </div>
 
         <div className="costs-skeleton-grid">
           <Skeleton className="costs-skeleton-panel" />

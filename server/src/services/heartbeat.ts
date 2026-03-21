@@ -23,6 +23,7 @@ import { getServerAdapter, runningProcesses } from "../adapters/index.js";
 import type { AdapterExecutionResult, AdapterInvocationMeta, AdapterSessionCodec } from "../adapters/index.js";
 import { createLocalAgentJwt } from "../agent-auth-jwt.js";
 import { parseObject, asBoolean, asNumber, appendWithCap, MAX_EXCERPT_BYTES } from "../adapters/utils.js";
+import { budgetPolicyService } from "./budget-policies.js";
 import { costService } from "./costs.js";
 import { secretService } from "./secrets.js";
 import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
@@ -36,8 +37,10 @@ import {
 } from "./workspace-runtime.js";
 import { agentMemoriesService } from "./agent-memories.js";
 import { issueService } from "./issues.js";
+import type { IssueExecutionWorkspaceSettings } from "@paperclipai/shared";
 import {
   buildExecutionWorkspaceAdapterConfig,
+  orderProjectWorkspaceRowsForIssue,
   parseIssueExecutionWorkspaceSettings,
   parseProjectExecutionWorkspacePolicy,
   resolveExecutionWorkspaceMode,
@@ -589,7 +592,10 @@ export function heartbeatService(db: Db) {
     agent: typeof agents.$inferSelect,
     context: Record<string, unknown>,
     previousSessionParams: Record<string, unknown> | null,
-    opts?: { useProjectWorkspace?: boolean | null },
+    opts?: {
+      useProjectWorkspace?: boolean | null;
+      issueExecutionWorkspaceSettings?: IssueExecutionWorkspaceSettings | null;
+    },
   ): Promise<ResolvedWorkspaceForRun> {
     const issueId = readNonEmptyString(context.issueId);
     const contextProjectId = readNonEmptyString(context.projectId);
@@ -617,6 +623,12 @@ export function heartbeatService(db: Db) {
           .orderBy(asc(projectWorkspaces.createdAt), asc(projectWorkspaces.id))
       : [];
 
+    const preferredWorkspaceId = readNonEmptyString(
+      opts?.issueExecutionWorkspaceSettings?.projectWorkspaceId,
+    );
+    const { ordered: orderedProjectWorkspaceRows, preferredMissingFromProject } =
+      orderProjectWorkspaceRowsForIssue(projectWorkspaceRows, preferredWorkspaceId);
+
     const workspaceHints = projectWorkspaceRows.map((workspace) => ({
       workspaceId: workspace.id,
       cwd: readNonEmptyString(workspace.cwd),
@@ -625,11 +637,23 @@ export function heartbeatService(db: Db) {
     }));
 
     if (projectWorkspaceRows.length > 0) {
+      const initialWarnings: string[] = [];
+      if (preferredMissingFromProject && preferredWorkspaceId) {
+        initialWarnings.push(
+          `Issue's project workspace "${preferredWorkspaceId}" is not linked to this project. Trying project workspaces in default order.`,
+        );
+      }
+
       const missingProjectCwds: string[] = [];
       let hasConfiguredProjectCwd = false;
-      for (const workspace of projectWorkspaceRows) {
+      let preferredSkippedUnavailable = false;
+
+      for (const workspace of orderedProjectWorkspaceRows) {
         const projectCwd = readNonEmptyString(workspace.cwd);
         if (!projectCwd || projectCwd === REPO_ONLY_CWD_SENTINEL) {
+          if (preferredWorkspaceId && workspace.id === preferredWorkspaceId) {
+            preferredSkippedUnavailable = true;
+          }
           continue;
         }
         hasConfiguredProjectCwd = true;
@@ -638,6 +662,16 @@ export function heartbeatService(db: Db) {
           .then((stats) => stats.isDirectory())
           .catch(() => false);
         if (projectCwdExists) {
+          const warnings = [...initialWarnings];
+          if (
+            preferredWorkspaceId &&
+            workspace.id !== preferredWorkspaceId &&
+            preferredSkippedUnavailable
+          ) {
+            warnings.push(
+              `Preferred project workspace is not available on this host. Using "${projectCwd}" instead.`,
+            );
+          }
           return {
             cwd: projectCwd,
             source: "project_primary" as const,
@@ -646,15 +680,18 @@ export function heartbeatService(db: Db) {
             repoUrl: workspace.repoUrl,
             repoRef: workspace.repoRef,
             workspaceHints,
-            warnings: [],
+            warnings,
           };
+        }
+        if (preferredWorkspaceId && workspace.id === preferredWorkspaceId) {
+          preferredSkippedUnavailable = true;
         }
         missingProjectCwds.push(projectCwd);
       }
 
       const fallbackCwd = resolveDefaultAgentWorkspaceDir(agent.id);
       await fs.mkdir(fallbackCwd, { recursive: true });
-      const warnings: string[] = [];
+      const warnings = [...initialWarnings];
       if (missingProjectCwds.length > 0) {
         const firstMissing = missingProjectCwds[0];
         const extraMissingCount = Math.max(0, missingProjectCwds.length - 1);
@@ -672,9 +709,9 @@ export function heartbeatService(db: Db) {
         cwd: fallbackCwd,
         source: "project_primary" as const,
         projectId: resolvedProjectId,
-        workspaceId: projectWorkspaceRows[0]?.id ?? null,
-        repoUrl: projectWorkspaceRows[0]?.repoUrl ?? null,
-        repoRef: projectWorkspaceRows[0]?.repoRef ?? null,
+        workspaceId: orderedProjectWorkspaceRows[0]?.id ?? null,
+        repoUrl: orderedProjectWorkspaceRows[0]?.repoUrl ?? null,
+        repoRef: orderedProjectWorkspaceRows[0]?.repoRef ?? null,
         workspaceHints,
         warnings,
       };
@@ -1247,7 +1284,10 @@ export function heartbeatService(db: Db) {
       agent,
       context,
       previousSessionParams,
-      { useProjectWorkspace: executionWorkspaceMode !== "agent_default" },
+      {
+        useProjectWorkspace: executionWorkspaceMode !== "agent_default",
+        issueExecutionWorkspaceSettings,
+      },
     );
     const workspaceManagedConfig = buildExecutionWorkspaceAdapterConfig({
       agentConfig: config,
@@ -2104,6 +2144,88 @@ export function heartbeatService(db: Db) {
       agent.status === "pending_approval"
     ) {
       throw conflict("Agent is not invokable in its current state", { status: agent.status });
+    }
+
+    const limitExceeded = await costService(db).isCompanyLimitExceeded(agent.companyId);
+    if (limitExceeded.reason) {
+      const skipReason = `company.${limitExceeded.reason}_reached`;
+      await db.insert(agentWakeupRequests).values({
+        companyId: agent.companyId,
+        agentId,
+        source,
+        triggerDetail,
+        reason: skipReason,
+        payload,
+        status: "skipped",
+        requestedByActorType: opts.requestedByActorType ?? null,
+        requestedByActorId: opts.requestedByActorId ?? null,
+        idempotencyKey: opts.idempotencyKey ?? null,
+        finishedAt: new Date(),
+      });
+      if (source === "timer") {
+        return null;
+      }
+      const code =
+        limitExceeded.reason === "token_limit"
+          ? "token_limit_reached"
+          : "price_limit_reached";
+      throw conflict("Company limit reached; new runs are blocked", { code });
+    }
+
+    const budgetPolicies = budgetPolicyService(db);
+    const policyNow = new Date();
+    const skipBudgetPolicy = async (skipReason: string): Promise<null> => {
+      await db.insert(agentWakeupRequests).values({
+        companyId: agent.companyId,
+        agentId,
+        source,
+        triggerDetail,
+        reason: skipReason,
+        payload,
+        status: "skipped",
+        requestedByActorType: opts.requestedByActorType ?? null,
+        requestedByActorId: opts.requestedByActorId ?? null,
+        idempotencyKey: opts.idempotencyKey ?? null,
+        finishedAt: new Date(),
+      });
+      if (source === "timer") {
+        return null;
+      }
+      throw conflict("Budget policy scope blocks new runs", {
+        code: "budget_policy_scope_reached",
+      });
+    };
+
+    if (await budgetPolicies.isCompanyScopeBlocking(agent.companyId, policyNow)) {
+      return await skipBudgetPolicy("company.budget_policy_company_scope_reached");
+    }
+
+    let projectIdForBudget: string | null = null;
+    if (issueId) {
+      const issueRow = await db
+        .select({ projectId: issues.projectId })
+        .from(issues)
+        .where(and(eq(issues.id, issueId), eq(issues.companyId, agent.companyId)))
+        .then((rows) => rows[0] ?? null);
+      projectIdForBudget = issueRow?.projectId ?? null;
+    }
+    const ctxProjectId = readNonEmptyString(enrichedContextSnapshot.projectId);
+    if (ctxProjectId) {
+      projectIdForBudget = ctxProjectId;
+    }
+    if (
+      projectIdForBudget &&
+      (await budgetPolicies.isProjectScopeBlocking(agent.companyId, projectIdForBudget, policyNow))
+    ) {
+      return await skipBudgetPolicy("company.budget_policy_project_scope_reached");
+    }
+
+    const billingFromCtx = readNonEmptyString(enrichedContextSnapshot.billingCode);
+    if (
+      billingFromCtx &&
+      (await budgetPolicies.isBillingCodeScopeBlocking(agent.companyId, billingFromCtx, policyNow))
+    ) {
+      return await skipBudgetPolicy("company.budget_policy_billing_scope_reached");
     }
 
     const policy = parseHeartbeatPolicy(agent);

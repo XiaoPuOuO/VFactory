@@ -1,14 +1,43 @@
-import { and, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { activityLog, agents, companies, costEvents, heartbeatRuns, issues, projects } from "@paperclipai/db";
+import {
+  activityLog,
+  agents,
+  companies,
+  costEvents,
+  heartbeatRuns,
+  issues,
+  limitBreachEvents,
+  projects,
+} from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
+import { budgetPolicyService } from "./budget-policies.js";
 
 export interface CostDateRange {
   from?: Date;
   to?: Date;
 }
 
+/** 當月 UTC 的起訖日（用於 Token/Price Limit 與 breach 判斷）。 */
+function currentMonthRange(): { from: Date; to: Date } {
+  const now = new Date();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const to = new Date(from);
+  to.setUTCMonth(to.getUTCMonth() + 1);
+  to.setUTCMilliseconds(-1);
+  return { from, to };
+}
+
+/** 過去 N 天的起訖。 */
+function pastDaysRange(days: number): { from: Date; to: Date } {
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - days);
+  return { from, to };
+}
+
 export function costService(db: Db) {
+  const budgetPolicies = budgetPolicyService(db);
   return {
     createEvent: async (companyId: string, data: Omit<typeof costEvents.$inferInsert, "companyId">) => {
       const agent = await db
@@ -59,14 +88,167 @@ export function costService(db: Db) {
       ) {
         await db
           .update(agents)
-          .set({ status: "paused", updatedAt: new Date() })
+          .set({ status: "paused", autoPauseReason: "budget_limit", updatedAt: new Date() })
           .where(eq(agents.id, updatedAgent.id));
+        const { from } = currentMonthRange();
+        await db.insert(limitBreachEvents).values({
+          companyId,
+          type: "budget_breach",
+          occurredAt: new Date(),
+          amountCents: updatedAgent.spentMonthlyCents,
+          tokenUsage: null,
+          agentId: updatedAgent.id,
+          details: { agentName: updatedAgent.name },
+        });
       }
+
+      const { from: monthStart } = currentMonthRange();
+      const companyRow = await db
+        .select()
+        .from(companies)
+        .where(eq(companies.id, companyId))
+        .then((rows) => rows[0] ?? null);
+      if (companyRow) {
+        const [usage] = await db
+          .select({
+            spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+            tokenUsage: sql<number>`coalesce(sum(${costEvents.inputTokens} + ${costEvents.outputTokens}), 0)::int`,
+          })
+          .from(costEvents)
+          .where(
+            and(eq(costEvents.companyId, companyId), gte(costEvents.occurredAt, monthStart)),
+          );
+        const spendCents = Number(usage.spendCents);
+        const tokenUsage = Number(usage.tokenUsage);
+        const tokenLimit = companyRow.tokenLimit != null ? Number(companyRow.tokenLimit) : null;
+        const priceLimitCents = companyRow.priceLimitCents ?? null;
+
+        if (tokenLimit != null && tokenUsage >= tokenLimit) {
+          const [existing] = await db
+            .select({ id: limitBreachEvents.id })
+            .from(limitBreachEvents)
+            .where(
+              and(
+                eq(limitBreachEvents.companyId, companyId),
+                eq(limitBreachEvents.type, "token_limit_breach"),
+                gte(limitBreachEvents.occurredAt, monthStart),
+              ),
+            )
+            .limit(1);
+          if (!existing) {
+            await db.insert(limitBreachEvents).values({
+              companyId,
+              type: "token_limit_breach",
+              occurredAt: new Date(),
+              amountCents: null,
+              tokenUsage,
+              agentId: null,
+              details: { tokenLimit },
+            });
+          }
+        }
+        if (priceLimitCents != null && spendCents >= priceLimitCents) {
+          const [existing] = await db
+            .select({ id: limitBreachEvents.id })
+            .from(limitBreachEvents)
+            .where(
+              and(
+                eq(limitBreachEvents.companyId, companyId),
+                eq(limitBreachEvents.type, "price_limit_breach"),
+                gte(limitBreachEvents.occurredAt, monthStart),
+              ),
+            )
+            .limit(1);
+          if (!existing) {
+            await db.insert(limitBreachEvents).values({
+              companyId,
+              type: "price_limit_breach",
+              occurredAt: new Date(),
+              amountCents: spendCents,
+              tokenUsage: null,
+              agentId: null,
+              details: { priceLimitCents },
+            });
+          }
+        }
+      }
+
+      await budgetPolicies.evaluateAfterCostEvent({
+        companyId,
+        costEvent: {
+          id: event.id,
+          agentId: event.agentId,
+          projectId: event.projectId ?? null,
+          billingCode: event.billingCode ?? null,
+          costCents: event.costCents,
+          occurredAt: event.occurredAt,
+        },
+      });
 
       return event;
     },
 
-    summary: async (companyId: string, range?: CostDateRange) => {
+    /** 取得公司當月使用量（用於 Limit 檢查與 dashboard）。 */
+    getCompanyUsageForMonth: async (companyId: string) => {
+      const { from } = currentMonthRange();
+      const [row] = await db
+        .select({
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+          tokenUsage: sql<number>`coalesce(sum(${costEvents.inputTokens} + ${costEvents.outputTokens}), 0)::int`,
+        })
+        .from(costEvents)
+        .where(
+          and(eq(costEvents.companyId, companyId), gte(costEvents.occurredAt, from)),
+        );
+      return {
+        spendCents: Number(row?.spendCents ?? 0),
+        tokenUsage: Number(row?.tokenUsage ?? 0),
+      };
+    },
+
+    /** 公司是否已達 Token 或 Price 上限（任一達即 true）。用於阻擋新 run 與 UI badge。 */
+    isCompanyLimitExceeded: async (
+      companyId: string,
+    ): Promise<{ token: boolean; price: boolean; reason: "token_limit" | "price_limit" | null }> => {
+      const company = await db
+        .select({
+          tokenLimit: companies.tokenLimit,
+          priceLimitCents: companies.priceLimitCents,
+        })
+        .from(companies)
+        .where(eq(companies.id, companyId))
+        .then((rows) => rows[0] ?? null);
+      if (!company) return { token: false, price: false, reason: null };
+      const { from } = currentMonthRange();
+      const [usage] = await db
+        .select({
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+          tokenUsage: sql<number>`coalesce(sum(${costEvents.inputTokens} + ${costEvents.outputTokens}), 0)::int`,
+        })
+        .from(costEvents)
+        .where(
+          and(eq(costEvents.companyId, companyId), gte(costEvents.occurredAt, from)),
+        );
+      const spendCents = Number(usage?.spendCents ?? 0);
+      const tokenUsage = Number(usage?.tokenUsage ?? 0);
+      const tokenLimit = company.tokenLimit != null ? Number(company.tokenLimit) : null;
+      const priceLimitCents = company.priceLimitCents ?? null;
+      const tokenExceeded = tokenLimit != null && tokenUsage >= tokenLimit;
+      const priceExceeded = priceLimitCents != null && spendCents >= priceLimitCents;
+      const reason =
+        tokenExceeded ? "token_limit" : priceExceeded ? "price_limit" : null;
+      return {
+        token: tokenExceeded,
+        price: priceExceeded,
+        reason,
+      };
+    },
+
+    summary: async (
+      companyId: string,
+      range?: CostDateRange,
+      opts?: { breachEventsDays?: number },
+    ) => {
       const company = await db
         .select()
         .from(companies)
@@ -79,24 +261,60 @@ export function costService(db: Db) {
       if (range?.from) conditions.push(gte(costEvents.occurredAt, range.from));
       if (range?.to) conditions.push(lte(costEvents.occurredAt, range.to));
 
-      const [{ total }] = await db
+      const [totals] = await db
         .select({
-          total: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+          tokenUsage: sql<number>`coalesce(sum(${costEvents.inputTokens} + ${costEvents.outputTokens}), 0)::int`,
         })
         .from(costEvents)
         .where(and(...conditions));
 
-      const spendCents = Number(total);
+      const spendCents = Number(totals?.spendCents ?? 0);
+      const tokenUsage = Number(totals?.tokenUsage ?? 0);
       const utilization =
         company.budgetMonthlyCents > 0
           ? (spendCents / company.budgetMonthlyCents) * 100
           : 0;
+
+      const breachDays = opts?.breachEventsDays ?? 90;
+      const { from: breachFrom } = pastDaysRange(breachDays);
+      const breachRows = await db
+        .select()
+        .from(limitBreachEvents)
+        .where(
+          and(
+            eq(limitBreachEvents.companyId, companyId),
+            gte(limitBreachEvents.occurredAt, breachFrom),
+          ),
+        )
+        .orderBy(desc(limitBreachEvents.occurredAt))
+        .limit(200);
+
+      const breachEvents = breachRows.map((r) => ({
+        id: r.id,
+        companyId: r.companyId,
+        type: r.type as
+          | "budget_breach"
+          | "token_limit_breach"
+          | "price_limit_breach"
+          | "budget_policy_breach",
+        occurredAt: r.occurredAt,
+        amountCents: r.amountCents,
+        tokenUsage: r.tokenUsage != null ? Number(r.tokenUsage) : null,
+        agentId: r.agentId,
+        details: (r.details as Record<string, unknown>) ?? null,
+        createdAt: r.createdAt,
+      }));
 
       return {
         companyId,
         spendCents,
         budgetCents: company.budgetMonthlyCents,
         utilizationPercent: Number(utilization.toFixed(2)),
+        tokenUsage,
+        tokenLimit: company.tokenLimit != null ? Number(company.tokenLimit) : null,
+        priceLimitCents: company.priceLimitCents ?? null,
+        breachEvents,
       };
     },
 
@@ -199,6 +417,51 @@ export function costService(db: Db) {
         .where(and(...conditions))
         .groupBy(runProjectLinks.projectId, projects.name)
         .orderBy(desc(costCentsExpr));
+    },
+
+    byBillingCode: async (companyId: string, range?: CostDateRange) => {
+      const conditions: ReturnType<typeof eq>[] = [eq(costEvents.companyId, companyId)];
+      if (range?.from) conditions.push(gte(costEvents.occurredAt, range.from));
+      if (range?.to) conditions.push(lte(costEvents.occurredAt, range.to));
+
+      const sumCost = sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`;
+
+      return db
+        .select({
+          billingCode: costEvents.billingCode,
+          costCents: sumCost,
+          inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
+          outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+        })
+        .from(costEvents)
+        .where(and(...conditions))
+        .groupBy(costEvents.billingCode)
+        .orderBy(desc(sumCost));
+    },
+
+    byRequestDepth: async (companyId: string, range?: CostDateRange) => {
+      const conditions: ReturnType<typeof eq>[] = [eq(costEvents.companyId, companyId)];
+      if (range?.from) conditions.push(gte(costEvents.occurredAt, range.from));
+      if (range?.to) conditions.push(lte(costEvents.occurredAt, range.to));
+
+      const sumCost = sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`;
+      const depthIsNull = sql<boolean>`(${issues.requestDepth} IS NULL)`;
+
+      return db
+        .select({
+          requestDepth: issues.requestDepth,
+          costCents: sumCost,
+          inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
+          outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+        })
+        .from(costEvents)
+        .leftJoin(
+          issues,
+          and(eq(costEvents.issueId, issues.id), eq(issues.companyId, companyId)),
+        )
+        .where(and(...conditions))
+        .groupBy(issues.requestDepth)
+        .orderBy(asc(depthIsNull), asc(issues.requestDepth));
     },
   };
 }

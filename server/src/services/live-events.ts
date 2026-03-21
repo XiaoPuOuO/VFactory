@@ -4,6 +4,15 @@ import type { LiveEvent, LiveEventType } from "@paperclipai/shared";
 type LiveEventPayload = Record<string, unknown>;
 type LiveEventListener = (event: LiveEvent) => void;
 
+/** 在 publish 之後呼叫（與 SSE 並行），供內建 Plugin runtime 訂閱；勿拋錯。 */
+type LiveEventPostPublishHook = (event: LiveEvent) => void;
+
+let postPublishHook: LiveEventPostPublishHook | null = null;
+
+export function setLiveEventPostPublishHook(hook: LiveEventPostPublishHook | null) {
+  postPublishHook = hook;
+}
+
 const emitter = new EventEmitter();
 emitter.setMaxListeners(0);
 
@@ -31,6 +40,9 @@ export function publishLiveEvent(input: {
 }) {
   const event = toLiveEvent(input);
   emitter.emit(input.companyId, event);
+  if (postPublishHook) {
+    postPublishHook(event);
+  }
   return event;
 }
 

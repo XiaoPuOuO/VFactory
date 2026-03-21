@@ -245,13 +245,34 @@ export function Dashboard() {
               label={t("dashboard.monthSpend")}
               to="/costs"
               description={
-                <span>
-                  {data.costs.monthBudgetCents > 0
-                    ? t("dashboard.budgetOf", {
-                        percent: data.costs.monthUtilizationPercent,
-                        budget: formatCents(data.costs.monthBudgetCents),
-                      })
-                    : t("dashboard.unlimitedBudget")}
+                <span className="dashboard-metric-card-desc-stack">
+                  <span>
+                    {data.costs.monthBudgetCents > 0
+                      ? t("dashboard.budgetOf", {
+                          percent: data.costs.monthUtilizationPercent,
+                          budget: formatCents(data.costs.monthBudgetCents),
+                        })
+                      : t("dashboard.unlimitedBudget")}
+                  </span>
+                  {(data.governance.agentsPausedByBudgetCount > 0 ||
+                    data.governance.recentBreaches.length > 0) && (
+                    <span className="dashboard-governance-hint">
+                      {[
+                        data.governance.agentsPausedByBudgetCount > 0
+                          ? t("dashboard.governanceBudgetPaused", {
+                              count: data.governance.agentsPausedByBudgetCount,
+                            })
+                          : null,
+                        data.governance.recentBreaches.length > 0
+                          ? t("dashboard.governanceRecentBreaches", {
+                              count: data.governance.recentBreaches.length,
+                            })
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  )}
                 </span>
               }
             />
@@ -259,7 +280,7 @@ export function Dashboard() {
               icon={ShieldCheck}
               value={data.pendingApprovals}
               label={t("dashboard.pendingApprovals")}
-              to="/approvals"
+              to="/governance"
               description={
                 <span>
                   {t("dashboard.awaitingBoardReview")}

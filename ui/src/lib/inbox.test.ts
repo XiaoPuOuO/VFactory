@@ -40,6 +40,9 @@ function makeApproval(status: Approval["status"]): Approval {
     payload: {},
     decisionNote: null,
     decidedByUserId: null,
+    decisionSource: "human",
+    policyId: null,
+    policySnapshot: null,
     decidedAt: null,
     createdAt: new Date("2026-03-11T00:00:00.000Z"),
     updatedAt: new Date("2026-03-11T00:00:00.000Z"),
@@ -164,6 +167,10 @@ const dashboard: DashboardSummary = {
     monthSpendCents: 900,
     monthBudgetCents: 1000,
     monthUtilizationPercent: 90,
+  },
+  governance: {
+    agentsPausedByBudgetCount: 0,
+    recentBreaches: [],
   },
   pendingApprovals: 1,
 };

@@ -38,8 +38,16 @@ export interface OrgNode {
   name: string;
   role: string;
   status: string;
+  autoPaused: boolean;
+  autoPauseReason: string | null;
   reports: OrgNode[];
 }
+
+/** Agent list/detail API 回傳會加上 autoPaused 與 autoPauseReason（含公司層級上限）。 */
+export type AgentWithPauseReason = Agent & {
+  autoPaused: boolean;
+  autoPauseReason: string | null;
+};
 
 export interface AgentHireResponse {
   agent: Agent;
@@ -57,13 +65,14 @@ function agentPath(id: string, companyId?: string, suffix = "") {
 }
 
 export const agentsApi = {
-  list: (companyId: string) => api.get<Agent[]>(`/companies/${companyId}/agents`),
+  list: (companyId: string) =>
+    api.get<AgentWithPauseReason[]>(`/companies/${companyId}/agents`),
   org: (companyId: string) => api.get<OrgNode[]>(`/companies/${companyId}/org`),
   listConfigurations: (companyId: string) =>
     api.get<Record<string, unknown>[]>(`/companies/${companyId}/agent-configurations`),
   get: async (id: string, companyId?: string) => {
     try {
-      return await api.get<Agent>(agentPath(id, companyId));
+      return await api.get<AgentWithPauseReason>(agentPath(id, companyId));
     } catch (error) {
       // Backward-compat fallback: if backend shortname lookup reports ambiguity,
       // resolve using company agent list while ignoring terminated agents.

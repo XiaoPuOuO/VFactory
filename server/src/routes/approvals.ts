@@ -8,15 +8,15 @@ import {
   resubmitApprovalSchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { logger } from "../middleware/logger.js";
 import {
   approvalService,
-  heartbeatService,
   issueApprovalService,
   logActivity,
   secretService,
 } from "../services/index.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
+import { assertCompanyPermission } from "./company-permission.js";
+import { runApprovalApprovedFollowUp } from "../services/approval-follow-up.js";
 import { redactEventPayload } from "../redaction.js";
 
 function redactApprovalPayload<T extends { payload: Record<string, unknown> }>(approval: T): T {
@@ -29,7 +29,6 @@ function redactApprovalPayload<T extends { payload: Record<string, unknown> }>(a
 export function approvalRoutes(db: Db) {
   const router = Router();
   const svc = approvalService(db);
-  const heartbeat = heartbeatService(db);
   const issueApprovalsSvc = issueApprovalService(db);
   const secretsSvc = secretService(db);
   const strictSecretsMode = process.env.PAPERCLIP_SECRETS_STRICT_MODE === "true";
@@ -81,6 +80,9 @@ export function approvalRoutes(db: Db) {
       status: "pending",
       decisionNote: null,
       decidedByUserId: null,
+      decisionSource: "human",
+      policyId: null,
+      policySnapshot: null,
       decidedAt: null,
       updatedAt: new Date(),
     });
@@ -121,93 +123,25 @@ export function approvalRoutes(db: Db) {
   router.post("/approvals/:id/approve", validate(resolveApprovalSchema), async (req, res) => {
     assertBoard(req);
     const id = req.params.id as string;
+    const existing = await svc.getById(id);
+    if (!existing) {
+      res.status(404).json({ error: "Approval not found" });
+      return;
+    }
+    await assertCompanyPermission(db, req, existing.companyId, "approvals:resolve");
+
     const { approval, applied } = await svc.approve(
       id,
       req.body.decidedByUserId ?? "board",
       req.body.decisionNote,
+      { decisionSource: "human" },
     );
 
     if (applied) {
-      const linkedIssues = await issueApprovalsSvc.listIssuesForApproval(approval.id);
-      const linkedIssueIds = linkedIssues.map((issue) => issue.id);
-      const primaryIssueId = linkedIssueIds[0] ?? null;
-
-      await logActivity(db, {
-        companyId: approval.companyId,
-        actorType: "user",
-        actorId: req.actor.userId ?? "board",
-        action: "approval.approved",
-        entityType: "approval",
-        entityId: approval.id,
-        details: {
-          type: approval.type,
-          requestedByAgentId: approval.requestedByAgentId,
-          linkedIssueIds,
-        },
+      await runApprovalApprovedFollowUp(db, approval, {
+        userId: req.actor.userId ?? null,
+        label: "user",
       });
-
-      if (approval.requestedByAgentId) {
-        try {
-          const wakeRun = await heartbeat.wakeup(approval.requestedByAgentId, {
-            source: "automation",
-            triggerDetail: "system",
-            reason: "approval_approved",
-            payload: {
-              approvalId: approval.id,
-              approvalStatus: approval.status,
-              issueId: primaryIssueId,
-              issueIds: linkedIssueIds,
-            },
-            requestedByActorType: "user",
-            requestedByActorId: req.actor.userId ?? "board",
-            contextSnapshot: {
-              source: "approval.approved",
-              approvalId: approval.id,
-              approvalStatus: approval.status,
-              issueId: primaryIssueId,
-              issueIds: linkedIssueIds,
-              taskId: primaryIssueId,
-              wakeReason: "approval_approved",
-            },
-          });
-
-          await logActivity(db, {
-            companyId: approval.companyId,
-            actorType: "user",
-            actorId: req.actor.userId ?? "board",
-            action: "approval.requester_wakeup_queued",
-            entityType: "approval",
-            entityId: approval.id,
-            details: {
-              requesterAgentId: approval.requestedByAgentId,
-              wakeRunId: wakeRun?.id ?? null,
-              linkedIssueIds,
-            },
-          });
-        } catch (err) {
-          logger.warn(
-            {
-              err,
-              approvalId: approval.id,
-              requestedByAgentId: approval.requestedByAgentId,
-            },
-            "failed to queue requester wakeup after approval",
-          );
-          await logActivity(db, {
-            companyId: approval.companyId,
-            actorType: "user",
-            actorId: req.actor.userId ?? "board",
-            action: "approval.requester_wakeup_failed",
-            entityType: "approval",
-            entityId: approval.id,
-            details: {
-              requesterAgentId: approval.requestedByAgentId,
-              linkedIssueIds,
-              error: err instanceof Error ? err.message : String(err),
-            },
-          });
-        }
-      }
     }
 
     res.json(redactApprovalPayload(approval));
@@ -216,6 +150,13 @@ export function approvalRoutes(db: Db) {
   router.post("/approvals/:id/reject", validate(resolveApprovalSchema), async (req, res) => {
     assertBoard(req);
     const id = req.params.id as string;
+    const existing = await svc.getById(id);
+    if (!existing) {
+      res.status(404).json({ error: "Approval not found" });
+      return;
+    }
+    await assertCompanyPermission(db, req, existing.companyId, "approvals:resolve");
+
     const { approval, applied } = await svc.reject(
       id,
       req.body.decidedByUserId ?? "board",
@@ -243,6 +184,13 @@ export function approvalRoutes(db: Db) {
     async (req, res) => {
       assertBoard(req);
       const id = req.params.id as string;
+      const pre = await svc.getById(id);
+      if (!pre) {
+        res.status(404).json({ error: "Approval not found" });
+        return;
+      }
+      await assertCompanyPermission(db, req, pre.companyId, "approvals:resolve");
+
       const approval = await svc.requestRevision(
         id,
         req.body.decidedByUserId ?? "board",

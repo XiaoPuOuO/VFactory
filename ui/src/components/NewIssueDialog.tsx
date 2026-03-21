@@ -42,11 +42,16 @@ import { extractProviderIdWithFallback } from "../lib/model-utils";
 import { MarkdownEditor, type MarkdownEditorRef, type MentionOption } from "./MarkdownEditor";
 import { AgentIcon } from "./AgentIconPicker";
 import { InlineEntitySelector, type InlineEntityOption } from "./InlineEntitySelector";
+import { SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI } from "@/lib/featureFlags";
+import type { Project } from "@paperclipai/shared";
 
 const DRAFT_KEY = "paperclip:issue-draft";
 const DEBOUNCE_MS = 800;
-// TODO(issue-worktree-support): re-enable this UI once the workflow is ready to ship.
-const SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI = false;
+
+function defaultProjectWorkspaceId(project: Project | undefined): string {
+  if (!project?.workspaces?.length) return "";
+  return project.primaryWorkspace?.id ?? project.workspaces[0]?.id ?? "";
+}
 
 /** Return black or white hex based on background luminance (WCAG perceptual weights). */
 function getContrastTextColor(hexColor: string): string {
@@ -70,6 +75,7 @@ interface IssueDraft {
   assigneeChrome: boolean;
   useIsolatedExecutionWorkspace: boolean;
   executionLabel: string;
+  issueProjectWorkspaceId?: string;
 }
 
 const ISSUE_OVERRIDE_ADAPTER_TYPES = new Set([
@@ -211,6 +217,7 @@ export function NewIssueDialog() {
   const [assigneeThinkingEffort, setAssigneeThinkingEffort] = useState("");
   const [assigneeChrome, setAssigneeChrome] = useState(false);
   const [useIsolatedExecutionWorkspace, setUseIsolatedExecutionWorkspace] = useState(false);
+  const [issueProjectWorkspaceId, setIssueProjectWorkspaceId] = useState("");
   const [executionLabel, setExecutionLabel] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [dialogCompanyId, setDialogCompanyId] = useState<string | null>(null);
@@ -333,6 +340,7 @@ export function NewIssueDialog() {
       assigneeThinkingEffort,
       assigneeChrome,
       useIsolatedExecutionWorkspace,
+      issueProjectWorkspaceId,
       executionLabel,
     });
   }, [
@@ -346,6 +354,7 @@ export function NewIssueDialog() {
     assigneeThinkingEffort,
     assigneeChrome,
     useIsolatedExecutionWorkspace,
+    issueProjectWorkspaceId,
     executionLabel,
     newIssueOpen,
     scheduleSave,
@@ -369,7 +378,9 @@ export function NewIssueDialog() {
       setAssigneeThinkingEffort("");
       setAssigneeChrome(false);
       setUseIsolatedExecutionWorkspace(false);
+      setIssueProjectWorkspaceId("");
       setExecutionLabel("");
+      executionWorkspaceDefaultProjectId.current = newIssueDefaults.projectId ?? null;
     } else if (draft && draft.title.trim()) {
       setTitle(draft.title);
       setDescription(draft.description);
@@ -381,7 +392,9 @@ export function NewIssueDialog() {
       setAssigneeThinkingEffort(draft.assigneeThinkingEffort ?? "");
       setAssigneeChrome(draft.assigneeChrome ?? false);
       setUseIsolatedExecutionWorkspace(draft.useIsolatedExecutionWorkspace ?? false);
+      setIssueProjectWorkspaceId(draft.issueProjectWorkspaceId ?? "");
       setExecutionLabel(draft.executionLabel ?? "");
+      executionWorkspaceDefaultProjectId.current = newIssueDefaults.projectId ?? draft.projectId ?? null;
     } else {
       setStatus(newIssueDefaults.status ?? "todo");
       setPriority(newIssueDefaults.priority ?? "");
@@ -391,7 +404,9 @@ export function NewIssueDialog() {
       setAssigneeThinkingEffort("");
       setAssigneeChrome(false);
       setUseIsolatedExecutionWorkspace(false);
+      setIssueProjectWorkspaceId("");
       setExecutionLabel("");
+      executionWorkspaceDefaultProjectId.current = newIssueDefaults.projectId ?? null;
     }
   }, [newIssueOpen, newIssueDefaults]);
 
@@ -431,6 +446,7 @@ export function NewIssueDialog() {
     setAssigneeThinkingEffort("");
     setAssigneeChrome(false);
     setUseIsolatedExecutionWorkspace(false);
+    setIssueProjectWorkspaceId("");
     setExpanded(false);
     setDialogCompanyId(null);
     setCompanyOpen(false);
@@ -446,6 +462,7 @@ export function NewIssueDialog() {
     setAssigneeThinkingEffort("");
     setAssigneeChrome(false);
     setUseIsolatedExecutionWorkspace(false);
+    setIssueProjectWorkspaceId("");
   }
 
   function discardDraft() {
@@ -466,11 +483,23 @@ export function NewIssueDialog() {
     const executionWorkspacePolicy = SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI
       ? selectedProject?.executionWorkspacePolicy
       : null;
-    const executionWorkspaceSettings = executionWorkspacePolicy?.enabled
-      ? {
+    const resolvedPw =
+      selectedProject && selectedProject.workspaces.length > 1
+        ? issueProjectWorkspaceId || defaultProjectWorkspaceId(selectedProject)
+        : undefined;
+    const executionWorkspaceSettings = (() => {
+      if (!projectId || !selectedProject) return null;
+      if (executionWorkspacePolicy?.enabled) {
+        return {
           mode: useIsolatedExecutionWorkspace ? "isolated" : "project_primary",
-        }
-      : null;
+          ...(resolvedPw ? { projectWorkspaceId: resolvedPw } : {}),
+        };
+      }
+      if (selectedProject.workspaces.length > 1 && resolvedPw) {
+        return { projectWorkspaceId: resolvedPw };
+      }
+      return null;
+    })();
     createIssue.mutate({
       companyId: effectiveCompanyId,
       title: title.trim(),
@@ -561,6 +590,7 @@ export function NewIssueDialog() {
     const policy = SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI ? nextProject?.executionWorkspacePolicy : null;
     executionWorkspaceDefaultProjectId.current = nextProjectId || null;
     setUseIsolatedExecutionWorkspace(Boolean(policy?.enabled && policy.defaultMode === "isolated"));
+    setIssueProjectWorkspaceId(defaultProjectWorkspaceId(nextProject));
   }, [orderedProjects]);
 
   useEffect(() => {
@@ -577,6 +607,7 @@ export function NewIssueDialog() {
         project.executionWorkspacePolicy.defaultMode === "isolated",
       ),
     );
+    setIssueProjectWorkspaceId(defaultProjectWorkspaceId(project));
   }, [newIssueOpen, orderedProjects, projectId]);
   const modelOverrideOptions = useMemo<InlineEntityOption[]>(
     () => {
@@ -818,6 +849,29 @@ export function NewIssueDialog() {
             </div>
           </div>
         </div>
+
+        {currentProject && currentProject.workspaces.length > 1 && (
+          <div className="ui-new-issue-section">
+            <label className="ui-new-issue-section-label" htmlFor="new-issue-project-workspace">
+              {t("newIssue.projectWorkspace")}
+            </label>
+            <select
+              id="new-issue-project-workspace"
+              className="ui-new-issue-input"
+              value={issueProjectWorkspaceId || defaultProjectWorkspaceId(currentProject)}
+              onChange={(e) => setIssueProjectWorkspaceId(e.target.value)}
+            >
+              {currentProject.workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.name}
+                </option>
+              ))}
+            </select>
+            <div className="ui-new-issue-toggle-row-hint">
+              {t("newIssue.projectWorkspaceHint")}
+            </div>
+          </div>
+        )}
 
         {currentProjectSupportsExecutionWorkspace && (
           <div className="ui-new-issue-section">

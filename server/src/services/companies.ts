@@ -28,6 +28,7 @@ import {
   heartbeatRuns,
   heartbeatRunEvents,
   costEvents,
+  limitBreachEvents,
   approvalComments,
   approvals,
   activityLog,
@@ -300,6 +301,7 @@ export function companyService(db: Db) {
       await tx.delete(issues).where(eq(issues.companyId, id));
       await tx.delete(assets).where(eq(assets.companyId, id));
       await tx.delete(costEvents).where(eq(costEvents.companyId, id));
+      await tx.delete(limitBreachEvents).where(eq(limitBreachEvents.companyId, id));
       await tx.delete(approvalComments).where(eq(approvalComments.companyId, id));
       await tx.delete(approvals).where(eq(approvals.companyId, id));
       await tx.delete(companySecrets).where(eq(companySecrets.companyId, id));

@@ -32,6 +32,12 @@ export type {
 } from "./issue.js";
 export type { Goal } from "./goal.js";
 export type {
+  GoalProgress,
+  GoalProgressChildGoal,
+  GoalProgressIssueStatusCounts,
+  GoalProgressProjectRow,
+} from "./goal-progress.js";
+export type {
   ChatRoom,
   ChatRoomMember,
   ChatMessage,
@@ -41,6 +47,7 @@ export type {
 } from "./chat.js";
 export type { AgentChatMemory } from "./agent-memory.js";
 export type { Approval, ApprovalComment } from "./approval.js";
+export type { ApprovalWithLinkedIssueCount, GovernanceHubSummary } from "./governance.js";
 export type {
   SecretProvider,
   SecretVersionSelector,
@@ -51,7 +58,16 @@ export type {
   CompanySecret,
   SecretProviderDescriptor,
 } from "./secrets.js";
-export type { CostEvent, CostSummary, CostByAgent } from "./cost.js";
+export type {
+  BudgetPolicy,
+  CostEvent,
+  CostSummary,
+  CostByAgent,
+  CostByBillingCode,
+  CostByRequestDepth,
+  LimitBreachType,
+  LimitBreachEvent,
+} from "./cost.js";
 export type {
   HeartbeatRun,
   HeartbeatRunEvent,
@@ -60,6 +76,7 @@ export type {
   AgentWakeupRequest,
 } from "./heartbeat.js";
 export type { LiveEvent } from "./live.js";
+export type { CompanyPluginState, CompanyPluginDescriptor } from "./plugin.js";
 export type { DashboardSummary } from "./dashboard.js";
 export type { ActivityEvent } from "./activity.js";
 export type { SidebarBadges } from "./sidebar-badges.js";

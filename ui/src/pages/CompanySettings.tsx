@@ -3,8 +3,12 @@ import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
+import type { CompanyPortabilityExportResult } from "@paperclipai/shared";
 import { companiesApi } from "../api/companies";
+import { downloadCompanyPortabilityZip } from "../lib/company-portability";
+import { companyPluginsApi } from "../api/plugins";
 import { accessApi } from "../api/access";
+import { ApiError } from "../api/client";
 import { meApi } from "../api/me";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
@@ -76,6 +80,9 @@ export function CompanySettings() {
 
   const [showMoveWorkingDirDialog, setShowMoveWorkingDirDialog] = useState(false);
   const [showIconDialog, setShowIconDialog] = useState(false);
+  const [exportIncludeCompany, setExportIncludeCompany] = useState(true);
+  const [exportIncludeAgents, setExportIncludeAgents] = useState(true);
+  const [lastExportResult, setLastExportResult] = useState<CompanyPortabilityExportResult | null>(null);
 
   const generalMutation = useMutation({
     mutationFn: (data: {
@@ -98,6 +105,20 @@ export function CompanySettings() {
     },
   });
 
+  const exportMutation = useMutation({
+    mutationFn: () =>
+      companiesApi.exportBundle(selectedCompanyId!, {
+        include: {
+          company: exportIncludeCompany,
+          agents: exportIncludeAgents,
+        },
+      }),
+    onSuccess: (data) => {
+      downloadCompanyPortabilityZip(data, selectedCompany?.name ?? "company");
+      setLastExportResult(data);
+    },
+  });
+
   const settingsMutation = useMutation({
     mutationFn: (requireApproval: boolean) =>
       companiesApi.update(selectedCompanyId!, {
@@ -106,6 +127,20 @@ export function CompanySettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
     }
+  });
+
+  const { data: pluginsResponse } = useQuery({
+    queryKey: queryKeys.companies.plugins(selectedCompanyId!),
+    queryFn: () => companyPluginsApi.list(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
+
+  const pluginMutation = useMutation({
+    mutationFn: ({ pluginId, enabled }: { pluginId: string; enabled: boolean }) =>
+      companyPluginsApi.patch(selectedCompanyId!, pluginId, { enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.companies.plugins(selectedCompanyId!) });
+    },
   });
 
   const inviteMutation = useMutation({
@@ -166,6 +201,7 @@ export function CompanySettings() {
     setInviteSnippet(null);
     setSnippetCopied(false);
     setSnippetCopyDelightId(0);
+    setLastExportResult(null);
   }, [selectedCompanyId]);
   const archiveMutation = useMutation({
     mutationFn: ({
@@ -416,6 +452,35 @@ export function CompanySettings() {
         </div>
       </div>
 
+      {/* Plugins (built-in, company-scoped) */}
+      <div className="company-settings-section">
+        <div className="company-settings-section-label">
+          {t("sectionPlugins")}
+        </div>
+        <div className="company-settings-block">
+          <div className="company-settings-invite-desc-row">
+            <span className="company-settings-invite-desc">{t("pluginsIntro")}</span>
+          </div>
+          {pluginsResponse?.plugins.map((p) => (
+            <ToggleField
+              key={p.id}
+              label={t(`pluginLabel_${p.id}`, { defaultValue: p.label })}
+              hint={t(`pluginDesc_${p.id}`, { defaultValue: p.description })}
+              checked={p.enabled}
+              disabled={pluginMutation.isPending}
+              onChange={(v) => pluginMutation.mutate({ pluginId: p.id, enabled: v })}
+            />
+          ))}
+          {pluginMutation.isError && (
+            <p className="company-settings-invite-error">
+              {pluginMutation.error instanceof ApiError && pluginMutation.error.status === 403
+                ? t("pluginPermissionDenied")
+                : t("pluginUpdateFailed")}
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* Invites */}
       <div className="company-settings-section">
         <div className="company-settings-section-label">
@@ -481,6 +546,63 @@ export function CompanySettings() {
                 </div>
               </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Portability: export company bundle (CLI-compatible zip) */}
+      <div className="company-settings-section">
+        <div className="company-settings-section-label">
+          {t("sectionPortability")}
+        </div>
+        <div className="company-settings-block">
+          <p className="company-settings-portability-desc">{t("portabilityDesc")}</p>
+          <label className="company-settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={exportIncludeCompany}
+              onChange={(e) => setExportIncludeCompany(e.target.checked)}
+            />
+            <span>{t("exportIncludeCompany")}</span>
+          </label>
+          <label className="company-settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={exportIncludeAgents}
+              onChange={(e) => setExportIncludeAgents(e.target.checked)}
+            />
+            <span>{t("exportIncludeAgents")}</span>
+          </label>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={
+              exportMutation.isPending ||
+              (!exportIncludeCompany && !exportIncludeAgents)
+            }
+            onClick={() => exportMutation.mutate()}
+          >
+            {exportMutation.isPending ? t("exporting") : t("downloadExportZip")}
+          </Button>
+          {exportMutation.isError && (
+            <p className="company-settings-export-error">
+              {exportMutation.error instanceof Error
+                ? exportMutation.error.message
+                : t("exportFailed")}
+            </p>
+          )}
+          {lastExportResult && lastExportResult.warnings.length > 0 && (
+            <ul className="company-settings-export-warnings">
+              {lastExportResult.warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          )}
+          {lastExportResult && lastExportResult.manifest.requiredSecrets.length > 0 && (
+            <p className="company-settings-export-secrets-hint">
+              {t("exportRequiredSecretsHint")}
+            </p>
           )}
         </div>
       </div>

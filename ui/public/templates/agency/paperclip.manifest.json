@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2025-03-21T00:00:00.000Z",
+  "source": null,
+  "includes": {
+    "company": true,
+    "agents": true
+  },
+  "company": {
+    "path": "COMPANY.md",
+    "name": "Agency",
+    "description": "Client-facing agency with CEO, account management, and creative lead.",
+    "brandColor": null,
+    "requireBoardApprovalForNewAgents": true
+  },
+  "agents": [
+    {
+      "slug": "ceo",
+      "name": "CEO",
+      "path": "agents/ceo/AGENTS.md",
+      "role": "ceo",
+      "title": "Chief Executive Officer",
+      "icon": null,
+      "capabilities": null,
+      "reportsToSlug": null,
+      "adapterType": "process",
+      "adapterConfig": {
+        "command": "echo",
+        "args": ["idle"]
+      },
+      "runtimeConfig": {
+        "heartbeat": {
+          "enabled": true,
+          "intervalSec": 3600,
+          "wakeOnDemand": true,
+          "cooldownSec": 10,
+          "maxConcurrentRuns": 10
+        }
+      },
+      "permissions": {},
+      "budgetMonthlyCents": 15000,
+      "metadata": null
+    },
+    {
+      "slug": "account-manager",
+      "name": "Account Manager",
+      "path": "agents/account-manager/AGENTS.md",
+      "role": "operator",
+      "title": "Account Manager",
+      "icon": null,
+      "capabilities": null,
+      "reportsToSlug": "ceo",
+      "adapterType": "process",
+      "adapterConfig": {
+        "command": "echo",
+        "args": ["idle"]
+      },
+      "runtimeConfig": {
+        "heartbeat": {
+          "enabled": true,
+          "intervalSec": 3600,
+          "wakeOnDemand": true,
+          "cooldownSec": 10,
+          "maxConcurrentRuns": 10
+        }
+      },
+      "permissions": {},
+      "budgetMonthlyCents": 8000,
+      "metadata": null
+    },
+    {
+      "slug": "creative-director",
+      "name": "Creative Director",
+      "path": "agents/creative-director/AGENTS.md",
+      "role": "operator",
+      "title": "Creative Director",
+      "icon": null,
+      "capabilities": null,
+      "reportsToSlug": "ceo",
+      "adapterType": "process",
+      "adapterConfig": {
+        "command": "echo",
+        "args": ["idle"]
+      },
+      "runtimeConfig": {
+        "heartbeat": {
+          "enabled": true,
+          "intervalSec": 3600,
+          "wakeOnDemand": true,
+          "cooldownSec": 10,
+          "maxConcurrentRuns": 10
+        }
+      },
+      "permissions": {},
+      "budgetMonthlyCents": 8000,
+      "metadata": null
+    }
+  ],
+  "requiredSecrets": []
+}

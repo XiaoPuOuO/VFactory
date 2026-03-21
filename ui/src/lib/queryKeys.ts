@@ -3,6 +3,7 @@ export const queryKeys = {
     all: ["companies"] as const,
     detail: (id: string) => ["companies", id] as const,
     allowedAdapterTypes: (id: string) => ["companies", id, "allowed-adapter-types"] as const,
+    plugins: (companyId: string) => ["companies", companyId, "plugins"] as const,
     stats: ["companies", "stats"] as const,
   },
   agents: {
@@ -46,6 +47,8 @@ export const queryKeys = {
   goals: {
     list: (companyId: string) => ["goals", companyId] as const,
     detail: (id: string) => ["goals", "detail", id] as const,
+    progress: (goalId: string, costPreset: "mtd" | "all") =>
+      ["goals", "progress", goalId, costPreset] as const,
   },
   schedules: {
     list: (companyId: string, filters?: { agentId?: string; enabled?: boolean }) =>
@@ -59,6 +62,10 @@ export const queryKeys = {
     detail: (approvalId: string) => ["approvals", "detail", approvalId] as const,
     comments: (approvalId: string) => ["approvals", "comments", approvalId] as const,
     issues: (approvalId: string) => ["approvals", "issues", approvalId] as const,
+  },
+  governance: {
+    hub: (companyId: string) => ["governance", "hub", companyId] as const,
+    hirePolicy: (companyId: string) => ["governance", "hirePolicy", companyId] as const,
   },
   access: {
     joinRequests: (companyId: string, status: string = "pending_approval") =>
@@ -95,6 +102,7 @@ export const queryKeys = {
   activity: (companyId: string) => ["activity", companyId] as const,
   costs: (companyId: string, from?: string, to?: string) =>
     ["costs", companyId, from, to] as const,
+  budgetPolicies: (companyId: string) => ["budget-policies", companyId] as const,
   heartbeats: (companyId: string, agentId?: string) =>
     ["heartbeats", companyId, agentId] as const,
   runDetail: (runId: string) => ["heartbeat-run", runId] as const,

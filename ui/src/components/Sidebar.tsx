@@ -5,6 +5,7 @@ import {
   Target,
   LayoutDashboard,
   DollarSign,
+  Scale,
   History,
   Search,
   SquarePen,
@@ -100,6 +101,7 @@ export function Sidebar() {
         <SidebarSection label={t("nav.company")}>
           <SidebarNavItem to="/org" label={t("nav.orgChart")} icon={Network} />
           <SidebarNavItem to="/goal-map" label={t("nav.goalMap")} icon={Map} />
+          <SidebarNavItem to="/governance" label={t("nav.governance")} icon={Scale} />
           <SidebarNavItem to="/costs" label={t("nav.costs")} icon={DollarSign} />
           <SidebarNavItem to="/activity" label={t("nav.activity")} icon={History} />
           <SidebarNavItem to="/company/settings" label={t("nav.settings")} icon={Settings} />

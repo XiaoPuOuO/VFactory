@@ -61,3 +61,56 @@ Archives a company. Archived companies are hidden from default listings.
 | `budgetMonthlyCents` | number | Monthly budget limit |
 | `createdAt` | string | ISO timestamp |
 | `updatedAt` | string | ISO timestamp |
+
+## Company plugins (built-in)
+
+Lists compile-time registered plugins and per-company state. Updating requires **company management** permission (`company:manage`).
+
+```
+GET /api/companies/{companyId}/plugins
+```
+
+Response:
+
+```json
+{
+  "plugins": [
+    {
+      "id": "noop",
+      "label": "No-op",
+      "description": "…",
+      "enabled": false,
+      "config": {},
+      "updatedAt": null
+    }
+  ]
+}
+```
+
+```
+PATCH /api/companies/{companyId}/plugins/{pluginId}
+{
+  "enabled": true,
+  "config": {}
+}
+```
+
+`pluginId` must be a member of `BUILTIN_PLUGIN_IDS` in `@paperclipai/shared`. See [`docs/plugins/built-in-plugins.md`](../plugins/built-in-plugins.md).
+
+## Hire auto-approval policy
+
+Delegated rules for `hire_agent` when the company still requires board approval for new agents (`requireBoardApprovalForNewAgents`): hires at or below a monthly budget cap can be auto-approved.
+
+```
+GET /api/companies/{companyId}/approval-policies/hire
+```
+
+```
+PUT /api/companies/{companyId}/approval-policies/hire
+{
+  "enabled": true,
+  "maxBudgetMonthlyCents": 50000
+}
+```
+
+`PUT` requires company permission `governance:policies:manage` (owners always have it; `admin` role does not unless granted).

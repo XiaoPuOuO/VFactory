@@ -2,6 +2,7 @@ import type {
   AgentAdapterType,
   AgentRole,
   AgentStatus,
+  AutoPauseReason,
 } from "../constants.js";
 
 export interface AgentPermissions {
@@ -17,6 +18,8 @@ export interface Agent {
   title: string | null;
   icon: string | null;
   status: AgentStatus;
+  /** 當 status 為 paused 時，記錄暫停原因（budget_limit | token_limit | price_limit | manual）。 */
+  autoPauseReason?: AutoPauseReason | null;
   reportsTo: string | null;
   capabilities: string | null;
   adapterType: AgentAdapterType;

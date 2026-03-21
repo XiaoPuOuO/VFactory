@@ -30,11 +30,18 @@ export function approvalService(db: Db) {
     return existing;
   }
 
+  type ResolutionMeta = {
+    decisionSource: "human" | "policy" | "system";
+    policyId?: string | null;
+    policySnapshot?: Record<string, unknown> | null;
+  };
+
   async function resolveApproval(
     id: string,
     targetStatus: "approved" | "rejected",
-    decidedByUserId: string,
+    decidedByUserId: string | null,
     decisionNote: string | null | undefined,
+    meta?: ResolutionMeta,
   ): Promise<ResolutionResult> {
     const existing = await getExistingApproval(id);
     if (!canResolveStatuses.has(existing.status)) {
@@ -46,6 +53,7 @@ export function approvalService(db: Db) {
       );
     }
 
+    const decisionSource = meta?.decisionSource ?? "human";
     const now = new Date();
     const updated = await db
       .update(approvals)
@@ -53,6 +61,9 @@ export function approvalService(db: Db) {
         status: targetStatus,
         decidedByUserId,
         decisionNote: decisionNote ?? null,
+        decisionSource: targetStatus === "rejected" ? "human" : decisionSource,
+        policyId: targetStatus === "approved" ? (meta?.policyId ?? null) : null,
+        policySnapshot: targetStatus === "approved" ? (meta?.policySnapshot ?? null) : null,
         decidedAt: now,
         updatedAt: now,
       })
@@ -95,12 +106,18 @@ export function approvalService(db: Db) {
         .returning()
         .then((rows) => rows[0]),
 
-    approve: async (id: string, decidedByUserId: string, decisionNote?: string | null) => {
+    approve: async (
+      id: string,
+      decidedByUserId: string | null,
+      decisionNote?: string | null,
+      meta?: ResolutionMeta,
+    ) => {
       const { approval: updated, applied } = await resolveApproval(
         id,
         "approved",
         decidedByUserId,
         decisionNote,
+        meta ?? { decisionSource: "human" },
       );
 
       let hireApprovedAgentId: string | null = null;
@@ -156,6 +173,7 @@ export function approvalService(db: Db) {
         "rejected",
         decidedByUserId,
         decisionNote,
+        { decisionSource: "human" },
       );
 
       if (applied && updated.type === "hire_agent") {
@@ -182,6 +200,9 @@ export function approvalService(db: Db) {
           status: "revision_requested",
           decidedByUserId,
           decisionNote: decisionNote ?? null,
+          decisionSource: "human",
+          policyId: null,
+          policySnapshot: null,
           decidedAt: now,
           updatedAt: now,
         })
@@ -204,6 +225,9 @@ export function approvalService(db: Db) {
           payload: payload ?? existing.payload,
           decisionNote: null,
           decidedByUserId: null,
+          decisionSource: "human",
+          policyId: null,
+          policySnapshot: null,
           decidedAt: null,
           updatedAt: now,
         })

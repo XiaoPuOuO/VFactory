@@ -880,3 +880,99 @@
   gap: 0.375rem;
   margin-bottom: 0.25rem;
 }
+
+.onboarding-wizard-creation-toggle {
+  display: flex;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 0.25rem;
+}
+
+.onboarding-wizard-creation-toggle-btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.onboarding-wizard-creation-toggle-btn:hover {
+  background: color-mix(in oklch, var(--accent) 35%, transparent);
+  color: var(--foreground);
+}
+
+.onboarding-wizard-creation-toggle-btn.active {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.onboarding-wizard-select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+.onboarding-wizard-template-hint {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin: 0.25rem 0 0;
+  line-height: 1.4;
+}
+
+.onboarding-wizard-template-agent-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--foreground);
+}
+
+.onboarding-wizard-template-dialog {
+  max-width: min(26rem, calc(100vw - 2rem));
+}
+
+.onboarding-wizard-template-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.onboarding-wizard-template-errors {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--destructive);
+}
+
+.onboarding-wizard-template-warnings {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--muted-foreground);
+}
+
+.onboarding-wizard-template-plans {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+
+.onboarding-wizard-plan-slug {
+  font-family: ui-monospace, monospace;
+  margin-right: 0.375rem;
+}
+
+.onboarding-wizard-plan-action {
+  text-transform: uppercase;
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  margin-right: 0.375rem;
+}
+
+.onboarding-wizard-template-secrets-hint {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin: 0;
+}

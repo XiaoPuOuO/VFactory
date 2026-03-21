@@ -102,3 +102,15 @@ pending -> approved
         -> rejected
         -> revision_requested -> resubmitted -> pending
 ```
+
+## Decision source
+
+Approval records include:
+
+| Field | Description |
+|-------|-------------|
+| `decisionSource` | `human` (board action), `policy` (company hire auto-approval rule), or `system` |
+| `policyId` | When `decisionSource` is `policy`, the id of the matching company policy row (may be null after rule deletion) |
+| `policySnapshot` | JSON snapshot of the rule and requested values at decision time |
+
+Approving or rejecting via `POST /api/approvals/{id}/approve|reject` requires board session and company permission `approvals:resolve`.

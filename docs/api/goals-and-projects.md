@@ -21,6 +21,16 @@ GET /api/companies/{companyId}/goals
 GET /api/goals/{goalId}
 ```
 
+### Goal progress
+
+Aggregates issue status counts and spend for a goal and its linked projects (same project linkage as the goal detail UI: `projects.goal_id`, or `project_goals`). Cost total sums `cost_events` rows attributed to the goal, to a linked project, or to an issue in scope (each row counted once). Optional query: `from`, `to` (ISO 8601) to filter costs by `occurred_at`; omit both for all-time costs.
+
+```
+GET /api/goals/{goalId}/progress?from={iso}&to={iso}
+```
+
+Response shape (TypeScript names): `GoalProgress` in `@paperclipai/shared` — includes `issueStatusCounts`, `spendCents`, `inputTokens`, `outputTokens`, `projects` (per-project issue counts and project-attributed spend), and `childGoals`.
+
 ### Create Goal
 
 ```

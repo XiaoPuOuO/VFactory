@@ -10,23 +10,29 @@ import {
   createCompanySchema,
   DEFAULT_OWNER_GRANTS,
   updateCompanySchema,
+  upsertCompanyHireApprovalPolicySchema,
 } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import {
   accessService,
+  companyApprovalPolicyService,
   companyPortabilityService,
   companyService,
+  governanceService,
   logActivity,
 } from "../services/index.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { assertBoard, assertCompanyAccess, assertInstanceSetting, getActorInfo, hasCompanyViewAll } from "./authz.js";
+import { assertCompanyPermission } from "./company-permission.js";
 
 export function companyRoutes(db: Db) {
   const router = Router();
   const svc = companyService(db);
   const portability = companyPortabilityService(db);
   const access = accessService(db);
+  const governance = governanceService(db);
+  const approvalPolicies = companyApprovalPolicyService(db);
 
   router.get("/", async (req, res) => {
     if (req.actor.type === "banned") throw forbidden("Account banned");
@@ -89,6 +95,60 @@ export function companyRoutes(db: Db) {
     );
     res.json({ adapterTypes: allowed });
   });
+
+  /** 審批與策略中心：待審批、近期已核准之 hire／CEO 策略、issue 關聯計數。 */
+  router.get("/:companyId/governance", async (req, res) => {
+    assertBoard(req);
+    const companyId = req.params.companyId as string;
+    await assertCompanyAccess(req, companyId, db);
+    const summary = await governance.hub(companyId);
+    res.json(summary);
+  });
+
+  /** 讀取 hire 自動核准政策（租戶內 board 可見）。 */
+  router.get("/:companyId/approval-policies/hire", async (req, res) => {
+    assertBoard(req);
+    const companyId = req.params.companyId as string;
+    await assertCompanyAccess(req, companyId, db);
+    const row = await approvalPolicies.getForCompany(companyId, "hire_agent");
+    res.json(
+      row ?? {
+        companyId,
+        approvalType: "hire_agent",
+        enabled: false,
+        maxBudgetMonthlyCents: null,
+      },
+    );
+  });
+
+  /** 更新 hire 自動核准政策（需 governance:policies:manage，通常為 owner 或顯式授權）。 */
+  router.put(
+    "/:companyId/approval-policies/hire",
+    validate(upsertCompanyHireApprovalPolicySchema),
+    async (req, res) => {
+      assertBoard(req);
+      const companyId = req.params.companyId as string;
+      await assertCompanyPermission(db, req, companyId, "governance:policies:manage");
+      const row = await approvalPolicies.upsertHirePolicy(companyId, {
+        enabled: req.body.enabled,
+        maxBudgetMonthlyCents: req.body.maxBudgetMonthlyCents,
+      });
+      await logActivity(db, {
+        companyId,
+        actorType: "user",
+        actorId: req.actor.userId ?? "board",
+        action: "company.approval_policy_updated",
+        entityType: "company",
+        entityId: companyId,
+        details: {
+          approvalType: "hire_agent",
+          enabled: row.enabled,
+          maxBudgetMonthlyCents: row.maxBudgetMonthlyCents,
+        },
+      });
+      res.json(row);
+    },
+  );
 
   router.get("/:companyId", async (req, res) => {
     assertBoard(req);
@@ -223,7 +283,7 @@ export function companyRoutes(db: Db) {
   router.patch("/:companyId", validate(updateCompanySchema), async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyPermission(db, req, companyId, "company:manage");
     const body = req.body as Record<string, unknown>;
     const patchData =
       Object.prototype.hasOwnProperty.call(body, "workingDirectory") && !hasCompanyViewAll(req)
@@ -253,7 +313,7 @@ export function companyRoutes(db: Db) {
     assertBoard(req);
     assertInstanceSetting(req);
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyPermission(db, req, companyId, "company:manage");
     const company = await svc.archive(companyId);
     if (!company) {
       res.status(404).json({ error: "Company not found" });
@@ -273,7 +333,7 @@ export function companyRoutes(db: Db) {
   router.delete("/:companyId", async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyPermission(db, req, companyId, "company:manage");
     const company = await svc.remove(companyId);
     if (!company) {
       res.status(404).json({ error: "Company not found" });

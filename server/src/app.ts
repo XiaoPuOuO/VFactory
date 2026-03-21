@@ -35,6 +35,8 @@ import { instanceGroupsRoutes } from "./routes/instance-groups.js";
 import { instanceUsersRoutes } from "./routes/instance-users.js";
 import { instanceSettingsRoutes } from "./routes/instance-settings.js";
 import { applyUiBranding } from "./ui-branding.js";
+import { registerPluginRuntime } from "./plugins/runtime.js";
+import { pluginRoutes } from "./routes/plugins.js";
 import type { BetterAuthSessionResult } from "./auth/better-auth.js";
 import type { GetBanStatusFn } from "./middleware/auth.js";
 
@@ -142,9 +144,11 @@ export async function createApp(
       companyDeletionEnabled: opts.companyDeletionEnabled,
     }),
   );
+  registerPluginRuntime(db);
   const heartbeat = heartbeatService(db);
   const chat = chatService(db, heartbeat as ChatHeartbeat);
   api.use("/companies", chatRoutes(db, chat));
+  api.use("/companies", pluginRoutes(db));
   api.use("/companies", companyRoutes(db));
   api.use(agentRoutes(db));
   api.use(assetRoutes(db, opts.storageService));

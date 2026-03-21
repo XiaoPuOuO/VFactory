@@ -60,12 +60,7 @@ export async function doctor(opts: {
     return printSummary(results);
   }
 
-  // 2. Deployment/auth mode check
-  const deploymentAuthResult = deploymentAuthCheck(config);
-  results.push(deploymentAuthResult);
-  printResult(deploymentAuthResult);
-
-  // 3. Agent JWT check
+  // 2. Agent JWT check（可先 --repair 寫入 .env，供後續 deployment 與其他檢查讀取同一 secret）
   results.push(
     await runRepairableCheck({
       run: () => agentJwtSecretCheck(opts.config),
@@ -73,6 +68,13 @@ export async function doctor(opts: {
       opts,
     }),
   );
+
+  loadPaperclipEnvFile(configPath);
+
+  // 3. Deployment/auth mode（依賴 BETTER_AUTH_SECRET 或 PAPERCLIP_AGENT_JWT_SECRET，後者可能由上一步 repair 寫入）
+  const deploymentAuthResult = deploymentAuthCheck(config);
+  results.push(deploymentAuthResult);
+  printResult(deploymentAuthResult);
 
   // 4. Secrets adapter check
   results.push(

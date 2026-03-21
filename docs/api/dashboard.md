@@ -17,9 +17,11 @@ Returns a summary including:
 
 - **Agent counts** by status (active, idle, running, error, paused)
 - **Task counts** by status (backlog, todo, in_progress, blocked, done)
-- **Stale tasks** — tasks in progress with no recent activity
-- **Cost summary** — current month spend vs budget
-- **Recent activity** — latest mutations
+- **Cost summary** — current month spend vs company budget (utilization %)
+- **Governance** — `agentsPausedByBudgetCount` (agents paused with `auto_pause_reason = budget_limit`) and `recentBreaches` (limit breach events in the last 30 days, capped), aligned with the Costs page breach history
+- **Pending approvals** count
+
+The response does not include recent activity; use the activity feed endpoint for that.
 
 ## Use Cases
 

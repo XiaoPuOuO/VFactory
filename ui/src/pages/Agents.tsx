@@ -20,6 +20,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Bot, Plus, List, GitBranch, SlidersHorizontal } from "lucide-react";
 import { AGENT_ROLE_LABELS, type Agent } from "@paperclipai/shared";
+import type { AgentWithPauseReason } from "../api/agents";
 
 const adapterLabels: Record<string, string> = {
   claude_local: "Claude",
@@ -290,7 +291,14 @@ export function Agents() {
                         liveCount={liveRunByAgent.get(agent.id)!.liveCount}
                       />
                     ) : (
-                      <StatusBadge status={agent.status} />
+                      <StatusBadge
+                        status={agent.status}
+                        autoPauseReason={
+                          (agent as AgentWithPauseReason).autoPaused
+                            ? (agent as AgentWithPauseReason).autoPauseReason
+                            : undefined
+                        }
+                      />
                     )}
                   </span>
                   <div className="agents-org-node-desktop agents-list-meta">
@@ -308,7 +316,14 @@ export function Agents() {
                       {agent.lastHeartbeatAt ? relativeTime(agent.lastHeartbeatAt) : "—"}
                     </span>
                     <span className="agents-list-status-wrap">
-                      <StatusBadge status={agent.status} />
+                      <StatusBadge
+                        status={agent.status}
+                        autoPauseReason={
+                          (agent as AgentWithPauseReason).autoPaused
+                            ? (agent as AgentWithPauseReason).autoPauseReason
+                            : undefined
+                        }
+                      />
                     </span>
                   </div>
                 </div>
@@ -379,7 +394,14 @@ function OrgTreeNode({
                 liveCount={liveRunByAgent.get(node.id)!.liveCount}
               />
             ) : (
-              <StatusBadge status={node.status} />
+              <StatusBadge
+                status={node.status}
+                autoPauseReason={
+                  agent && (agent as AgentWithPauseReason).autoPaused
+                    ? (agent as AgentWithPauseReason).autoPauseReason
+                    : undefined
+                }
+              />
             )}
           </span>
           <div className="agents-org-node-desktop agents-org-node-trailing">
@@ -401,7 +423,14 @@ function OrgTreeNode({
               </>
             )}
             <span className="agents-list-status-wrap">
-              <StatusBadge status={node.status} />
+              <StatusBadge
+                status={node.status}
+                autoPauseReason={
+                  agent && (agent as AgentWithPauseReason).autoPaused
+                    ? (agent as AgentWithPauseReason).autoPauseReason
+                    : undefined
+                }
+              />
             </span>
           </div>
         </div>

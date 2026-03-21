@@ -23,6 +23,12 @@ export const API = {
   admin: `${API_PREFIX}/admin`,
   /** 公司排程：GET/POST /api/companies/:companyId/schedules；GET/PATCH/DELETE .../schedules/:scheduleId */
   companySchedules: (companyId: string) => `${API_PREFIX}/companies/${companyId}/schedules`,
+  /** 審批與策略中心：GET /api/companies/:companyId/governance */
+  companyGovernance: (companyId: string) => `${API_PREFIX}/companies/${companyId}/governance`,
+  /** 內建 Plugin：GET/PATCH /api/companies/:companyId/plugins、PATCH .../plugins/:pluginId */
+  companyPlugins: (companyId: string) => `${API_PREFIX}/companies/${companyId}/plugins`,
+  companyPlugin: (companyId: string, pluginId: string) =>
+    `${API_PREFIX}/companies/${companyId}/plugins/${pluginId}`,
   /** 此站設定：預設公司路徑 GET/PUT /api/instance/settings/default-company-path */
   instanceSettingsDefaultCompanyPath: `${API_PREFIX}/instance/settings/default-company-path`,
   /** Agent 跨聊天記憶：POST /companies/:id/agents/me/memories（agent 寫入）；GET/DELETE /companies/:id/agents/:agentId/memories（board 或 agent 本人） */

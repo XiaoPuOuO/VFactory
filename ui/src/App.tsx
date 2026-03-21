@@ -21,6 +21,7 @@ import { Schedules } from "./pages/Schedules";
 import { Approvals } from "./pages/Approvals";
 import { ApprovalDetail } from "./pages/ApprovalDetail";
 import { Costs } from "./pages/Costs";
+import { Governance } from "./pages/Governance";
 import { Activity } from "./pages/Activity";
 import { Inbox } from "./pages/Inbox";
 import { Chat } from "./pages/Chat";
@@ -204,6 +205,7 @@ function boardRoutes() {
       <Route path="approvals/all" element={<Approvals />} />
       <Route path="approvals/:approvalId" element={<ApprovalDetail />} />
       <Route path="costs" element={<Costs />} />
+      <Route path="governance" element={<Governance />} />
       <Route path="activity" element={<Activity />} />
       <Route path="inbox" element={<InboxRootRedirect />} />
       <Route path="inbox/recent" element={<Inbox />} />

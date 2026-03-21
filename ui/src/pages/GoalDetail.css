@@ -72,3 +72,132 @@
 .goal-detail-projects-list {
   border: 1px solid var(--border);
 }
+
+.goal-detail-progress {
+  gap: 1.25rem;
+}
+
+.goal-detail-progress-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.goal-detail-progress-toolbar-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.goal-detail-progress-toolbar-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.goal-detail-progress-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--muted, rgba(0, 0, 0, 0.02));
+}
+
+.goal-detail-progress-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.goal-detail-progress-stat-wide {
+  grid-column: 1 / -1;
+}
+
+.goal-detail-progress-stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+}
+
+.goal-detail-progress-stat-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-detail-progress-stat-meta {
+  font-size: 0.875rem;
+  color: var(--foreground);
+  line-height: 1.4;
+}
+
+.goal-detail-progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.goal-detail-progress-section-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+}
+
+.goal-detail-progress-subgoal-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+
+.goal-detail-progress-subgoal-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.goal-detail-progress-subgoal-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s ease;
+}
+
+.goal-detail-progress-subgoal-link:hover {
+  background: var(--accent, rgba(0, 0, 0, 0.04));
+}
+
+.goal-detail-progress-subgoal-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.goal-detail-progress-projects-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+
+.goal-detail-progress-project-trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.goal-detail-progress-project-spend {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}

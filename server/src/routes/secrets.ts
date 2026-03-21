@@ -9,6 +9,7 @@ import {
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
+import { assertCompanyPermission } from "./company-permission.js";
 import { logActivity, secretService } from "../services/index.js";
 
 export function secretRoutes(db: Db) {
@@ -39,7 +40,7 @@ export function secretRoutes(db: Db) {
   router.post("/companies/:companyId/secrets", validate(createSecretSchema), async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyPermission(db, req, companyId, "company:manage");
 
     const created = await svc.create(
       companyId,
@@ -74,7 +75,7 @@ export function secretRoutes(db: Db) {
       res.status(404).json({ error: "Secret not found" });
       return;
     }
-    await assertCompanyAccess(req, existing.companyId, db);
+    await assertCompanyPermission(db, req, existing.companyId, "company:manage");
 
     const rotated = await svc.rotate(
       id,
@@ -106,7 +107,7 @@ export function secretRoutes(db: Db) {
       res.status(404).json({ error: "Secret not found" });
       return;
     }
-    await assertCompanyAccess(req, existing.companyId, db);
+    await assertCompanyPermission(db, req, existing.companyId, "company:manage");
 
     const updated = await svc.update(id, {
       name: req.body.name,
@@ -140,7 +141,7 @@ export function secretRoutes(db: Db) {
       res.status(404).json({ error: "Secret not found" });
       return;
     }
-    await assertCompanyAccess(req, existing.companyId, db);
+    await assertCompanyPermission(db, req, existing.companyId, "company:manage");
 
     const removed = await svc.remove(id);
     if (!removed) {

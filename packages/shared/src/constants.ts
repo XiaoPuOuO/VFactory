@@ -21,6 +21,32 @@ export const AGENT_STATUSES = [
 ] as const;
 export type AgentStatus = (typeof AGENT_STATUSES)[number];
 
+/** 當 agent 為 paused 時，記錄暫停原因（API/UI 顯示 badge 用）。 */
+export const AUTO_PAUSE_REASONS = [
+  "budget_limit",
+  "budget_policy",
+  "token_limit",
+  "price_limit",
+  "manual",
+] as const;
+export type AutoPauseReason = (typeof AUTO_PAUSE_REASONS)[number];
+
+/** 多維度預算策略：範圍類型。 */
+export const BUDGET_POLICY_SCOPE_TYPES = ["project", "billing_code", "company"] as const;
+export type BudgetPolicyScopeType = (typeof BUDGET_POLICY_SCOPE_TYPES)[number];
+
+/** 策略時間窗（目前僅 UTC 曆月）。 */
+export const BUDGET_POLICY_PERIODS = ["calendar_month_utc"] as const;
+export type BudgetPolicyPeriod = (typeof BUDGET_POLICY_PERIODS)[number];
+
+/** 超標後行為。 */
+export const BUDGET_POLICY_ON_EXCEED = [
+  "record_only",
+  "block_new_runs_for_scope",
+  "pause_agents",
+] as const;
+export type BudgetPolicyOnExceed = (typeof BUDGET_POLICY_ON_EXCEED)[number];
+
 export const AGENT_ADAPTER_TYPES = [
   "process",
   "http",
@@ -190,6 +216,10 @@ export const APPROVAL_STATUSES = [
 ] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 
+/** 核准決策來源：人工、依公司政策自動、或系統內部。 */
+export const APPROVAL_DECISION_SOURCES = ["human", "policy", "system"] as const;
+export type ApprovalDecisionSource = (typeof APPROVAL_DECISION_SOURCES)[number];
+
 export const SECRET_PROVIDERS = [
   "local_encrypted",
   "aws_secrets_manager",
@@ -246,11 +276,29 @@ export const LIVE_EVENT_TYPES = [
 ] as const;
 export type LiveEventType = (typeof LIVE_EVENT_TYPES)[number];
 
+/**
+ * 內建、編譯期註冊之非 adapter Plugin id（DB `company_plugins.plugin_id` 須為其中一值）。
+ * 新增 id 時須同步註冊 server `plugins/registry` 與 migration 無需改欄位（text）。
+ */
+export const BUILTIN_PLUGIN_IDS = ["noop"] as const;
+export type BuiltinPluginId = (typeof BUILTIN_PLUGIN_IDS)[number];
+
 export const PRINCIPAL_TYPES = ["user", "agent"] as const;
 export type PrincipalType = (typeof PRINCIPAL_TYPES)[number];
 
 export const MEMBERSHIP_STATUSES = ["pending", "active", "suspended"] as const;
 export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[number];
+
+/** 公司內人類成員角色（board 操作者）；權限以 principal_permission_grants 與角色預設為準。 */
+export const COMPANY_MEMBERSHIP_ROLES = ["owner", "admin", "member"] as const;
+export type CompanyMembershipRole = (typeof COMPANY_MEMBERSHIP_ROLES)[number];
+
+export function isCompanyMembershipRole(value: string | null | undefined): value is CompanyMembershipRole {
+  return (
+    typeof value === "string" &&
+    (COMPANY_MEMBERSHIP_ROLES as readonly string[]).includes(value)
+  );
+}
 
 /** instance_settings 表鍵名：預設公司路徑；未設定 working_directory 的公司，其 Agent 設定目錄將放在此路徑下 (companyId) 子目錄。 */
 export const INSTANCE_SETTING_KEY_DEFAULT_COMPANY_PATH = "default_company_path";
@@ -287,11 +335,16 @@ export type ModelPermissionKey = (typeof MODEL_PERMISSION_KEYS)[number];
 
 export const PERMISSION_KEYS = [
   "agents:create",
+  "agents:admin",
   "users:invite",
   "users:manage_permissions",
   "tasks:assign",
   "tasks:assign_scope",
   "joins:approve",
+  "approvals:resolve",
+  "governance:policies:manage",
+  "budgets:manage",
+  "company:manage",
   ...MODEL_PERMISSION_KEYS,
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

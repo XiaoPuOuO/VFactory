@@ -8,7 +8,7 @@
 
 ### Level 1：低成本、立即提升體驗的功能
 
-- **Chat ↔ Issue 整合強化（已完成✅）**
+- **Chat ↔ Issue 整合強化**（已實作）
   - **機會**：現在 chat 與 issues 有 schema 上的關聯（例如 `sourceChatRoomId`），但 UX 還不算一條龍。
   - **建議功能**：  
     - 在聊天室訊息上提供「建立 Issue」與「附加到現有 Issue」。  
@@ -16,7 +16,7 @@
     - 在 issue detail 顯示「來自哪個 chat room」並可跳回對話。
   - **影響層**：Server（issues/chat routes 聚合）、UI（`ChatRoom`、`IssueDetail`）、Doc（board/agent 使用手冊）。
 
-- **Board Inbox 強化（真正變成「需要人處理的佇列」）（已完成✅）**
+- **Board Inbox 強化（真正變成「需要人處理的佇列」）**（已實作）
   - **機會**：現在 Inbox 已存在，但可以更偏「待辦中心」，聚焦需要人介入的事件。
   - **建議功能**：  
     - Inbox 裡集中：pending approvals、失敗的 heartbeat runs、被 budget 停用的 agents、blocked issues。  
@@ -36,6 +36,7 @@
     - 在 agents list / detail 顯示「因預算上限自動暫停」的 badge。  
     - 在 Costs 頁面提供「歷史 budget breach」區塊。
   - **影響層**：Server（dashboard/costs 回傳 breach metadata）、UI（`Dashboard`、`Costs`）、Doc（成本治理章節）。
+  - **實作**：Agents 清單／詳情與組織圖已用 `StatusBadge` + `autoPauseReason`；`GET /dashboard` 回傳 `governance`（因預算暫停數、近 30 天 breach 預覽）；Costs 有上限觸發紀錄表（含 AI 員工欄）；見 `docs/guides/board-operator/costs-and-budgets.md`、`docs/api/dashboard.md`。
 
 ---
 
@@ -89,6 +90,7 @@
     - 新增 budget policy 模型：按 project / billing_code / 時間窗定義上限。  
     - 在成本 ingestion 與 scheduler 中套用這些策略；UI 設定與監控。
   - **影響層**：DB（`budget_policies`）、Server（costs & scheduler）、UI（Costs / Settings）、Doc（策略示例）。
+  - **進度（baseline）**：已落地 `budget_policies`（UTC 曆月）、成本入帳評估、`enqueueWakeup` 阻擋、Costs 頁管理；見 `doc/SPEC-implementation.md` §13.1.1 與 `docs/guides/board-operator/costs-and-budgets.md`。
 
 - **非 adapter 型 Plugin 架構**
   - **機會**：adapter 已抽象良好，但其他擴充（knowledge、revenue、外部 metrics）尚未有通用插件介面。
@@ -97,12 +99,9 @@
     - DB 管理 plugin 啟用與設定；UI 提供 plugin 管理頁。
   - **影響層**：DB（plugins/configs）、Server（plugin loader + hooks）、UI（Instance settings / plugin 管理）、Doc（plugin 開發者指南）。
 
-- **Company Template / Portability 產品化**
-  - **現況**：SPEC-implementation 已定義 manifest 與 export/import，程式碼也有 routes，但 UX 尚未當成完整 template 系統經營。
-  - **建議功能**：  
-    - Onboarding / Company settings 中加入「基於 template 建新公司」與「匯出為 template」。  
-    - 內建幾個官方模板（工程 org、agency 等），未來可接 ClipHub。
-  - **影響層**：Server（export/import metadata）、UI（OnboardingWizard / CompanySettings / InstanceCompanyManagement）、Doc（Template / Portability）。
+- **Company Template / Portability 產品化**（已落地一版）
+  - **現況**：沿用既有 API；Board UI 已接上 onboarding 模板流、公司設定匯出 zip、此站 Company 管理捷徑；`ui/public/templates/` 內建 engineering-org、agency 等 catalog。
+  - **後續可選**：ClipHub / 遠端 catalog、`GET /api/company-templates`、匯入上傳本機 zip/json。
 
 ---
 

@@ -108,11 +108,13 @@ export function ToggleField({
   hint,
   checked,
   onChange,
+  disabled,
 }: {
   label: string;
   hint?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="ui-agent-toggle-row">
@@ -124,7 +126,11 @@ export function ToggleField({
         type="button"
         className="ui-agent-switch"
         data-checked={checked}
-        onClick={() => onChange(!checked)}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          onChange(!checked);
+        }}
         aria-checked={checked}
       >
         <span className="ui-agent-switch-thumb" aria-hidden />

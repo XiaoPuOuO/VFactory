@@ -39,6 +39,9 @@ const ACTION_VERB_KEYS: Record<string, string> = {
   "company.updated": "activity.updatedCompany",
   "company.archived": "activity.archived",
   "company.budget_updated": "activity.updatedBudgetFor",
+  "company.budget_policy_created": "activity.createdBudgetPolicy",
+  "company.budget_policy_updated": "activity.updatedBudgetPolicy",
+  "company.budget_policy_deleted": "activity.deletedBudgetPolicy",
 };
 
 function humanizeValue(value: unknown): string {

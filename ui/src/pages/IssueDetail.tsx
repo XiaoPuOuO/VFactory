@@ -148,7 +148,7 @@ function ActorIdentity({ evt, agentMap }: { evt: ActivityEvent; agentMap: Map<st
 export function IssueDetail() {
   const { t } = useTranslation();
   const { issueId } = useParams<{ issueId: string }>();
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, selectedCompany } = useCompany();
   const { openPanel, closePanel, panelVisible, setPanelVisible } = usePanel();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
@@ -660,9 +660,10 @@ export function IssueDetail() {
                 size="sm"
                 className="issue-detail-source-chat-button"
                 onClick={() => {
+                  const prefix = selectedCompany?.issuePrefix;
                   const path =
-                    issue.companyPrefix && issue.companyPrefix.length > 0
-                      ? `/${issue.companyPrefix}/chat/${sourceChatRoomId}`
+                    prefix && prefix.length > 0
+                      ? `/${prefix}/chat/${sourceChatRoomId}`
                       : `/chat/${sourceChatRoomId}`;
                   navigate(path);
                 }}

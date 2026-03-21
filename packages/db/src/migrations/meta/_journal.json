@@ -204,6 +204,41 @@
       "when": 1773713314417,
       "tag": "0028_hopa_execution_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1773810436770,
+      "tag": "0029_cold_magdalene",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1774076640119,
+      "tag": "0030_tearful_madame_web",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1774077248238,
+      "tag": "0031_dashing_vargas",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1774077256969,
+      "tag": "0032_serious_fallen_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1774077976260,
+      "tag": "0033_hard_lethal_legion",
+      "breakpoints": true
     }
   ]
 }

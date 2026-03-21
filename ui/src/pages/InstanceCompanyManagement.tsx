@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Building2, ExternalLink, Archive } from "lucide-react";
 import { Link } from "@/lib/router";
 import { useCompany } from "../context/CompanyContext";
+import { useDialog } from "../context/DialogContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { companiesApi } from "../api/companies";
 import { queryKeys } from "../lib/queryKeys";
@@ -20,6 +21,7 @@ export function InstanceCompanyManagement() {
   const { t } = useTranslation();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { companies, loading, error } = useCompany();
+  const { openOnboarding } = useDialog();
 
   const { data: stats } = useQuery({
     queryKey: queryKeys.companies.stats,
@@ -64,6 +66,26 @@ export function InstanceCompanyManagement() {
         <p className="instance-company-management-desc">
           {t("instance.companyManagementDesc")}
         </p>
+        <div className="instance-company-management-header-actions">
+          <Button
+            type="button"
+            size="sm"
+            variant="default"
+            className="instance-company-management-add-btn"
+            onClick={() => openOnboarding({ creationMode: "template" })}
+          >
+            {t("instance.addCompanyFromTemplate")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="instance-company-management-add-btn"
+            onClick={() => openOnboarding({ creationMode: "blank" })}
+          >
+            {t("instance.addCompanyBlank")}
+          </Button>
+        </div>
         <Link
           to="/instance/archive-company"
           className="instance-company-management-archive-link"

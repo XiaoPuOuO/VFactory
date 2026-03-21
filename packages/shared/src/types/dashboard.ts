@@ -1,3 +1,5 @@
+import type { LimitBreachEvent } from "./cost.js";
+
 export interface DashboardSummary {
   companyId: string;
   agents: {
@@ -16,6 +18,13 @@ export interface DashboardSummary {
     monthSpendCents: number;
     monthBudgetCents: number;
     monthUtilizationPercent: number;
+  };
+  /** 預算／上限治理可見性（與 Costs breach 同源）。 */
+  governance: {
+    /** 目前因個人月預算觸頂而暫停中的 agent 數。 */
+    agentsPausedByBudgetCount: number;
+    /** 最近 30 天內上限觸發紀錄（最多 8 筆）。 */
+    recentBreaches: LimitBreachEvent[];
   };
   pendingApprovals: number;
 }

@@ -16,6 +16,8 @@ interface NewGoalDefaults {
 interface OnboardingOptions {
   initialStep?: 1 | 2 | 3 | 4;
   companyId?: string;
+  /** 開啟精靈時預設「空白建立」或「從官方模板匯入」；僅在步驟 1 且非既有公司流程時有效。 */
+  creationMode?: "blank" | "template";
 }
 
 interface DialogContextValue {

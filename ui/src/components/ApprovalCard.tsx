@@ -52,6 +52,11 @@ export function ApprovalCard({
         <div className="ui-approval-card-header-right">
           {statusIcon(approval.status)}
           <span className="ui-approval-card-meta ui-approval-card-status-text">{approval.status}</span>
+          {approval.status === "approved" && approval.decisionSource === "policy" && (
+            <span className="ui-approval-card-decision-source" title="Policy auto-approved">
+              policy
+            </span>
+          )}
           <span className="ui-approval-card-meta">· {timeAgo(approval.createdAt)}</span>
         </div>
       </div>

@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { APPROVAL_TYPES } from "../constants.js";
 
+export const upsertCompanyHireApprovalPolicySchema = z.object({
+  enabled: z.boolean(),
+  maxBudgetMonthlyCents: z.number().int().min(0).nullable(),
+});
+
+export type UpsertCompanyHireApprovalPolicy = z.infer<typeof upsertCompanyHireApprovalPolicySchema>;
+
 export const createApprovalSchema = z.object({
   type: z.enum(APPROVAL_TYPES),
   requestedByAgentId: z.string().uuid().optional().nullable(),

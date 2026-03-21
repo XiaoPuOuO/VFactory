@@ -59,6 +59,8 @@ export interface Issue {
   projectId: string | null;
   goalId: string | null;
   parentId: string | null;
+  /** 若議題由聊天室對話建立，完成時會回報至此聊天室。 */
+  sourceChatRoomId?: string | null;
   ancestors?: IssueAncestor[];
   title: string;
   description: string | null;

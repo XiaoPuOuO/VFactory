@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Db } from "@paperclipai/db";
 import { createGoalSchema, updateGoalSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { goalService, logActivity } from "../services/index.js";
+import { getGoalProgress, goalService, logActivity } from "../services/index.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
 
 export function goalRoutes(db: Db) {
@@ -14,6 +14,29 @@ export function goalRoutes(db: Db) {
     await assertCompanyAccess(req, companyId, db);
     const result = await svc.list(companyId);
     res.json(result);
+  });
+
+  function parseProgressDateRange(query: Record<string, unknown>) {
+    const from = query.from ? new Date(query.from as string) : undefined;
+    const to = query.to ? new Date(query.to as string) : undefined;
+    return from || to ? { from, to } : undefined;
+  }
+
+  router.get("/goals/:goalId/progress", async (req, res) => {
+    const goalId = req.params.goalId as string;
+    const goal = await svc.getById(goalId);
+    if (!goal) {
+      res.status(404).json({ error: "Goal not found" });
+      return;
+    }
+    await assertCompanyAccess(req, goal.companyId, db);
+    const range = parseProgressDateRange(req.query as Record<string, unknown>);
+    const progress = await getGoalProgress(db, goalId, range);
+    if (!progress) {
+      res.status(404).json({ error: "Goal not found" });
+      return;
+    }
+    res.json(progress);
   });
 
   router.get("/goals/:id", async (req, res) => {

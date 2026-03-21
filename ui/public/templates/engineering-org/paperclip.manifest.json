@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2025-03-21T00:00:00.000Z",
+  "source": null,
+  "includes": {
+    "company": true,
+    "agents": true
+  },
+  "company": {
+    "path": "COMPANY.md",
+    "name": "Engineering Org",
+    "description": "Product organization with a CEO and a founding engineer.",
+    "brandColor": null,
+    "requireBoardApprovalForNewAgents": true
+  },
+  "agents": [
+    {
+      "slug": "ceo",
+      "name": "CEO",
+      "path": "agents/ceo/AGENTS.md",
+      "role": "ceo",
+      "title": "Chief Executive Officer",
+      "icon": null,
+      "capabilities": null,
+      "reportsToSlug": null,
+      "adapterType": "process",
+      "adapterConfig": {
+        "command": "echo",
+        "args": ["idle"]
+      },
+      "runtimeConfig": {
+        "heartbeat": {
+          "enabled": true,
+          "intervalSec": 3600,
+          "wakeOnDemand": true,
+          "cooldownSec": 10,
+          "maxConcurrentRuns": 10
+        }
+      },
+      "permissions": {},
+      "budgetMonthlyCents": 15000,
+      "metadata": null
+    },
+    {
+      "slug": "engineer",
+      "name": "Founding Engineer",
+      "path": "agents/engineer/AGENTS.md",
+      "role": "engineer",
+      "title": "Software Engineer",
+      "icon": null,
+      "capabilities": null,
+      "reportsToSlug": "ceo",
+      "adapterType": "process",
+      "adapterConfig": {
+        "command": "echo",
+        "args": ["idle"]
+      },
+      "runtimeConfig": {
+        "heartbeat": {
+          "enabled": true,
+          "intervalSec": 3600,
+          "wakeOnDemand": true,
+          "cooldownSec": 10,
+          "maxConcurrentRuns": 10
+        }
+      },
+      "permissions": {},
+      "budgetMonthlyCents": 10000,
+      "metadata": null
+    }
+  ],
+  "requiredSecrets": []
+}

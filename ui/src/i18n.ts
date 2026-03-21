@@ -31,6 +31,7 @@ const PAGE_NAMESPACES = [
   "costs",
   "goalMap",
   "goals",
+  "governance",
   "org",
   "onboarding",
   "pathInstructions",

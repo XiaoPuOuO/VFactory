@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 
 export const companies = pgTable(
@@ -13,6 +13,10 @@ export const companies = pgTable(
     issueCounter: integer("issue_counter").notNull().default(0),
     budgetMonthlyCents: integer("budget_monthly_cents").notNull().default(0),
     spentMonthlyCents: integer("spent_monthly_cents").notNull().default(0),
+    /** 公司層級 Token 上限（當月累計 input+output tokens）；null 表示不限制。 */
+    tokenLimit: bigint("token_limit", { mode: "number" }),
+    /** 公司層級花費上限（當月累計，單位：分）；null 表示不限制。 */
+    priceLimitCents: integer("price_limit_cents"),
     requireBoardApprovalForNewAgents: boolean("require_board_approval_for_new_agents")
       .notNull()
       .default(true),

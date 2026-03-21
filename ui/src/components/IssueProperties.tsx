@@ -20,9 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { User, Hexagon, ArrowUpRight, Tag, Plus, Trash2 } from "lucide-react";
 import { AgentIcon } from "./AgentIconPicker";
-
-// TODO(issue-worktree-support): re-enable this UI once the workflow is ready to ship.
-const SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI = false;
+import { SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI } from "@/lib/featureFlags";
 
 interface IssuePropertiesProps {
   issue: Issue;
@@ -423,11 +421,22 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
             type="button"
             className={["ui-form-dialog-popover-item", "ui-issue-props-nowrap", p.id === issue.projectId ? "active" : ""].filter(Boolean).join(" ")}
             onClick={() => {
+              const pw = p.primaryWorkspace?.id ?? p.workspaces[0]?.id;
+              const nextExecution: Record<string, unknown> | null = (() => {
+                if (SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI && p.executionWorkspacePolicy?.enabled) {
+                  return {
+                    mode: p.executionWorkspacePolicy.defaultMode === "isolated" ? "isolated" : "project_primary",
+                    ...(p.workspaces.length > 1 && pw ? { projectWorkspaceId: pw } : {}),
+                  };
+                }
+                if (p.workspaces.length > 1 && pw) {
+                  return { projectWorkspaceId: pw };
+                }
+                return null;
+              })();
               onUpdate({
                 projectId: p.id,
-                executionWorkspaceSettings: SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI && p.executionWorkspacePolicy?.enabled
-                  ? { mode: p.executionWorkspacePolicy.defaultMode === "isolated" ? "isolated" : "project_primary" }
-                  : null,
+                ...(nextExecution ? { executionWorkspaceSettings: nextExecution } : { executionWorkspaceSettings: null }),
               });
               setProjectOpen(false);
             }}
@@ -515,6 +524,33 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
           {projectContent}
         </PropertyPicker>
 
+        {issue.projectId && (currentProject?.workspaces?.length ?? 0) > 1 && currentProject && (
+          <PropertyRow label={t("properties.projectWorkspace")}>
+            <select
+              className="ui-issue-props-select"
+              value={
+                issue.executionWorkspaceSettings?.projectWorkspaceId ??
+                currentProject.primaryWorkspace?.id ??
+                currentProject.workspaces[0]!.id
+              }
+              onChange={(e) =>
+                onUpdate({
+                  executionWorkspaceSettings: {
+                    ...(issue.executionWorkspaceSettings ?? {}),
+                    projectWorkspaceId: e.target.value,
+                  },
+                })
+              }
+            >
+              {currentProject.workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.name}
+                </option>
+              ))}
+            </select>
+          </PropertyRow>
+        )}
+
         {currentProjectSupportsExecutionWorkspace && (
           <PropertyRow label={t("properties.workspace")}>
             <div className="ui-issue-props-card">
@@ -532,6 +568,7 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
                 onClick={() =>
                   onUpdate({
                     executionWorkspaceSettings: {
+                      ...(issue.executionWorkspaceSettings ?? {}),
                       mode: usesIsolatedExecutionWorkspace ? "project_primary" : "isolated",
                     },
                   })

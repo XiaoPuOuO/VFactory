@@ -47,6 +47,13 @@
   color: var(--muted-foreground);
 }
 
+.instance-company-management-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
 .instance-company-management-archive-link {
   display: inline-flex;
   align-items: center;

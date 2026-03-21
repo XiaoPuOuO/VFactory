@@ -46,7 +46,37 @@ Paperclip enforces budgets automatically:
 | 80% | Soft alert — agent is warned to focus on critical tasks only |
 | 100% | Hard stop — agent is auto-paused, no more heartbeats |
 
-An auto-paused agent can be resumed by increasing its budget or waiting for the next calendar month.
+An auto-paused agent can be resumed by increasing its budget or waiting for the next calendar month. The UI shows a badge for the pause reason: budget limit, budget policy, token limit, price limit, or manual.
+
+The **Dashboard** surfaces governance at a glance: how many agents are paused due to **budget limit**, and a short list of recent **limit breach** events (same data as the Costs page history). The **Org** chart uses the same pause badges as the agent list.
+
+### Multi-dimensional budget policies
+
+On the **Costs** page you can add **budget policies** scoped to a **project**, a **billing code**, or the **whole company**. Each policy sets a spending cap in cents for the **current UTC calendar month** (same window as other monthly budgets).
+
+When a policy is exceeded:
+
+- **Record only** — writes a breach record (`budget_policy_breach`) in limit history; no automatic pause.
+- **Block new runs (this scope)** — once over the cap, new heartbeat runs are skipped for that scope (company-wide; project from the issue or wake context; billing code only when the wake carries `billingCode` in context).
+- **Pause reporting agent** — pauses the agent that reported the cost event that first crossed the line in that month (`budget_policy` pause reason).
+
+Policies are evaluated when cost events are ingested; spend is aggregated from `cost_events` in the matching scope.
+
+### Company Token Limit and Price Limit
+
+At the company level you can set two optional caps that apply to all agents:
+
+- **Token limit** — Maximum tokens (input + output) consumed in the current calendar month. When reached, existing runs continue but no new runs, schedules, or heartbeats start. You can still create issues manually; they will not run until the limit is raised or the month resets.
+- **Price limit** — Maximum spend in cents for the current calendar month. Same behaviour as token limit when reached.
+
+Either limit can be set independently; hitting either one blocks new runs. Set them from the Costs page or via:
+
+```
+PATCH /api/companies/{companyId}/limits
+{ "tokenLimit": 1000000, "priceLimitCents": 50000 }
+```
+
+Omit a field to leave it unchanged; send `null` to clear that limit.
 
 ## Viewing Costs
 
@@ -57,10 +87,12 @@ The dashboard shows current month spend vs budget for the company and each agent
 ### Cost Breakdown API
 
 ```
-GET /api/companies/{companyId}/costs/summary     # Company total
+GET /api/companies/{companyId}/costs/summary     # Company total + breach history
 GET /api/companies/{companyId}/costs/by-agent     # Per-agent breakdown
 GET /api/companies/{companyId}/costs/by-project   # Per-project breakdown
 ```
+
+The summary response includes optional `tokenUsage`, `tokenLimit`, `priceLimitCents`, and `breachEvents` (history of budget/token/price limit breaches for the past 90 days). Use these on the Costs page to show limit breach history and to drive the company limits form.
 
 ## Best Practices
 

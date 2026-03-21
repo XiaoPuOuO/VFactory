@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { costsApi } from "../api/costs";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@/lib/router";
+import { costsApi, type CostByProject } from "../api/costs";
+import type {
+  CostByAgent,
+  CostByBillingCode,
+  CostByRequestDepth,
+  CostSummary,
+  LimitBreachEvent,
+} from "@paperclipai/shared";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
@@ -12,15 +20,20 @@ import { Identity } from "../components/Identity";
 import { StatusBadge } from "../components/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DollarSign } from "lucide-react";
 import {
+  SpendByBillingCodeChart,
+  SpendByRequestDepthChart,
   TokenUsageByAgentChart,
   TokenUsageByProjectChart,
-  SubscriptionRunsByAgentChart,
 } from "../components/CostCharts";
+import { BudgetPoliciesSection } from "../components/BudgetPoliciesSection";
 import "./Costs.css";
 
 type DatePreset = "mtd" | "7d" | "30d" | "ytd" | "all" | "custom";
+type BreakdownView = "agent" | "project";
+type TokenUsageView = "agent" | "project";
 
 const PRESET_KEYS: Record<DatePreset, string> = {
   mtd: "mtd",
@@ -58,14 +71,34 @@ function computeRange(preset: DatePreset): { from: string; to: string } {
   }
 }
 
+const BREACH_TYPE_KEYS: Record<string, string> = {
+  budget_breach: "breachBudget",
+  token_limit_breach: "breachTokenLimit",
+  price_limit_breach: "breachPriceLimit",
+  budget_policy_breach: "breachPolicy",
+};
+
+function breachAgentLabel(ev: LimitBreachEvent): string | null {
+  const d = ev.details;
+  if (d && typeof d.agentName === "string" && d.agentName.trim() !== "") {
+    return d.agentName;
+  }
+  return null;
+}
+
 export function Costs() {
   const { t } = useTranslation("costs");
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const queryClient = useQueryClient();
 
   const [preset, setPreset] = useState<DatePreset>("mtd");
+  const [breakdownView, setBreakdownView] = useState<BreakdownView>("agent");
+  const [tokenUsageView, setTokenUsageView] = useState<TokenUsageView>("agent");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [tokenLimitInput, setTokenLimitInput] = useState<string>("");
+  const [priceLimitInput, setPriceLimitInput] = useState<string>("");
 
   useEffect(() => {
     setBreadcrumbs([{ label: t("pageTitle") }]);
@@ -83,16 +116,84 @@ export function Costs() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.costs(selectedCompanyId!, from || undefined, to || undefined),
-    queryFn: async () => {
-      const [summary, byAgent, byProject] = await Promise.all([
+    queryFn: async (): Promise<{
+      summary: CostSummary;
+      byAgent: CostByAgent[];
+      byProject: CostByProject[];
+      byBillingCode: CostByBillingCode[];
+      byRequestDepth: CostByRequestDepth[];
+    }> => {
+      const [summary, byAgent, byProject, byBillingCode, byRequestDepth] = await Promise.all([
         costsApi.summary(selectedCompanyId!, from || undefined, to || undefined),
         costsApi.byAgent(selectedCompanyId!, from || undefined, to || undefined),
         costsApi.byProject(selectedCompanyId!, from || undefined, to || undefined),
+        costsApi.byBillingCode(selectedCompanyId!, from || undefined, to || undefined),
+        costsApi.byRequestDepth(selectedCompanyId!, from || undefined, to || undefined),
       ]);
-      return { summary, byAgent, byProject };
+      return { summary, byAgent, byProject, byBillingCode, byRequestDepth };
     },
     enabled: !!selectedCompanyId,
   });
+
+  const updateLimitsMutation = useMutation({
+    mutationFn: (body: { tokenLimit?: number | null; priceLimitCents?: number | null }) =>
+      costsApi.updateLimits(selectedCompanyId!, body),
+    onSuccess: () => {
+      setLimitsUpdateError(null);
+      // 伺服器可能會 clamp/round 實際數值；重新允許 useEffect 將 inputs 同步為回傳值。
+      setLimitsSynced(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.costs(selectedCompanyId!) });
+    },
+    onError: (err) => {
+      const message =
+        err instanceof Error ? err.message : err != null ? String(err) : "Unknown error";
+      setLimitsUpdateError(message);
+    },
+  });
+
+  const [limitsSynced, setLimitsSynced] = useState(false);
+  const [limitsUpdateError, setLimitsUpdateError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectedCompanyId) setLimitsSynced(false);
+  }, [selectedCompanyId]);
+  useEffect(() => {
+    if (data?.summary && !limitsSynced) {
+      const s = data.summary;
+      setTokenLimitInput(s.tokenLimit != null ? String(s.tokenLimit) : "");
+      setPriceLimitInput(s.priceLimitCents != null ? String(s.priceLimitCents) : "");
+      setLimitsSynced(true);
+    }
+  }, [data?.summary, limitsSynced, selectedCompanyId]);
+
+  const presetKeys: DatePreset[] = ["mtd", "7d", "30d", "ytd", "all", "custom"];
+
+  const barVariant = data && data.summary.budgetCents > 0
+    ? data.summary.utilizationPercent > 85
+      ? "_red"
+      : data.summary.utilizationPercent >= 60
+        ? "_yellow"
+        : "_green"
+    : "_green";
+
+  const errorMessage =
+    error != null
+      ? error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : String(error)
+      : null;
+
+  const totalTokenSummary = useMemo(() => {
+    if (!data) return "";
+    const totalInput = data.byAgent.reduce((acc, row) => acc + row.inputTokens, 0);
+    const totalOutput = data.byAgent.reduce((acc, row) => acc + row.outputTokens, 0);
+    return t("totalTokensInRange", {
+      range: t(PRESET_KEYS[preset]),
+      input: formatTokens(totalInput),
+      output: formatTokens(totalOutput),
+    });
+  }, [data, preset, t]);
 
   if (!selectedCompanyId) {
     return <EmptyState icon={DollarSign} message={t("selectCompanyToViewCosts")} />;
@@ -102,172 +203,346 @@ export function Costs() {
     return <PageSkeleton variant="costs" />;
   }
 
-  const presetKeys: DatePreset[] = ["mtd", "7d", "30d", "ytd", "all", "custom"];
-
-  const barVariant = data && data.summary.budgetCents > 0
-    ? data.summary.utilizationPercent > 90
-      ? "_red"
-      : data.summary.utilizationPercent > 70
-        ? "_yellow"
-        : "_green"
-    : "_green";
-
   return (
     <div className="costs-page">
-      <div className="costs-filters">
-        {presetKeys.map((p) => (
-          <Button
-            key={p}
-            variant={preset === p ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setPreset(p)}
-          >
-            {t(PRESET_KEYS[p])}
-          </Button>
-        ))}
+      <Tabs
+        value={preset}
+        onValueChange={(v) => setPreset(v as DatePreset)}
+        className="costs-filters"
+      >
+        <TabsList variant="default" align="start" aria-label={t("dateRangeTabsLabel")} className="costs-preset-tabs">
+          {presetKeys.map((p) => (
+            <TabsTrigger key={p} value={p}>
+              {t(PRESET_KEYS[p])}
+            </TabsTrigger>
+          ))}
+        </TabsList>
         {preset === "custom" && (
-          <div className="costs-custom-range">
-            <input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-            />
-            <span>{t("to")}</span>
-            <input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-            />
-          </div>
+          <fieldset className="costs-custom-range" aria-label={t("customRangeLegend")}>
+            <legend className="sr-only">{t("customRangeLegend")}</legend>
+            <label className="costs-custom-range-field">
+              <span className="sr-only">{t("from")}</span>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                aria-label={t("from")}
+              />
+            </label>
+            <span aria-hidden="true">{t("to")}</span>
+            <label className="costs-custom-range-field">
+              <span className="sr-only">{t("to")}</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                aria-label={t("to")}
+              />
+            </label>
+          </fieldset>
         )}
-      </div>
+      </Tabs>
 
-      {error && <p className="costs-error">{error.message}</p>}
+      {errorMessage && (
+        <div className="costs-error" role="alert" aria-live="assertive">
+          {errorMessage}
+        </div>
+      )}
 
       {data && (
         <>
-          <Card>
-            <CardContent className="costs-summary-card">
-              <div className="costs-summary-header">
-                <p className="costs-summary-label">{t(PRESET_KEYS[preset])}</p>
-                {data.summary.budgetCents > 0 && (
-                  <p className="costs-summary-label">
-                    {t("utilized", { pct: data.summary.utilizationPercent })}
-                  </p>
-                )}
-              </div>
-              <p className="costs-summary-value">
-                {formatCents(data.summary.spendCents)}{" "}
-                <span className="costs-summary-budget">
-                  {data.summary.budgetCents > 0
-                    ? `/ ${formatCents(data.summary.budgetCents)}`
-                    : t("unlimitedBudget")}
-                </span>
-              </p>
-              {data.summary.budgetCents > 0 && (
-                <div className="costs-summary-bar-wrap">
-                  <div
-                    className={`costs-summary-bar ${barVariant}`}
-                    style={{ width: `${Math.min(100, data.summary.utilizationPercent)}%` }}
-                  />
+          <div className="costs-insights-grid">
+                <div className="costs-insights-left">
+                      <Card>
+                        <CardContent className="costs-panel costs-left-panel">
+                          <Tabs
+                            value={tokenUsageView}
+                            onValueChange={(v) => setTokenUsageView(v as TokenUsageView)}
+                          >
+                            <div className="costs-insights-left-header">
+                              <TabsList
+                                variant="default"
+                                align="start"
+                                aria-label={t("tokenUsageTabsLabel")}
+                                className="costs-toggle-tabs"
+                              >
+                                <TabsTrigger value="agent">{t("byAgent")}</TabsTrigger>
+                                <TabsTrigger value="project">{t("byProject")}</TabsTrigger>
+                              </TabsList>
+                            </div>
+
+                            <TabsContent value="agent" className="costs-tabs-content">
+                              <TokenUsageByAgentChart data={data.byAgent} totalTokenSummary={totalTokenSummary} />
+                            </TabsContent>
+                            <TabsContent value="project" className="costs-tabs-content">
+                              <TokenUsageByProjectChart data={data.byProject} totalTokenSummary={totalTokenSummary} />
+                            </TabsContent>
+                          </Tabs>
+                        </CardContent>
+                      </Card>
                 </div>
-              )}
+
+                <div className="costs-insights-right">
+                  <Card>
+                    <CardContent className="costs-panel">
+                      <Tabs
+                        value={breakdownView}
+                        onValueChange={(v) => setBreakdownView(v as BreakdownView)}
+                      >
+                        <div className="costs-breakdown-header">
+                          <div className="costs-breakdown-title-wrap">
+                            <div className="costs-breakdown-title-top">
+                              <h3 className="costs-panel-title">{t("breakdown")}</h3>
+                              <span className="costs-breakdown-range">{t(PRESET_KEYS[preset])}</span>
+                            </div>
+                            <div className="costs-breakdown-title-bottom">
+                              <span className="costs-breakdown-amount">
+                                {formatCents(data.summary.spendCents)}
+                              </span>
+                              <span className="costs-breakdown-budget">
+                                {data.summary.budgetCents > 0
+                                  ? `/ ${formatCents(data.summary.budgetCents)}`
+                                  : t("unlimitedBudget")}
+                              </span>
+                              {data.summary.budgetCents > 0 && (
+                                <span className="costs-breakdown-utilized">
+                                  {t("utilized", { pct: data.summary.utilizationPercent })}
+                                </span>
+                              )}
+                            </div>
+                            {data.summary.budgetCents > 0 && (
+                              <div className="costs-breakdown-bar-wrap">
+                                <div
+                                  className={`costs-breakdown-bar ${barVariant}`}
+                                  style={{ width: `${Math.min(100, data.summary.utilizationPercent)}%` }}
+                                  role="progressbar"
+                                  aria-label={t("budgetUtilizationProgressbar")}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-valuenow={Math.min(100, Math.max(0, data.summary.utilizationPercent))}
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <TabsList
+                            variant="default"
+                            align="start"
+                            aria-label={t("breakdownTabsLabel")}
+                            className="costs-breakdown-toggle"
+                          >
+                            <TabsTrigger value="agent">{t("byAgent")}</TabsTrigger>
+                            <TabsTrigger value="project">{t("byProject")}</TabsTrigger>
+                          </TabsList>
+                        </div>
+
+                        <TabsContent value="agent" className="costs-breakdown-body costs-tabs-content">
+                          {data.byAgent.length === 0 ? (
+                            <p className="costs-panel-empty">{t("noCostEventsYet")}</p>
+                          ) : (
+                            <div className="costs-breakdown-list">
+                              {data.byAgent.map((row) => (
+                                <div key={row.agentId} className="costs-breakdown-item">
+                                  <div className="costs-breakdown-item-top">
+                                    <div className="costs-breakdown-item-left">
+                                      <Identity name={row.agentName ?? row.agentId} size="sm" />
+                                      {row.agentStatus === "terminated" && (
+                                        <StatusBadge status="terminated" />
+                                      )}
+                                    </div>
+                                    <div className="costs-breakdown-item-right">
+                                      <span className="costs-breakdown-item-amount">
+                                        {formatCents(row.costCents)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="costs-breakdown-item-sub">
+                                    <span className="costs-breakdown-item-tokens">
+                                      {t("inOutTok", {
+                                        in: formatTokens(row.inputTokens),
+                                        out: formatTokens(row.outputTokens),
+                                      })}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </TabsContent>
+
+                        <TabsContent value="project" className="costs-breakdown-body costs-tabs-content">
+                          {data.byProject.length === 0 ? (
+                            <p className="costs-panel-empty">{t("noProjectCostsYet")}</p>
+                          ) : (
+                            <div className="costs-breakdown-list">
+                              {data.byProject.map((row) => (
+                                <div key={row.projectId ?? "na"} className="costs-breakdown-item">
+                                  <div className="costs-breakdown-item-top">
+                                    <div className="costs-breakdown-item-left">
+                                      <span className="costs-breakdown-item-name">
+                                        {row.projectName ?? row.projectId ?? t("unattributed")}
+                                      </span>
+                                    </div>
+                                    <div className="costs-breakdown-item-right">
+                                      <span className="costs-breakdown-item-amount">
+                                        {formatCents(row.costCents)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="costs-breakdown-item-sub">
+                                    <span className="costs-breakdown-item-tokens">
+                                      {t("inOutTok", {
+                                        in: formatTokens(row.inputTokens),
+                                        out: formatTokens(row.outputTokens),
+                                      })}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </TabsContent>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+          <section className="costs-advanced-section" aria-labelledby="costs-advanced-heading">
+            <h2 id="costs-advanced-heading" className="costs-advanced-heading">
+              {t("advancedAttribution")}
+            </h2>
+            <div className="costs-panels-grid">
+              <Card>
+                <CardContent className="costs-panel costs-advanced-chart-wrap">
+                  <SpendByBillingCodeChart data={data.byBillingCode} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="costs-panel costs-advanced-chart-wrap">
+                  <SpendByRequestDepthChart data={data.byRequestDepth} />
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          {data.summary.breachEvents != null && (
+            <Card>
+              <CardContent className="costs-panel">
+                <h3 className="costs-panel-title">{t("breachHistory")}</h3>
+                {(data.summary.breachEvents?.length ?? 0) === 0 ? (
+                  <p className="costs-panel-empty">{t("noBreachesYet")}</p>
+                ) : (
+                  <div className="costs-breach-table-wrap">
+                    <table className="costs-breach-table">
+                      <caption className="sr-only">{t("breachHistory")}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("breachType")}</th>
+                          <th scope="col">{t("breachAgent")}</th>
+                          <th scope="col">{t("breachOccurredAt")}</th>
+                          <th scope="col">{t("breachAmount")}</th>
+                          <th scope="col">{t("breachTokenUsage")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(data.summary.breachEvents ?? []).map((ev) => {
+                          const agentName = breachAgentLabel(ev);
+                          return (
+                            <tr key={ev.id}>
+                              <td>{t(BREACH_TYPE_KEYS[ev.type] ?? ev.type)}</td>
+                              <td>
+                                {ev.agentId ? (
+                                  <Link className="costs-breach-agent-link" to={`/agents/${ev.agentId}`}>
+                                    {agentName ?? ev.agentId.slice(0, 8)}
+                                  </Link>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td>{new Date(ev.occurredAt).toLocaleString()}</td>
+                              <td>{ev.amountCents != null ? formatCents(ev.amountCents) : "—"}</td>
+                              <td>{ev.tokenUsage != null ? formatTokens(ev.tokenUsage) : "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardContent className="costs-panel">
+              <BudgetPoliciesSection companyId={selectedCompanyId} />
             </CardContent>
           </Card>
 
-          {(() => {
-            const totalInput = data.byAgent.reduce(
-              (acc, row) => acc + row.inputTokens + (row.subscriptionInputTokens ?? 0),
-              0
-            );
-            const totalOutput = data.byAgent.reduce(
-              (acc, row) => acc + row.outputTokens + (row.subscriptionOutputTokens ?? 0),
-              0
-            );
-            const totalTokenSummary = t("totalTokensInRange", {
-              range: t(PRESET_KEYS[preset]),
-              input: formatTokens(totalInput),
-              output: formatTokens(totalOutput),
-            });
-            return (
-              <div className="costs-charts-grid">
-                <TokenUsageByAgentChart data={data.byAgent} totalTokenSummary={totalTokenSummary} />
-                <TokenUsageByProjectChart data={data.byProject} totalTokenSummary={totalTokenSummary} />
+          <Card>
+            <CardContent className="costs-panel">
+              <h3 className="costs-panel-title">{t("companyLimits")}</h3>
+              <p className="costs-limits-desc">{t("tokenLimitDescription")}</p>
+              <div className="costs-limits-form">
+                <label className="costs-limits-label">
+                  {t("tokenLimitLabel")}
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className="costs-limits-input"
+                    value={tokenLimitInput}
+                    onChange={(e) => setTokenLimitInput(e.target.value)}
+                    placeholder={t("optional", { ns: "common" })}
+                  />
+                </label>
+                <label className="costs-limits-label">
+                  {t("priceLimitLabel")}
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className="costs-limits-input"
+                    value={priceLimitInput}
+                    onChange={(e) => setPriceLimitInput(e.target.value)}
+                    placeholder={t("optional", { ns: "common" })}
+                  />
+                </label>
+                <p className="costs-limits-desc costs-limits-desc--small">{t("priceLimitDescription")}</p>
+                <Button
+                  size="sm"
+                  disabled={updateLimitsMutation.isPending}
+                  onClick={() => {
+                    const tokenLimit =
+                      tokenLimitInput.trim() === ""
+                        ? null
+                        : Math.max(0, parseInt(tokenLimitInput, 10) || 0);
+                    const priceLimitCents =
+                      priceLimitInput.trim() === ""
+                        ? null
+                        : Math.max(0, parseInt(priceLimitInput, 10) || 0);
+                    updateLimitsMutation.mutate({
+                      tokenLimit: tokenLimitInput.trim() === "" ? null : tokenLimit,
+                      priceLimitCents: priceLimitInput.trim() === "" ? null : priceLimitCents,
+                    });
+                  }}
+                >
+                  {updateLimitsMutation.isPending ? t("saving", { ns: "common" }) : t("updateLimits")}
+                </Button>
+                {limitsUpdateError && (
+                  <span className="costs-limits-error" role="alert" aria-live="assertive">
+                    {limitsUpdateError}
+                  </span>
+                )}
+                {updateLimitsMutation.isSuccess && (
+                  <span className="costs-limits-saved" aria-live="polite">
+                    {t("limitsUpdated")}
+                  </span>
+                )}
               </div>
-            );
-          })()}
-          <div>
-            <SubscriptionRunsByAgentChart data={data.byAgent} />
-          </div>
-
-          <div className="costs-panels-grid">
-            <Card>
-              <CardContent className="costs-panel">
-                <h3 className="costs-panel-title">{t("byAgent")}</h3>
-                {data.byAgent.length === 0 ? (
-                  <p className="costs-panel-empty">{t("noCostEventsYet")}</p>
-                ) : (
-                  <div className="costs-by-agent-list">
-                    {data.byAgent.map((row) => (
-                      <div key={row.agentId} className="costs-by-agent-row">
-                        <div className="costs-by-agent-left">
-                          <Identity
-                            name={row.agentName ?? row.agentId}
-                            size="sm"
-                          />
-                          {row.agentStatus === "terminated" && (
-                            <StatusBadge status="terminated" />
-                          )}
-                        </div>
-                        <div className="costs-by-agent-right">
-                          <span className="costs-by-agent-amount">{formatCents(row.costCents)}</span>
-                          <span className="costs-by-agent-tokens">
-                            {t("inOutTok", {
-                              in: formatTokens(row.inputTokens),
-                              out: formatTokens(row.outputTokens),
-                            })}
-                          </span>
-                          {(row.apiRunCount > 0 || row.subscriptionRunCount > 0) && (
-                            <span className="costs-by-agent-runs">
-                              {row.apiRunCount > 0 ? t("apiRunsCount", { count: row.apiRunCount }) : null}
-                              {row.apiRunCount > 0 && row.subscriptionRunCount > 0 ? " | " : null}
-                              {row.subscriptionRunCount > 0
-                                ? t("subscriptionRunsDetail", {
-                                    count: row.subscriptionRunCount,
-                                    in: formatTokens(row.subscriptionInputTokens),
-                                    out: formatTokens(row.subscriptionOutputTokens),
-                                  })
-                                : null}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="costs-panel">
-                <h3 className="costs-panel-title">{t("byProject")}</h3>
-                {data.byProject.length === 0 ? (
-                  <p className="costs-panel-empty">{t("noProjectCostsYet")}</p>
-                ) : (
-                  <div className="costs-by-agent-list">
-                    {data.byProject.map((row) => (
-                      <div key={row.projectId ?? "na"} className="costs-by-project-row">
-                        <span>
-                          {row.projectName ?? row.projectId ?? t("unattributed")}
-                        </span>
-                        <span className="costs-by-agent-amount">{formatCents(row.costCents)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

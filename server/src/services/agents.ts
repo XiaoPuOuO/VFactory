@@ -368,7 +368,7 @@ export function agentService(db: Db) {
 
       const updated = await db
         .update(agents)
-        .set({ status: "paused", updatedAt: new Date() })
+        .set({ status: "paused", autoPauseReason: "manual", updatedAt: new Date() })
         .where(eq(agents.id, id))
         .returning()
         .then((rows) => rows[0] ?? null);
@@ -385,7 +385,7 @@ export function agentService(db: Db) {
 
       const updated = await db
         .update(agents)
-        .set({ status: "idle", updatedAt: new Date() })
+        .set({ status: "idle", autoPauseReason: null, updatedAt: new Date() })
         .where(eq(agents.id, id))
         .returning()
         .then((rows) => rows[0] ?? null);

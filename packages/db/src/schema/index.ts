@@ -1,4 +1,5 @@
 export { companies } from "./companies.js";
+export { companyPlugins } from "./company_plugins.js";
 export { tenants } from "./tenants.js";
 export { tenantMemberships } from "./tenant_memberships.js";
 export { authUsers, authSessions, authAccounts, authVerifications } from "./auth.js";
@@ -34,6 +35,9 @@ export { issueAttachments } from "./issue_attachments.js";
 export { heartbeatRuns } from "./heartbeat_runs.js";
 export { heartbeatRunEvents } from "./heartbeat_run_events.js";
 export { costEvents } from "./cost_events.js";
+export { budgetPolicies } from "./budget_policies.js";
+export { limitBreachEvents } from "./limit_breach_events.js";
+export { companyApprovalPolicies } from "./company_approval_policies.js";
 export { approvals } from "./approvals.js";
 export { approvalComments } from "./approval_comments.js";
 export { activityLog } from "./activity_log.js";

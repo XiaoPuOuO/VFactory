@@ -5,10 +5,20 @@ import type {
   CompanyPortabilityImportResult,
   CompanyPortabilityPreviewRequest,
   CompanyPortabilityPreviewResult,
+  UpsertCompanyHireApprovalPolicy,
 } from "@paperclipai/shared";
 import { api } from "./client";
 
 export type CompanyStats = Record<string, { agentCount: number; issueCount: number }>;
+
+/** GET /companies/:id/approval-policies/hire 回傳（無列時為預設物件）。 */
+export type CompanyHireApprovalPolicy = {
+  id?: string;
+  companyId?: string;
+  approvalType?: string;
+  enabled: boolean;
+  maxBudgetMonthlyCents: number | null;
+};
 
 export const companiesApi = {
   list: () => api.get<Company[]>("/companies"),
@@ -37,4 +47,8 @@ export const companiesApi = {
     api.post<CompanyPortabilityPreviewResult>("/companies/import/preview", data),
   importBundle: (data: CompanyPortabilityImportRequest) =>
     api.post<CompanyPortabilityImportResult>("/companies/import", data),
+  getHireApprovalPolicy: (companyId: string) =>
+    api.get<CompanyHireApprovalPolicy>(`/companies/${companyId}/approval-policies/hire`),
+  updateHireApprovalPolicy: (companyId: string, body: UpsertCompanyHireApprovalPolicy) =>
+    api.put<CompanyHireApprovalPolicy>(`/companies/${companyId}/approval-policies/hire`, body),
 };

@@ -1,15 +1,29 @@
 import { Router } from "express";
 import type { Db } from "@paperclipai/db";
-import { createCostEventSchema, updateBudgetSchema } from "@paperclipai/shared";
+import {
+  createBudgetPolicySchema,
+  createCostEventSchema,
+  updateBudgetPolicySchema,
+  updateBudgetSchema,
+  updateCompanyLimitsSchema,
+} from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { costService, companyService, agentService, logActivity } from "../services/index.js";
+import {
+  budgetPolicyService,
+  costService,
+  companyService,
+  agentService,
+  logActivity,
+} from "../services/index.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
+import { assertCompanyPermission } from "./company-permission.js";
 
 export function costRoutes(db: Db) {
   const router = Router();
   const costs = costService(db);
   const companies = companyService(db);
   const agents = agentService(db);
+  const budgetPolicies = budgetPolicyService(db);
 
   router.post("/companies/:companyId/cost-events", validate(createCostEventSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
@@ -70,9 +84,26 @@ export function costRoutes(db: Db) {
     res.json(rows);
   });
 
+  router.get("/companies/:companyId/costs/by-billing-code", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyAccess(req, companyId, db);
+    const range = parseDateRange(req.query);
+    const rows = await costs.byBillingCode(companyId, range);
+    res.json(rows);
+  });
+
+  router.get("/companies/:companyId/costs/by-request-depth", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyAccess(req, companyId, db);
+    const range = parseDateRange(req.query);
+    const rows = await costs.byRequestDepth(companyId, range);
+    res.json(rows);
+  });
+
   router.patch("/companies/:companyId/budgets", validate(updateBudgetSchema), async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
+    await assertCompanyPermission(db, req, companyId, "budgets:manage");
     const company = await companies.update(companyId, { budgetMonthlyCents: req.body.budgetMonthlyCents });
     if (!company) {
       res.status(404).json({ error: "Company not found" });
@@ -90,6 +121,123 @@ export function costRoutes(db: Db) {
     });
 
     res.json(company);
+  });
+
+  router.patch(
+    "/companies/:companyId/limits",
+    validate(updateCompanyLimitsSchema),
+    async (req, res) => {
+      assertBoard(req);
+      const companyId = req.params.companyId as string;
+      await assertCompanyPermission(db, req, companyId, "budgets:manage");
+      const payload: { tokenLimit?: number | null; priceLimitCents?: number | null } = {};
+      if (Object.prototype.hasOwnProperty.call(req.body, "tokenLimit")) {
+        payload.tokenLimit = req.body.tokenLimit;
+      }
+      if (Object.prototype.hasOwnProperty.call(req.body, "priceLimitCents")) {
+        payload.priceLimitCents = req.body.priceLimitCents;
+      }
+      if (Object.keys(payload).length === 0) {
+        res.status(400).json({ error: "Provide at least one of tokenLimit or priceLimitCents" });
+        return;
+      }
+      const company = await companies.update(companyId, payload);
+      if (!company) {
+        res.status(404).json({ error: "Company not found" });
+        return;
+      }
+      await logActivity(db, {
+        companyId,
+        actorType: "user",
+        actorId: req.actor.userId ?? "board",
+        action: "company.limits_updated",
+        entityType: "company",
+        entityId: companyId,
+        details: payload,
+      });
+      res.json(company);
+    },
+  );
+
+  router.get("/companies/:companyId/budget-policies", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyAccess(req, companyId, db);
+    const rows = await budgetPolicies.list(companyId);
+    res.json(rows);
+  });
+
+  router.post(
+    "/companies/:companyId/budget-policies",
+    validate(createBudgetPolicySchema),
+    async (req, res) => {
+      assertBoard(req);
+      const companyId = req.params.companyId as string;
+      await assertCompanyPermission(db, req, companyId, "budgets:manage");
+      const row = await budgetPolicies.create(companyId, req.body);
+      await logActivity(db, {
+        companyId,
+        actorType: "user",
+        actorId: req.actor.userId ?? "board",
+        action: "company.budget_policy_created",
+        entityType: "budget_policy",
+        entityId: row.id,
+        details: {
+          scopeType: row.scopeType,
+          projectId: row.projectId,
+          billingCode: row.billingCode,
+          limitCents: row.limitCents,
+        },
+      });
+      res.status(201).json(row);
+    },
+  );
+
+  router.patch(
+    "/companies/:companyId/budget-policies/:policyId",
+    validate(updateBudgetPolicySchema),
+    async (req, res) => {
+      assertBoard(req);
+      const companyId = req.params.companyId as string;
+      const policyId = req.params.policyId as string;
+      await assertCompanyPermission(db, req, companyId, "budgets:manage");
+      const row = await budgetPolicies.update(companyId, policyId, req.body);
+      if (!row) {
+        res.status(404).json({ error: "Budget policy not found" });
+        return;
+      }
+      await logActivity(db, {
+        companyId,
+        actorType: "user",
+        actorId: req.actor.userId ?? "board",
+        action: "company.budget_policy_updated",
+        entityType: "budget_policy",
+        entityId: policyId,
+        details: req.body,
+      });
+      res.json(row);
+    },
+  );
+
+  router.delete("/companies/:companyId/budget-policies/:policyId", async (req, res) => {
+    assertBoard(req);
+    const companyId = req.params.companyId as string;
+    const policyId = req.params.policyId as string;
+    await assertCompanyPermission(db, req, companyId, "budgets:manage");
+    const ok = await budgetPolicies.delete(companyId, policyId);
+    if (!ok) {
+      res.status(404).json({ error: "Budget policy not found" });
+      return;
+    }
+    await logActivity(db, {
+      companyId,
+      actorType: "user",
+      actorId: req.actor.userId ?? "board",
+      action: "company.budget_policy_deleted",
+      entityType: "budget_policy",
+      entityId: policyId,
+      details: {},
+    });
+    res.status(204).send();
   });
 
   router.patch("/agents/:agentId/budgets", validate(updateBudgetSchema), async (req, res) => {

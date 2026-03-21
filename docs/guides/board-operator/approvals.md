@@ -26,12 +26,22 @@ pending -> approved
 ```
 
 1. An agent creates an approval request
-2. It appears in your approval queue (Approvals page in the UI)
+2. It appears in your approval queue (Governance Hub and Approvals pages in the UI)
 3. You review the request details and any linked issues
 4. You can:
    - **Approve** — the action proceeds
    - **Reject** — the action is denied
    - **Request revision** — ask the agent to modify and resubmit
+
+## Governance Hub
+
+The **Governance** page (sidebar under Company) aggregates:
+
+- Pending and revision-requested approvals, with a short **scope** hint per type (hire vs CEO strategy) and how many **issues** are linked
+- Recently **approved** hire and CEO-strategy decisions
+- A short **budget / limits** summary with links to the Dashboard and Costs pages
+
+Use **Full approvals list** on that page to open the classic Approvals list (pending / all tabs).
 
 ## Reviewing Approvals
 

@@ -1,0 +1,16 @@
+{
+  "templates": [
+    {
+      "id": "engineering-org",
+      "manifestPath": "templates/engineering-org/paperclip.manifest.json",
+      "nameKey": "templateEngineeringName",
+      "descriptionKey": "templateEngineeringDesc"
+    },
+    {
+      "id": "agency",
+      "manifestPath": "templates/agency/paperclip.manifest.json",
+      "nameKey": "templateAgencyName",
+      "descriptionKey": "templateAgencyDesc"
+    }
+  ]
+}

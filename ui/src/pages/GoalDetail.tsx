@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useParams } from "@/lib/router";
+import { Link, useParams } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { goalsApi } from "../api/goals";
 import { projectsApi } from "../api/projects";
@@ -16,21 +16,35 @@ import { StatusBadge } from "../components/StatusBadge";
 import { InlineEditor } from "../components/InlineEditor";
 import { EntityRow } from "../components/EntityRow";
 import { PageSkeleton } from "../components/PageSkeleton";
-import { projectUrl } from "../lib/utils";
+import { formatCents, formatTokens, projectUrl } from "../lib/utils";
 import { Button } from "@/components/ui/button";
 import "./GoalDetail.css";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus } from "lucide-react";
-import type { Goal, Project } from "@paperclipai/shared";
+import { ISSUE_STATUSES, type Goal, type GoalProgressIssueStatusCounts } from "@paperclipai/shared";
+
+function issueStatusSummaryLine(
+  counts: GoalProgressIssueStatusCounts,
+  tStatus: (key: string) => string,
+): string {
+  const parts: string[] = [];
+  for (const s of ISSUE_STATUSES) {
+    const n = counts[s];
+    if (n > 0) parts.push(`${tStatus(s)} ${n}`);
+  }
+  return parts.join(" · ");
+}
 
 export function GoalDetail() {
   const { t } = useTranslation(["goals", "project"]);
+  const { t: tStatus } = useTranslation("status");
   const { goalId } = useParams<{ goalId: string }>();
   const { selectedCompanyId, setSelectedCompanyId } = useCompany();
   const { openNewGoal } = useDialog();
   const { openPanel, closePanel } = usePanel();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
+  const [costPreset, setCostPreset] = useState<"mtd" | "all">("mtd");
 
   const {
     data: goal,
@@ -55,6 +69,19 @@ export function GoalDetail() {
     enabled: !!resolvedCompanyId
   });
 
+  const progressRange = useMemo(() => {
+    if (costPreset === "all") return undefined;
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: from.toISOString(), to: now.toISOString() };
+  }, [costPreset]);
+
+  const { data: goalProgress, isLoading: progressLoading } = useQuery({
+    queryKey: queryKeys.goals.progress(goalId!, costPreset),
+    queryFn: () => goalsApi.getProgress(goalId!, progressRange),
+    enabled: !!goalId && !!resolvedCompanyId
+  });
+
   useEffect(() => {
     if (!goal?.companyId || goal.companyId === selectedCompanyId) return;
     setSelectedCompanyId(goal.companyId, { source: "route_sync" });
@@ -72,6 +99,9 @@ export function GoalDetail() {
           queryKey: queryKeys.goals.list(resolvedCompanyId)
         });
       }
+      queryClient.invalidateQueries({
+        queryKey: ["goals", "progress", goalId]
+      });
     }
   });
 
@@ -154,6 +184,7 @@ export function GoalDetail() {
           <TabsTrigger value="projects">
             {t("project:projectsWithCount", { count: linkedProjects.length })}
           </TabsTrigger>
+          <TabsTrigger value="progress">{t("progressTab")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="children" className="goal-detail-tabs-content">
@@ -190,6 +221,104 @@ export function GoalDetail() {
                 />
               ))}
             </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="progress" className="goal-detail-tabs-content goal-detail-progress">
+          <div className="goal-detail-progress-toolbar">
+            <span className="goal-detail-progress-toolbar-label">{t("costPeriod")}</span>
+            <div className="goal-detail-progress-toolbar-actions">
+              <Button
+                type="button"
+                size="sm"
+                variant={costPreset === "mtd" ? "default" : "outline"}
+                onClick={() => setCostPreset("mtd")}
+              >
+                {t("costPeriodMtd")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={costPreset === "all" ? "default" : "outline"}
+                onClick={() => setCostPreset("all")}
+              >
+                {t("costPeriodAll")}
+              </Button>
+            </div>
+          </div>
+
+          {progressLoading ? (
+            <p className="goal-detail-empty">{t("progressLoading")}</p>
+          ) : !goalProgress ? (
+            <p className="goal-detail-empty">{t("progressEmpty")}</p>
+          ) : (
+            <>
+              <div className="goal-detail-progress-summary">
+                <div className="goal-detail-progress-stat">
+                  <span className="goal-detail-progress-stat-label">{t("totalSpend")}</span>
+                  <span className="goal-detail-progress-stat-value">{formatCents(goalProgress.spendCents)}</span>
+                </div>
+                <div className="goal-detail-progress-stat">
+                  <span className="goal-detail-progress-stat-label">{t("totalTokens")}</span>
+                  <span className="goal-detail-progress-stat-value">
+                    {formatTokens(goalProgress.inputTokens + goalProgress.outputTokens)}
+                  </span>
+                </div>
+                <div className="goal-detail-progress-stat goal-detail-progress-stat-wide">
+                  <span className="goal-detail-progress-stat-label">{t("issuesByStatus")}</span>
+                  <span className="goal-detail-progress-stat-meta">
+                    {issueStatusSummaryLine(goalProgress.issueStatusCounts, tStatus) || t("noIssuesInScope")}
+                  </span>
+                </div>
+              </div>
+
+              {goalProgress.childGoals.length > 0 ? (
+                <section className="goal-detail-progress-section" aria-labelledby="goal-progress-subgoals-heading">
+                  <h3 id="goal-progress-subgoals-heading" className="goal-detail-progress-section-title">
+                    {t("subGoalsDrillDown")}
+                  </h3>
+                  <ul className="goal-detail-progress-subgoal-list">
+                    {goalProgress.childGoals.map((cg) => (
+                      <li key={cg.id}>
+                        <Link className="goal-detail-progress-subgoal-link" to={`/goals/${cg.id}`}>
+                          <span className="goal-detail-progress-subgoal-title">{cg.title}</span>
+                          <StatusBadge status={cg.status} />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
+              <section className="goal-detail-progress-section" aria-labelledby="goal-progress-projects-heading">
+                <h3 id="goal-progress-projects-heading" className="goal-detail-progress-section-title">
+                  {t("linkedProjectsProgress", { count: goalProgress.projects.length })}
+                </h3>
+                {goalProgress.projects.length === 0 ? (
+                  <p className="goal-detail-empty">{t("noProjectsInProgress")}</p>
+                ) : (
+                  <div className="goal-detail-progress-projects-list">
+                    {goalProgress.projects.map((p) => (
+                      <EntityRow
+                        key={p.projectId}
+                        title={p.name}
+                        subtitle={
+                          issueStatusSummaryLine(p.issueStatusCounts, tStatus) ||
+                          t("noIssuesInProject")
+                        }
+                        to={projectUrl({ id: p.projectId, name: p.name, urlKey: null })}
+                        trailing={
+                          <span className="goal-detail-progress-project-trailing">
+                            <StatusBadge status={p.status} />
+                            <span className="goal-detail-progress-project-spend">{formatCents(p.spendCents)}</span>
+                          </span>
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
           )}
         </TabsContent>
       </Tabs>

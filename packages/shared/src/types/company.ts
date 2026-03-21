@@ -10,6 +10,10 @@ export interface Company {
   issueCounter: number;
   budgetMonthlyCents: number;
   spentMonthlyCents: number;
+  /** 公司層級 Token 上限（當月累計）；null 表示不限制。 */
+  tokenLimit: number | null;
+  /** 公司層級花費上限（當月累計，單位：分）；null 表示不限制。 */
+  priceLimitCents: number | null;
   requireBoardApprovalForNewAgents: boolean;
   brandColor: string | null;
   /** 公司圖示 asset id；若有則外觀顯示上傳圖。 */

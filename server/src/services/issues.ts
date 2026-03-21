@@ -692,6 +692,21 @@ export function issueService(db: Db) {
             defaultIssueExecutionWorkspaceSettingsForProject(
               parseProjectExecutionWorkspacePolicy(project?.executionWorkspacePolicy),
             ) as Record<string, unknown> | null;
+        } else if (executionWorkspaceSettings != null && issueData.projectId) {
+          const raw = executionWorkspaceSettings as Record<string, unknown>;
+          if (raw.mode === undefined) {
+            const project = await tx
+              .select({ executionWorkspacePolicy: projects.executionWorkspacePolicy })
+              .from(projects)
+              .where(and(eq(projects.id, issueData.projectId), eq(projects.companyId, companyId)))
+              .then((rows) => rows[0] ?? null);
+            const defaults = defaultIssueExecutionWorkspaceSettingsForProject(
+              parseProjectExecutionWorkspacePolicy(project?.executionWorkspacePolicy),
+            );
+            if (defaults) {
+              executionWorkspaceSettings = { ...defaults, ...raw } as Record<string, unknown>;
+            }
+          }
         }
         const [company] = await tx
           .update(companies)

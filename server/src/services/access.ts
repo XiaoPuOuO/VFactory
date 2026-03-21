@@ -16,6 +16,9 @@ import { companyService } from "./companies.js";
 import type { PermissionKey, PrincipalType } from "@paperclipai/shared";
 import { ADAPTER_TYPE_TO_MODEL_PERMISSION } from "@paperclipai/shared";
 
+/** admin 角色預設擁有之公司權限（不含委任政策管理，僅 owner 或顯式 grant）。 */
+const ADMIN_IMPLICIT_DENIED: PermissionKey = "governance:policies:manage";
+
 type MembershipRow = typeof companyMemberships.$inferSelect;
 type GrantInput = {
   permissionKey: PermissionKey;
@@ -253,9 +256,15 @@ export function accessService(db: Db) {
     if (!userId) return false;
     if (await hasInstanceFullAccess(userId)) return true;
     if (await hasPermission(companyId, "user", userId, permissionKey)) return true;
-    // 既有公司建立者可能尚未寫入 grants，依 membershipRole === "owner" 視為擁有全部公司權限
     const membership = await getMembership(companyId, "user", userId);
-    return Boolean(membership?.status === "active" && membership.membershipRole === "owner");
+    if (!membership || membership.status !== "active") return false;
+    // 既有公司建立者可能尚未寫入 grants，依 membershipRole === "owner" 視為擁有全部公司權限
+    if (membership.membershipRole === "owner") return true;
+    // admin：除委任政策管理外，與 owner 同層級之默認操作權（仍可依 grants 微調）
+    if (membership.membershipRole === "admin") {
+      return permissionKey !== ADMIN_IMPLICIT_DENIED;
+    }
+    return false;
   }
 
   /** 回傳該使用者在該公司內可使用的 adapter 類型（依 model.* 權限）。 */

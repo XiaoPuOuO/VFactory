@@ -650,7 +650,7 @@ Clicking a row navigates to agent detail.
 
 **Issues tab:** issues assigned to this agent.
 
-**Costs tab:** cost breakdown for this agent — by model, by time period, with budget progress bar.
+**Costs tab:** cost breakdown for this agent — by model, by time period, with budget progress bar. Agent list and detail show an auto-pause reason badge when paused (budget limit, token limit, price limit, or manual).
 
 **Right pane properties:** Status, Role, Title, Reports To, Adapter Type, Context Mode, Budget (monthly), Spent (monthly), Last Heartbeat.
 
@@ -749,6 +749,10 @@ Right pane: Type, Status, Requested by, Requested at, Decided by, Decided at, De
 ```
 
 Top: company-wide budget progress bar (large, prominent).
+
+Company limits (optional): Token limit and price limit (cents) per month; when either is reached, new runs are blocked. Set/clear from the same page.
+
+Limit breach history: table of past budget/token/price limit breaches (type, occurred at, amount/tokens). Source: `GET /companies/:id/costs/summary` response `breachEvents`.
 
 Two side-by-side tables: breakdown by agent and by project. Each row shows entity name and spend amount.
 

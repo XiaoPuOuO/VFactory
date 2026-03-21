@@ -2,9 +2,11 @@ export { tenantSlugSchema, type TenantSlug } from "./tenant.js";
 export {
   createCompanySchema,
   updateCompanySchema,
+  updateCompanyLimitsSchema,
   normalizeWorkingDirectory,
   type CreateCompany,
   type UpdateCompany,
+  type UpdateCompanyLimits,
 } from "./company.js";
 export {
   createInstanceGroupSchema,
@@ -118,6 +120,8 @@ export {
 } from "./goal.js";
 
 export {
+  upsertCompanyHireApprovalPolicySchema,
+  type UpsertCompanyHireApprovalPolicy,
   createApprovalSchema,
   resolveApprovalSchema,
   requestApprovalRevisionSchema,
@@ -149,6 +153,13 @@ export {
   type CreateCostEvent,
   type UpdateBudget,
 } from "./cost.js";
+
+export {
+  createBudgetPolicySchema,
+  updateBudgetPolicySchema,
+  type CreateBudgetPolicy,
+  type UpdateBudgetPolicy,
+} from "./budget-policy.js";
 
 export {
   createAssetImageMetadataSchema,
@@ -195,3 +206,9 @@ export {
   type UpdateSchedule,
   type ListSchedulesQuery,
 } from "./schedule.js";
+
+export {
+  builtinPluginIdSchema,
+  upsertCompanyPluginSchema,
+  type UpsertCompanyPlugin,
+} from "./plugin.js";

@@ -4,6 +4,7 @@ import type { Db } from "@paperclipai/db";
 import { validate } from "../middleware/validate.js";
 import { activityService } from "../services/activity.js";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
+import { assertCompanyPermission } from "./company-permission.js";
 import { issueService } from "../services/index.js";
 import { sanitizeRecord } from "../redaction.js";
 
@@ -46,6 +47,7 @@ export function activityRoutes(db: Db) {
   router.post("/companies/:companyId/activity", validate(createActivitySchema), async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
+    await assertCompanyPermission(db, req, companyId, "company:manage");
     const event = await svc.create({
       companyId,
       ...req.body,

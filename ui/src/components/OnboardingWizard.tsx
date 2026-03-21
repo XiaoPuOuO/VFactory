@@ -2,7 +2,13 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdapterEnvironmentTestResult } from "@paperclipai/shared";
+import type {
+  AdapterEnvironmentTestResult,
+  CompanyPortabilityCollisionStrategy,
+  CompanyPortabilityImportRequest,
+  CompanyPortabilityManifest,
+  CompanyPortabilityPreviewResult,
+} from "@paperclipai/shared";
 import { adapterRequiresApiKeyInput, API_KEY_ENV_BY_ADAPTER, validateApiKeyFormat } from "../lib/api-key-validation";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
@@ -11,9 +17,22 @@ import { agentsApi } from "../api/agents";
 import { issuesApi } from "../api/issues";
 import { meApi } from "../api/me";
 import { secretsApi } from "../api/secrets";
+import {
+  buildNewCompanyImportRequest,
+  fetchOfficialTemplateCatalog,
+  loadOfficialTemplateInlineSource,
+} from "../lib/company-portability";
 import { queryKeys } from "../lib/queryKeys";
 import { ApiError } from "../api/client";
-import { Dialog, DialogPortal } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPortal,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
@@ -120,6 +139,21 @@ export function OnboardingWizard() {
   // Step 1：公司名稱與公司介紹
   const [companyName, setCompanyName] = useState("");
   const [companyDescription, setCompanyDescription] = useState("");
+  /** 空白建立 vs 官方模板（僅步驟 1、非既有公司流程） */
+  const [creationMode, setCreationMode] = useState<"blank" | "template">("blank");
+  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [templateImportDialogOpen, setTemplateImportDialogOpen] = useState(false);
+  const [templatePreview, setTemplatePreview] = useState<CompanyPortabilityPreviewResult | null>(null);
+  const [pendingImportRequest, setPendingImportRequest] = useState<CompanyPortabilityImportRequest | null>(null);
+  const [templateCollisionStrategy, setTemplateCollisionStrategy] =
+    useState<CompanyPortabilityCollisionStrategy>("rename");
+  const [importedFromTemplate, setImportedFromTemplate] = useState(false);
+  const [importedAgentNames, setImportedAgentNames] = useState<string[]>([]);
+  /** 已載入之官方模板內容，供在預覽對話框內切換 collision 策略時重新 preview。 */
+  const [templateBundle, setTemplateBundle] = useState<{
+    manifest: CompanyPortabilityManifest;
+    files: Record<string, string>;
+  } | null>(null);
 
   // Step 2
   const [agentName, setAgentName] = useState("CEO");
@@ -163,11 +197,36 @@ export function OnboardingWizard() {
     setStep(onboardingOptions.initialStep ?? 1);
     setCreatedCompanyId(cId);
     setCreatedCompanyPrefix(null);
+    if (cId) {
+      setCreationMode("blank");
+    } else if (onboardingOptions.creationMode === "template") {
+      setCreationMode("template");
+    } else {
+      setCreationMode("blank");
+    }
+    setTemplateId(null);
+    setImportedFromTemplate(false);
+    setImportedAgentNames([]);
+    setTemplateImportDialogOpen(false);
+    setTemplatePreview(null);
+    setPendingImportRequest(null);
+    setTemplateBundle(null);
   }, [
     onboardingOpen,
     onboardingOptions.companyId,
-    onboardingOptions.initialStep
+    onboardingOptions.initialStep,
+    onboardingOptions.creationMode,
   ]);
+
+  const { data: templateCatalog } = useQuery({
+    queryKey: ["official-templates", "catalog"],
+    queryFn: fetchOfficialTemplateCatalog,
+    enabled:
+      onboardingOpen &&
+      step === 1 &&
+      creationMode === "template" &&
+      !onboardingOptions.companyId,
+  });
 
   // Backfill issue prefix for an existing company once companies are loaded.
   useEffect(() => {
@@ -297,6 +356,15 @@ export function OnboardingWizard() {
     setError(null);
     setCompanyName("");
     setCompanyDescription("");
+    setCreationMode("blank");
+    setTemplateId(null);
+    setTemplateImportDialogOpen(false);
+    setTemplatePreview(null);
+    setPendingImportRequest(null);
+    setTemplateCollisionStrategy("rename");
+    setImportedFromTemplate(false);
+    setImportedAgentNames([]);
+    setTemplateBundle(null);
     setAgentName("CEO");
     setAdapterType("claude_local");
     setCwd("");
@@ -318,6 +386,7 @@ export function OnboardingWizard() {
   }
 
   function handleClose() {
+    setTemplateImportDialogOpen(false);
     reset();
     closeOnboarding();
   }
@@ -416,6 +485,110 @@ export function OnboardingWizard() {
       setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create company");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleTemplatePreviewAndOpenDialog() {
+    if (!templateId || !companyName.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const bundle = await loadOfficialTemplateInlineSource(templateId);
+      setTemplateBundle(bundle);
+      const req = buildNewCompanyImportRequest(
+        bundle.manifest,
+        bundle.files,
+        companyName,
+        templateCollisionStrategy,
+      );
+      const preview = await companiesApi.importPreview(req);
+      setPendingImportRequest(req);
+      setTemplatePreview(preview);
+      if (preview.errors.length > 0) {
+        setError(preview.errors.join("; "));
+        return;
+      }
+      setTemplateImportDialogOpen(true);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("onboarding:templatePreviewFailed"),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleTemplateCollisionChange(next: CompanyPortabilityCollisionStrategy) {
+    setTemplateCollisionStrategy(next);
+    if (!templateBundle || !companyName.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const req = buildNewCompanyImportRequest(
+        templateBundle.manifest,
+        templateBundle.files,
+        companyName,
+        next,
+      );
+      const preview = await companiesApi.importPreview(req);
+      setPendingImportRequest(req);
+      setTemplatePreview(preview);
+      if (preview.errors.length > 0) {
+        setError(preview.errors.join("; "));
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("onboarding:templatePreviewFailed"),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleConfirmTemplateImport() {
+    if (!pendingImportRequest) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const body: CompanyPortabilityImportRequest = {
+        ...pendingImportRequest,
+        collisionStrategy: templateCollisionStrategy,
+      };
+      const result = await companiesApi.importBundle(body);
+      const company = await companiesApi.get(result.company.id);
+      setCreatedCompanyId(result.company.id);
+      setCreatedCompanyPrefix(company.issuePrefix);
+      setSelectedCompanyId(result.company.id);
+      setCwd(
+        company.workingDirectory?.trim() ??
+          (company as { effectiveWorkingDirectory?: string | null })
+            .effectiveWorkingDirectory ??
+          "",
+      );
+      const ceo = result.agents.find((a) => a.slug === "ceo" && a.id);
+      const assignee =
+        ceo ?? result.agents.find((a) => a.id && a.action !== "skipped");
+      if (assignee?.id) setCreatedAgentId(assignee.id);
+      setAgentName(assignee?.name ?? "CEO");
+      setImportedAgentNames(
+        result.agents.filter((a) => a.id).map((a) => a.name),
+      );
+      setImportedFromTemplate(true);
+      queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.agents.list(result.company.id),
+      });
+      setTemplateImportDialogOpen(false);
+      setTemplatePreview(null);
+      setPendingImportRequest(null);
+      setTemplateBundle(null);
+      setStep(3);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("onboarding:templateImportFailed"),
+      );
     } finally {
       setLoading(false);
     }
@@ -626,7 +799,13 @@ export function OnboardingWizard() {
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      if (step === 1 && companyName.trim()) handleStep1Next();
+      if (step === 1 && companyName.trim()) {
+        if (creationMode === "template" && templateId && !existingCompanyId) {
+          void handleTemplatePreviewAndOpenDialog();
+        } else if (creationMode === "blank") {
+          handleStep1Next();
+        }
+      }
       else if (
         step === 2 &&
         agentName.trim() &&
@@ -642,6 +821,7 @@ export function OnboardingWizard() {
   if (!onboardingOpen) return null;
 
   return (
+    <>
     <Dialog
       open={onboardingOpen}
       onOpenChange={(open) => {
@@ -715,6 +895,37 @@ export function OnboardingWizard() {
                       </p>
                     </div>
                   </div>
+                  {!existingCompanyId && (
+                    <div className="onboarding-wizard-creation-toggle" role="group" aria-label={t("onboarding:creationModeLabel")}>
+                      <button
+                        type="button"
+                        className={cn(
+                          "onboarding-wizard-creation-toggle-btn",
+                          creationMode === "blank" && "active",
+                        )}
+                        onClick={() => {
+                          setCreationMode("blank");
+                          setTemplateId(null);
+                          setError(null);
+                        }}
+                      >
+                        {t("onboarding:creationModeBlank")}
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          "onboarding-wizard-creation-toggle-btn",
+                          creationMode === "template" && "active",
+                        )}
+                        onClick={() => {
+                          setCreationMode("template");
+                          setError(null);
+                        }}
+                      >
+                        {t("onboarding:creationModeTemplate")}
+                      </button>
+                    </div>
+                  )}
                   <div className="onboarding-wizard-field group">
                     <label className={cn("onboarding-wizard-label", companyName.trim() && "filled")}>
                       {t("onboarding:companyName")}
@@ -727,21 +938,64 @@ export function OnboardingWizard() {
                       autoFocus
                     />
                   </div>
-                  <div className="onboarding-wizard-field group">
-                    <label className={cn("onboarding-wizard-label", companyDescription.trim() && "filled")}>
-                      {t("onboarding:companyIntroOptional")}
-                    </label>
-                    <textarea
-                      className="onboarding-wizard-textarea"
-                      placeholder={t("onboarding:companyIntroPlaceholder")}
-                      value={companyDescription}
-                      onChange={(e) => setCompanyDescription(e.target.value)}
-                    />
-                  </div>
+                  {creationMode === "blank" && (
+                    <div className="onboarding-wizard-field group">
+                      <label className={cn("onboarding-wizard-label", companyDescription.trim() && "filled")}>
+                        {t("onboarding:companyIntroOptional")}
+                      </label>
+                      <textarea
+                        className="onboarding-wizard-textarea"
+                        placeholder={t("onboarding:companyIntroPlaceholder")}
+                        value={companyDescription}
+                        onChange={(e) => setCompanyDescription(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  {creationMode === "template" && !existingCompanyId && (
+                    <div className="onboarding-wizard-field group">
+                      <label className={cn("onboarding-wizard-label", templateId && "filled")}>
+                        {t("onboarding:officialTemplate")}
+                      </label>
+                      <select
+                        className="onboarding-wizard-input onboarding-wizard-select"
+                        value={templateId ?? ""}
+                        onChange={(e) => setTemplateId(e.target.value || null)}
+                      >
+                        <option value="">{t("onboarding:chooseTemplate")}</option>
+                        {(templateCatalog?.templates ?? []).map((entry) => (
+                          <option key={entry.id} value={entry.id}>
+                            {t(entry.nameKey)} — {t(entry.descriptionKey)}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="onboarding-wizard-template-hint">{t("onboarding:templateHint")}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {step === 2 && (
+              {step === 2 && importedFromTemplate && (
+                <div className="onboarding-wizard-step">
+                  <div className="onboarding-wizard-step-header">
+                    <div className="onboarding-wizard-step-icon">
+                      <Bot aria-hidden />
+                    </div>
+                    <div>
+                      <h3 className="onboarding-wizard-step-title">{t("onboarding:templateStep2Title")}</h3>
+                      <p className="onboarding-wizard-step-desc">
+                        {t("onboarding:templateStep2Desc")}
+                      </p>
+                    </div>
+                  </div>
+                  <ul className="onboarding-wizard-template-agent-list">
+                    {importedAgentNames.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {step === 2 && !importedFromTemplate && (
                 <div className="onboarding-wizard-step">
                   <div className="onboarding-wizard-step-header">
                     <div className="onboarding-wizard-step-icon">
@@ -1278,8 +1532,16 @@ export function OnboardingWizard() {
                     <div className="onboarding-wizard-summary-row">
                       <Bot aria-hidden />
                       <div className="onboarding-wizard-summary-body">
-                        <p className="onboarding-wizard-summary-title">{agentName}</p>
-                        <p className="onboarding-wizard-summary-caption">{t(`adapter:${adapterType}`)}</p>
+                        <p className="onboarding-wizard-summary-title">
+                          {importedFromTemplate
+                            ? importedAgentNames.join(", ")
+                            : agentName}
+                        </p>
+                        <p className="onboarding-wizard-summary-caption">
+                          {importedFromTemplate
+                            ? t("onboarding:templateAgentsCaption")
+                            : t(`adapter:${adapterType}`)}
+                        </p>
                       </div>
                       <Check aria-hidden />
                     </div>
@@ -1316,7 +1578,7 @@ export function OnboardingWizard() {
                   )}
                 </div>
                 <div className="onboarding-wizard-footer-actions">
-                  {step === 1 && (
+                  {step === 1 && creationMode === "blank" && (
                     <Button
                       size="sm"
                       disabled={!companyName.trim() || loading}
@@ -1330,7 +1592,27 @@ export function OnboardingWizard() {
                       {loading ? t("onboarding:creating") : t("onboarding:next")}
                     </Button>
                   )}
-                  {step === 2 && (
+                  {step === 1 && creationMode === "template" && !existingCompanyId && (
+                    <Button
+                      size="sm"
+                      disabled={!companyName.trim() || !templateId || loading}
+                      onClick={() => void handleTemplatePreviewAndOpenDialog()}
+                    >
+                      {loading ? (
+                        <Loader2 className="onboarding-wizard-footer-icon onboarding-wizard-footer-icon-spin" aria-hidden />
+                      ) : (
+                        <ArrowRight className="onboarding-wizard-footer-icon" aria-hidden />
+                      )}
+                      {loading ? t("onboarding:previewing") : t("onboarding:previewImport")}
+                    </Button>
+                  )}
+                  {step === 2 && importedFromTemplate && (
+                    <Button size="sm" disabled={loading} onClick={() => setStep(3)}>
+                      <ArrowRight className="onboarding-wizard-footer-icon" aria-hidden />
+                      {t("onboarding:next")}
+                    </Button>
+                  )}
+                  {step === 2 && !importedFromTemplate && (
                     <Button
                       size="sm"
                       disabled={
@@ -1385,6 +1667,88 @@ export function OnboardingWizard() {
         </div>
       </DialogPortal>
     </Dialog>
+
+    <Dialog
+      open={templateImportDialogOpen}
+      onOpenChange={(open) => {
+        if (!open) setTemplateImportDialogOpen(false);
+      }}
+    >
+      <DialogContent className="onboarding-wizard-template-dialog">
+        <DialogHeader>
+          <DialogTitle>{t("onboarding:templatePreviewTitle")}</DialogTitle>
+          <DialogDescription>{t("onboarding:templatePreviewDesc")}</DialogDescription>
+        </DialogHeader>
+        {templatePreview && (
+          <div className="onboarding-wizard-template-preview-body">
+            <div className="onboarding-wizard-field group">
+              <label className="onboarding-wizard-label">{t("onboarding:collisionStrategy")}</label>
+              <select
+                className="onboarding-wizard-input onboarding-wizard-select"
+                value={templateCollisionStrategy}
+                onChange={(e) =>
+                  void handleTemplateCollisionChange(
+                    e.target.value as CompanyPortabilityCollisionStrategy,
+                  )
+                }
+              >
+                <option value="rename">{t("onboarding:collisionRename")}</option>
+                <option value="skip">{t("onboarding:collisionSkip")}</option>
+                <option value="replace">{t("onboarding:collisionReplace")}</option>
+              </select>
+            </div>
+            {templatePreview.errors.length > 0 && (
+              <ul className="onboarding-wizard-template-errors">
+                {templatePreview.errors.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+              </ul>
+            )}
+            {templatePreview.warnings.length > 0 && (
+              <ul className="onboarding-wizard-template-warnings">
+                {templatePreview.warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            )}
+            <ul className="onboarding-wizard-template-plans">
+              {templatePreview.plan.agentPlans.map((p) => (
+                <li key={`${p.slug}-${p.action}`}>
+                  <span className="onboarding-wizard-plan-slug">{p.slug}</span>
+                  <span className="onboarding-wizard-plan-action">{p.action}</span>
+                  <span className="onboarding-wizard-plan-name">{p.plannedName}</span>
+                </li>
+              ))}
+            </ul>
+            {templatePreview.requiredSecrets.length > 0 && (
+              <p className="onboarding-wizard-template-secrets-hint">
+                {t("onboarding:templateRequiredSecretsHint")}
+              </p>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" type="button" onClick={() => setTemplateImportDialogOpen(false)}>
+            {t("common:cancel")}
+          </Button>
+          <Button
+            type="button"
+            disabled={
+              loading ||
+              !templatePreview ||
+              templatePreview.errors.length > 0
+            }
+            onClick={() => void handleConfirmTemplateImport()}
+          >
+            {loading ? (
+              <Loader2 className="onboarding-wizard-footer-icon onboarding-wizard-footer-icon-spin" aria-hidden />
+            ) : null}
+            {t("onboarding:confirmImport")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

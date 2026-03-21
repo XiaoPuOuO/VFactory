@@ -99,7 +99,8 @@ export function ChatMessageIssueRunCard({
   });
 
   const effectiveRuns = activeRun ? [activeRun, ...liveRuns] : liveRuns;
-  const latestRun: LiveRunForIssue | undefined = effectiveRuns[0];
+  /** active-run 與 live-run 欄位形狀略有不同，hook 僅依賴 id/status。 */
+  const latestRun = effectiveRuns[0] as LiveRunForIssue | undefined;
   const runsForTranscript = latestRun ? [latestRun] : [];
 
   const { transcriptByRun } = useLiveRunTranscripts({

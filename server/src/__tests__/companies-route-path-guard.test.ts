@@ -22,6 +22,14 @@ vi.mock("../services/index.js", () => ({
     canUser: vi.fn(),
     ensureMembership: vi.fn(),
   }),
+  governanceService: () => ({
+    hub: vi.fn(),
+  }),
+  companyApprovalPolicyService: () => ({
+    getForCompany: vi.fn(),
+    evaluateHireBudget: vi.fn(),
+    upsertHirePolicy: vi.fn(),
+  }),
   logActivity: vi.fn(),
 }));
 

@@ -20,6 +20,8 @@ export const agents = pgTable(
     title: text("title"),
     icon: text("icon"),
     status: text("status").notNull().default("idle"),
+    /** 當 status 為 paused 時，記錄暫停原因：budget_limit | token_limit | price_limit | manual。 */
+    autoPauseReason: text("auto_pause_reason"),
     reportsTo: uuid("reports_to").references((): AnyPgColumn => agents.id),
     capabilities: text("capabilities"),
     adapterType: text("adapter_type").notNull().default("process"),

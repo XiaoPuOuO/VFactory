@@ -211,6 +211,12 @@
   color: inherit;
 }
 
+/* 「與 Agent 的對話」旁 + 開啟的 Agent 列表：強制高度上限（約 53vh，為原 80vh 的 2/3） */
+.chat-list-section-add-dropdown {
+  max-height: calc(80vh * 2 / 3) !important;
+  overflow-y: auto !important;
+}
+
 .chat-list-agent-empty {
   padding: 0.75rem 1rem;
   list-style: none;
@@ -821,8 +827,12 @@
   color: var(--muted-foreground);
 }
 
+/* 群組名稱輸入框：限制寬度不超出對話框，與下方選項列對齊 */
 .chat-new-group-name-input {
   margin-bottom: 0.5rem;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .chat-dialog-scroll {
@@ -865,6 +875,11 @@
 
 .chat-room-project-select {
   max-width: 220px;
+}
+
+.chat-dialog-add-group {
+  min-width: 0; /* 讓 grid 子項目可縮小，輸入框不會撐開 */
+  overflow: hidden;
 }
 
 @media (min-width: 640px) {

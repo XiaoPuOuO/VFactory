@@ -17,11 +17,9 @@ import { AlertCircle, Check, ExternalLink, Github, Loader2, Plus, Trash2, X } fr
 import { ChoosePathButton } from "./PathInstructionsModal";
 import { DraftInput, Field, HintIcon } from "./agent-config-primitives";
 import { InlineEditor } from "./InlineEditor";
+import { SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI } from "@/lib/featureFlags";
 
 const PROJECT_STATUS_VALUES = ["backlog", "planned", "in_progress", "completed", "cancelled"] as const;
-
-// TODO(issue-worktree-support): re-enable this UI once the workflow is ready to ship.
-const SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI = false;
 
 interface ProjectPropertiesProps {
   project: Project;

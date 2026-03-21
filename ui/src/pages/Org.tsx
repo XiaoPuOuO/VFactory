@@ -70,7 +70,10 @@ function OrgTreeNode({
         />
         <span className="org-tree-node-name">{node.name}</span>
         <span className="org-tree-node-role">{node.role}</span>
-        <StatusBadge status={node.status} />
+        <StatusBadge
+          status={node.status}
+          autoPauseReason={node.autoPaused ? node.autoPauseReason ?? undefined : undefined}
+        />
       </Link>
       {hasChildren && expanded && (
         <OrgTree nodes={node.reports} depth={depth + 1} hrefFn={hrefFn} />

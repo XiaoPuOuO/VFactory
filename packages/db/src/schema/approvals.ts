@@ -1,6 +1,7 @@
 import { pgTable, uuid, text, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
+import { companyApprovalPolicies } from "./company_approval_policies.js";
 
 export const approvals = pgTable(
   "approvals",
@@ -14,6 +15,11 @@ export const approvals = pgTable(
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
     decisionNote: text("decision_note"),
     decidedByUserId: text("decided_by_user_id"),
+    decisionSource: text("decision_source").notNull().default("human"),
+    policyId: uuid("policy_id").references(() => companyApprovalPolicies.id, {
+      onDelete: "set null",
+    }),
+    policySnapshot: jsonb("policy_snapshot").$type<Record<string, unknown> | null>(),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

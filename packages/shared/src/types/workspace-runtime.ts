@@ -24,6 +24,8 @@ export interface ProjectExecutionWorkspacePolicy {
 
 export interface IssueExecutionWorkspaceSettings {
   mode?: ExecutionWorkspaceMode;
+  /** 對應 `project_workspaces.id`，指定 issue 使用哪個專案工作目錄（mono-repo 子目錄等）。 */
+  projectWorkspaceId?: string | null;
   workspaceStrategy?: ExecutionWorkspaceStrategy | null;
   workspaceRuntime?: Record<string, unknown> | null;
 }

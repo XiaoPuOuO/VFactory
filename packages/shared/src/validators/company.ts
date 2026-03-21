@@ -22,6 +22,10 @@ export const updateCompanySchema = createCompanySchema
   .extend({
     status: z.enum(COMPANY_STATUSES).optional(),
     spentMonthlyCents: z.number().int().nonnegative().optional(),
+    /** 公司層級 Token 上限（當月累計）；null 或未傳表示不變，傳 0 可視為「清除限制」由實作解讀。 */
+    tokenLimit: z.number().int().nonnegative().nullable().optional(),
+    /** 公司層級花費上限（當月累計，單位：分）；null 或未傳表示不變。 */
+    priceLimitCents: z.number().int().nonnegative().nullable().optional(),
     requireBoardApprovalForNewAgents: z.boolean().optional(),
     brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
     /** 公司圖示 asset id；設為 null 則清除圖示。 */
@@ -32,3 +36,11 @@ export const updateCompanySchema = createCompanySchema
   });
 
 export type UpdateCompany = z.infer<typeof updateCompanySchema>;
+
+/** 僅更新公司層級 Token / Price 上限（Costs 頁面用）。 */
+export const updateCompanyLimitsSchema = z.object({
+  tokenLimit: z.number().int().nonnegative().nullable().optional(),
+  priceLimitCents: z.number().int().nonnegative().nullable().optional(),
+});
+
+export type UpdateCompanyLimits = z.infer<typeof updateCompanyLimitsSchema>;

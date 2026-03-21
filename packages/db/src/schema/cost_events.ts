@@ -30,5 +30,17 @@ export const costEvents = pgTable(
       table.agentId,
       table.occurredAt,
     ),
+    /** 依專案聚合月度花費（budget policy） */
+    companyProjectOccurredIdx: index("cost_events_company_project_occurred_idx").on(
+      table.companyId,
+      table.projectId,
+      table.occurredAt,
+    ),
+    /** 依 billing code 聚合月度花費（budget policy） */
+    companyBillingOccurredIdx: index("cost_events_company_billing_occurred_idx").on(
+      table.companyId,
+      table.billingCode,
+      table.occurredAt,
+    ),
   }),
 );
