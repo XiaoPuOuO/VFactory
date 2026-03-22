@@ -1,5 +1,9 @@
 export { tenantSlugSchema, type TenantSlug } from "./tenant.js";
 export {
+  createIntegrationApiKeySchema,
+  type CreateIntegrationApiKeyInput,
+} from "./integration-tokens.js";
+export {
   createCompanySchema,
   updateCompanySchema,
   updateCompanyLimitsSchema,
@@ -8,6 +12,21 @@ export {
   type UpdateCompany,
   type UpdateCompanyLimits,
 } from "./company.js";
+
+export {
+  createCompanyWebhookEndpointSchema,
+  updateCompanyWebhookEndpointSchema,
+  type CreateCompanyWebhookEndpoint,
+  type UpdateCompanyWebhookEndpoint,
+} from "./company-webhook.js";
+export {
+  createCompanyNotificationDestinationSchema,
+  updateCompanyNotificationDestinationSchema,
+  testCompanyNotificationDestinationSchema,
+  type CreateCompanyNotificationDestination,
+  type UpdateCompanyNotificationDestination,
+  type TestCompanyNotificationDestination,
+} from "./company-notification-destination.js";
 export {
   createInstanceGroupSchema,
   updateInstanceGroupSchema,
@@ -31,11 +50,15 @@ export {
 export {
   updateMeDeveloperModeSchema,
   type UpdateMeDeveloperMode,
+  updateMeNotificationPreferencesSchema,
+  type UpdateMeNotificationPreferences,
 } from "./me.js";
 
 export {
   setDefaultCompanyPathSchema,
   type SetDefaultCompanyPath,
+  setComplianceDefaultRetentionSchema,
+  type SetComplianceDefaultRetention,
 } from "./instance-settings.js";
 
 export {
@@ -43,6 +66,8 @@ export {
   portabilitySecretRequirementSchema,
   portabilityCompanyManifestEntrySchema,
   portabilityAgentManifestEntrySchema,
+  portabilityApprovalPolicyEntrySchema,
+  portabilityBudgetPolicyEntrySchema,
   portabilityManifestSchema,
   portabilitySourceSchema,
   portabilityTargetSchema,
@@ -55,6 +80,19 @@ export {
   type CompanyPortabilityPreview,
   type CompanyPortabilityImport,
 } from "./company-portability.js";
+
+export {
+  automationRuleTriggerSchema,
+  automationRuleActionSchema,
+  createAutomationRuleSchema,
+  updateAutomationRuleSchema,
+  importPoliciesFromCompanySchema,
+  type CreateAutomationRule,
+  type UpdateAutomationRule,
+  type AutomationRuleTrigger,
+  type AutomationRuleAction,
+  type ImportPoliciesFromCompany,
+} from "./automation-rules.js";
 
 export {
   createAgentSchema,
@@ -97,6 +135,7 @@ export {
   updateIssueSchema,
   issueExecutionWorkspaceSettingsSchema,
   issueExecutionPolicySchema,
+  issueVcsLinksSchema,
   checkoutIssueSchema,
   addIssueCommentSchema,
   linkIssueApprovalSchema,
@@ -106,11 +145,21 @@ export {
   type UpdateIssue,
   type IssueExecutionWorkspaceSettings,
   type IssueExecutionPolicy,
+  type IssueVcsLinks,
   type CheckoutIssue,
   type AddIssueComment,
   type LinkIssueApproval,
   type CreateIssueAttachmentMetadata,
 } from "./issue.js";
+
+export {
+  issueSavedViewPayloadSchema,
+  createIssueSavedViewSchema,
+  updateIssueSavedViewSchema,
+  type IssueSavedViewPayload,
+  type CreateIssueSavedView,
+  type UpdateIssueSavedView,
+} from "./issue-saved-view.js";
 
 export {
   createGoalSchema,
@@ -212,3 +261,16 @@ export {
   upsertCompanyPluginSchema,
   type UpsertCompanyPlugin,
 } from "./plugin.js";
+
+export {
+  heartbeatRunsListQuerySchema,
+  heartbeatRunsQualityQuerySchema,
+  scheduleConflictsQuerySchema,
+  parseHeartbeatRunsListStatuses,
+  parseHeartbeatRunsListInvocationSources,
+  encodeHeartbeatRunCursor,
+  decodeHeartbeatRunCursor,
+  type HeartbeatRunsListQuery,
+  type HeartbeatRunsQualityQuery,
+  type ScheduleConflictsQuery,
+} from "./heartbeat-runs.js";

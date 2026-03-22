@@ -228,6 +228,16 @@
   }
 }
 
+.dashboard-trends-grid {
+  margin-top: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .dashboard-trends-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 .dashboard-chart-card {
   border: 1px solid var(--border);
   border-radius: 0.5rem;

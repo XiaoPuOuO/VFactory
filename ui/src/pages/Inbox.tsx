@@ -325,7 +325,7 @@ export function Inbox() {
 
   const { data: heartbeatRuns, isLoading: isRunsLoading } = useQuery({
     queryKey: queryKeys.heartbeats(selectedCompanyId!),
-    queryFn: () => heartbeatsApi.list(selectedCompanyId!),
+    queryFn: async () => (await heartbeatsApi.list(selectedCompanyId!)).runs,
     enabled: !!selectedCompanyId,
   });
 

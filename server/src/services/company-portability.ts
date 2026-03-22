@@ -1,7 +1,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import { projects } from "@paperclipai/db";
 import type {
+  BudgetPolicyOnExceed,
+  BudgetPolicyPeriod,
+  BudgetPolicyScopeType,
   CompanyPortabilityAgentManifestEntry,
   CompanyPortabilityCollisionStrategy,
   CompanyPortabilityExport,
@@ -18,11 +23,15 @@ import { DEFAULT_OWNER_GRANTS, normalizeAgentUrlKey, portabilityManifestSchema }
 import { notFound, unprocessable } from "../errors.js";
 import { accessService } from "./access.js";
 import { agentService } from "./agents.js";
+import { budgetPolicyService } from "./budget-policies.js";
+import { companyApprovalPolicyService } from "./company-approval-policies.js";
 import { companyService } from "./companies.js";
 
 const DEFAULT_INCLUDE: CompanyPortabilityInclude = {
   company: true,
   agents: true,
+  approvalPolicies: false,
+  budgetPolicies: false,
 };
 
 const DEFAULT_COLLISION_STRATEGY: CompanyPortabilityCollisionStrategy = "rename";
@@ -156,6 +165,8 @@ function normalizeInclude(input?: Partial<CompanyPortabilityInclude>): CompanyPo
   return {
     company: input?.company ?? DEFAULT_INCLUDE.company,
     agents: input?.agents ?? DEFAULT_INCLUDE.agents,
+    approvalPolicies: input?.approvalPolicies ?? false,
+    budgetPolicies: input?.budgetPolicies ?? false,
   };
 }
 
@@ -495,6 +506,8 @@ export function companyPortabilityService(db: Db) {
   const companies = companyService(db);
   const agents = agentService(db);
   const access = accessService(db);
+  const approvalPolicies = companyApprovalPolicyService(db);
+  const budgets = budgetPolicyService(db);
 
   async function resolveSource(source: CompanyPortabilityPreview["source"]): Promise<ResolvedSource> {
     if (source.type === "inline") {
@@ -573,7 +586,7 @@ export function companyPortabilityService(db: Db) {
     const generatedAt = new Date().toISOString();
 
     const manifest: CompanyPortabilityManifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt,
       source: {
         companyId: company.id,
@@ -625,6 +638,40 @@ export function companyPortabilityService(db: Db) {
         brandColor: company.brandColor ?? null,
         requireBoardApprovalForNewAgents: company.requireBoardApprovalForNewAgents,
       };
+    }
+
+    if (include.approvalPolicies) {
+      const rows = await approvalPolicies.listAllForCompany(companyId);
+      manifest.approvalPolicies = rows.map((r) => ({
+        approvalType: r.approvalType,
+        enabled: r.enabled,
+        maxBudgetMonthlyCents: r.maxBudgetMonthlyCents,
+      }));
+    }
+
+    if (include.budgetPolicies) {
+      const policyRows = await budgets.list(companyId);
+      manifest.budgetPolicies = [];
+      for (const p of policyRows) {
+        let projectName: string | null = null;
+        if (p.scopeType === "project" && p.projectId) {
+          const [proj] = await db
+            .select({ name: projects.name })
+            .from(projects)
+            .where(and(eq(projects.id, p.projectId), eq(projects.companyId, companyId)))
+            .limit(1);
+          projectName = proj?.name ?? null;
+        }
+        manifest.budgetPolicies.push({
+          scopeType: p.scopeType as "project" | "billing_code" | "company",
+          projectName,
+          billingCode: p.billingCode,
+          limitCents: p.limitCents,
+          period: p.period,
+          onExceed: p.onExceed as "record_only" | "block_new_runs_for_scope" | "pause_agents",
+          enabled: p.enabled,
+        });
+      }
     }
 
     if (include.agents) {
@@ -899,6 +946,57 @@ export function companyPortabilityService(db: Db) {
 
     if (!targetCompany) throw notFound("Target company not found");
 
+    if (include.approvalPolicies && sourceManifest.approvalPolicies?.length) {
+      for (const ap of sourceManifest.approvalPolicies) {
+        await approvalPolicies.upsertPolicy(targetCompany.id, {
+          approvalType: ap.approvalType,
+          enabled: ap.enabled,
+          maxBudgetMonthlyCents: ap.maxBudgetMonthlyCents,
+        });
+      }
+    }
+
+    if (include.budgetPolicies && sourceManifest.budgetPolicies?.length) {
+      const existingBudget = await budgets.list(targetCompany.id);
+      for (const p of existingBudget) {
+        await budgets.delete(targetCompany.id, p.id);
+      }
+      for (const bp of sourceManifest.budgetPolicies) {
+        let projectId: string | null | undefined;
+        if (bp.scopeType === "project") {
+          if (!bp.projectName?.trim()) {
+            warnings.push("Skipped budget policy: project scope without projectName.");
+            continue;
+          }
+          const [proj] = await db
+            .select({ id: projects.id })
+            .from(projects)
+            .where(and(eq(projects.companyId, targetCompany.id), eq(projects.name, bp.projectName.trim())))
+            .limit(1);
+          if (!proj) {
+            warnings.push(`Skipped budget policy: project not found: ${bp.projectName}`);
+            continue;
+          }
+          projectId = proj.id;
+        }
+        try {
+          await budgets.create(targetCompany.id, {
+            scopeType: bp.scopeType,
+            projectId: bp.scopeType === "project" ? projectId : undefined,
+            billingCode: bp.scopeType === "billing_code" ? bp.billingCode?.trim() ?? undefined : undefined,
+            limitCents: bp.limitCents,
+            period: bp.period as BudgetPolicyPeriod,
+            onExceed: bp.onExceed,
+            enabled: bp.enabled,
+          });
+        } catch (err) {
+          warnings.push(
+            `Budget policy import failed (${bp.scopeType}): ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+    }
+
     const resultAgents: CompanyPortabilityImportResult["agents"] = [];
     const importedSlugToAgentId = new Map<string, string>();
     const existingSlugToAgentId = new Map<string, string>();
@@ -1012,9 +1110,84 @@ export function companyPortabilityService(db: Db) {
     };
   }
 
+  /**
+   * 將來源公司之核准／預算政策複製到目標公司（不匯出 agent）。
+   * @param replaceExisting 為 true 時先清空目標公司之預算政策再寫入；核准政策仍為依類型 upsert。
+   */
+  async function importPoliciesFromCompany(
+    targetCompanyId: string,
+    sourceCompanyId: string,
+    options?: { replaceExisting?: boolean },
+  ): Promise<{ warnings: string[] }> {
+    const warnings: string[] = [];
+    const target = await companies.getById(targetCompanyId);
+    const source = await companies.getById(sourceCompanyId);
+    if (!target || !source) throw notFound("Company not found");
+
+    const approvalRows = await approvalPolicies.listAllForCompany(sourceCompanyId);
+    for (const ap of approvalRows) {
+      await approvalPolicies.upsertPolicy(targetCompanyId, {
+        approvalType: ap.approvalType,
+        enabled: ap.enabled,
+        maxBudgetMonthlyCents: ap.maxBudgetMonthlyCents,
+      });
+    }
+
+    const sourceBudget = await budgets.list(sourceCompanyId);
+    if (options?.replaceExisting) {
+      const existing = await budgets.list(targetCompanyId);
+      for (const p of existing) {
+        await budgets.delete(targetCompanyId, p.id);
+      }
+    }
+
+    for (const p of sourceBudget) {
+      let projectId: string | null | undefined = p.projectId;
+      if (p.scopeType === "project" && p.projectId) {
+        const [srcProj] = await db
+          .select({ name: projects.name })
+          .from(projects)
+          .where(eq(projects.id, p.projectId))
+          .limit(1);
+        if (!srcProj?.name) {
+          warnings.push("Skipped budget policy: missing source project name.");
+          continue;
+        }
+        const [tgtProj] = await db
+          .select({ id: projects.id })
+          .from(projects)
+          .where(and(eq(projects.companyId, targetCompanyId), eq(projects.name, srcProj.name)))
+          .limit(1);
+        if (!tgtProj) {
+          warnings.push(`Skipped budget policy: target project not found: ${srcProj.name}`);
+          continue;
+        }
+        projectId = tgtProj.id;
+      }
+      try {
+        await budgets.create(targetCompanyId, {
+          scopeType: p.scopeType as BudgetPolicyScopeType,
+          projectId: p.scopeType === "project" ? projectId : undefined,
+          billingCode: p.scopeType === "billing_code" ? p.billingCode : undefined,
+          limitCents: p.limitCents,
+          period: p.period as BudgetPolicyPeriod,
+          onExceed: p.onExceed as BudgetPolicyOnExceed,
+          enabled: p.enabled,
+        });
+      } catch (err) {
+        warnings.push(
+          `Budget policy not copied (${p.scopeType}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    return { warnings };
+  }
+
   return {
     exportBundle,
     previewImport,
     importBundle,
+    importPoliciesFromCompany,
   };
 }

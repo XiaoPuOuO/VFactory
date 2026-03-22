@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { Link } from "@/lib/router";
+import { Link, useLocation } from "@/lib/router";
 import { Menu } from "lucide-react";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
+import { useCompany } from "../context/CompanyContext";
 import { useSidebar } from "../context/SidebarContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,13 +17,18 @@ import { Fragment } from "react";
 
 export function BreadcrumbBar() {
   const { t } = useTranslation();
+  const location = useLocation();
   const { breadcrumbs } = useBreadcrumbs();
   const { toggleSidebar, isMobile, sidebarOpen } = useSidebar();
+  const { companies, loading: companiesLoading, error: companiesError } = useCompany();
+  const isInstanceSettingsRoute = location.pathname.startsWith("/instance/");
+  const hideBoardSidebar =
+    !companiesLoading && !companiesError && companies.length === 0 && !isInstanceSettingsRoute;
 
   if (breadcrumbs.length === 0) return null;
 
   /** 麵包屑列左側的 Sidebar 切換：手機版一律顯示；桌面版在 Sidebar 收合時顯示以利展開，必要時可改為永遠顯示以支援收合 */
-  const showMenuButton = isMobile || !sidebarOpen;
+  const showMenuButton = (isMobile || !sidebarOpen) && !hideBoardSidebar;
   const menuButton = showMenuButton ? (
     <Button
       variant="ghost"

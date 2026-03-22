@@ -89,7 +89,7 @@ export function useInboxBadge(companyId: string | null | undefined) {
 
   const { data: heartbeatRuns = [] } = useQuery({
     queryKey: queryKeys.heartbeats(companyId!),
-    queryFn: () => heartbeatsApi.list(companyId!),
+    queryFn: async () => (await heartbeatsApi.list(companyId!)).runs,
     enabled: !!companyId,
   });
 

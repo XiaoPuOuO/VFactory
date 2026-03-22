@@ -9,7 +9,12 @@ import {
   createAgentKeySchema,
   createAgentHireSchema,
   createAgentSchema,
+  decodeHeartbeatRunCursor,
+  heartbeatRunsListQuerySchema,
+  heartbeatRunsQualityQuerySchema,
   isUuidLike,
+  parseHeartbeatRunsListInvocationSources,
+  parseHeartbeatRunsListStatuses,
   resetAgentSessionSchema,
   testAdapterEnvironmentSchema,
   updateAgentPermissionsSchema,
@@ -27,9 +32,11 @@ import {
   companyService,
   costService,
   heartbeatService,
+  runQualityService,
   issueApprovalService,
   issueService,
   logActivity,
+  scheduleCompanyNotificationEvent,
   secretService,
 } from "../services/index.js";
 import { runApprovalApprovedFollowUp } from "../services/approval-follow-up.js";
@@ -38,6 +45,7 @@ import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { computeAutoPauseFields } from "../lib/auto-pause.js";
 import { assertBoard, assertCompanyAccess, getActorInfo, hasCompanyViewAll } from "./authz.js";
 import { assertCompanyPermission } from "./company-permission.js";
+import { assertCompanyIntegrationScope } from "./integration-scope.js";
 import { findServerAdapter, listAdapterModels } from "../adapters/index.js";
 import { testCloudConnection, isCloudAdapter } from "../adapters/cloud-connection-test.js";
 import { redactEventPayload } from "../redaction.js";
@@ -122,6 +130,26 @@ export function agentRoutes(db: Db) {
     return allowedByGrant || canCreateAgents(actorAgent);
   }
 
+  /** Board、本人或 CEO 可見 `projects:manage` grant 狀態（供設定頁開關）。 */
+  async function shouldExposePrincipalProjectFlags(req: Request, targetAgentId: string): Promise<boolean> {
+    if (req.actor.type === "board") return true;
+    if (req.actor.type !== "agent" || !req.actor.agentId) return false;
+    if (req.actor.agentId === targetAgentId) return true;
+    const actorAgent = await svc.getById(req.actor.agentId);
+    return actorAgent?.role === "ceo";
+  }
+
+  async function withPrincipalPermissionFields<A extends { id: string; companyId: string }>(
+    req: Request,
+    agent: A,
+  ): Promise<A & { canManageProjects?: boolean }> {
+    if (!(await shouldExposePrincipalProjectFlags(req, agent.id))) {
+      return agent;
+    }
+    const canManageProjects = await access.hasPermission(agent.companyId, "agent", agent.id, "projects:manage");
+    return { ...agent, canManageProjects };
+  }
+
   async function assertCanUpdateAgent(req: Request, targetAgent: { id: string; companyId: string }) {
     await assertCompanyAccess(req, targetAgent.companyId, db);
     if (req.actor.type === "banned") throw forbidden("Account banned");
@@ -156,6 +184,9 @@ export function agentRoutes(db: Db) {
       return requestedCompanyId;
     }
     if (req.actor.type === "agent" && req.actor.companyId) {
+      return req.actor.companyId;
+    }
+    if (req.actor.type === "service" && req.actor.companyId) {
       return req.actor.companyId;
     }
     return null;
@@ -541,7 +572,7 @@ export function agentRoutes(db: Db) {
 
   router.get("/companies/:companyId/adapters/:type/models", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "agents:read");
     const type = req.params.type as string;
     const models = await listAdapterModels(type);
     res.json(models);
@@ -591,7 +622,7 @@ export function agentRoutes(db: Db) {
 
   router.get("/companies/:companyId/agents", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "agents:read");
     const result = await svc.list(companyId);
     const withPause = await Promise.all(result.map((agent) => withAutoPauseFields(agent)));
     const canReadConfigs = await actorCanReadConfigurationsForCompany(req, companyId);
@@ -604,7 +635,7 @@ export function agentRoutes(db: Db) {
 
   router.get("/companies/:companyId/org", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "agents:read");
     const tree = await svc.orgForCompany(companyId);
     const limitExceeded = await costs.isCompanyLimitExceeded(companyId);
     const companyReason = limitExceeded.reason;
@@ -630,7 +661,8 @@ export function agentRoutes(db: Db) {
       return;
     }
     const chainOfCommand = await svc.getChainOfCommand(agent.id);
-    res.json({ ...agent, chainOfCommand });
+    const enriched = await withPrincipalPermissionFields(req, agent);
+    res.json({ ...enriched, chainOfCommand });
   });
 
   /** Agent 寫入一筆跨聊天記憶（僅該 agent 的 Bearer 可呼叫）。 */
@@ -665,6 +697,10 @@ export function agentRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     let agentId = req.params.agentId as string;
     await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot read agent memories" });
+      return;
+    }
     if (agentId === "me") {
       if (req.actor.type !== "agent" || !req.actor.agentId) {
         res.status(401).json({ error: "Agent authentication required" });
@@ -691,6 +727,10 @@ export function agentRoutes(db: Db) {
     let agentId = req.params.agentId as string;
     const memoryId = req.params.memoryId as string;
     await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot delete agent memories" });
+      return;
+    }
     if (agentId === "me") {
       if (req.actor.type !== "agent" || !req.actor.agentId) {
         res.status(401).json({ error: "Agent authentication required" });
@@ -710,6 +750,10 @@ export function agentRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     let agentId = req.params.agentId as string;
     await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot delete agent memories" });
+      return;
+    }
     if (agentId === "me") {
       if (req.actor.type !== "agent" || !req.actor.agentId) {
         res.status(401).json({ error: "Agent authentication required" });
@@ -734,18 +778,21 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
-    await assertCompanyAccess(req, agent.companyId, db);
+    await assertCompanyIntegrationScope(db, req, agent.companyId, "agents:read");
     const withPause = await withAutoPauseFields(agent);
     if (req.actor.type === "agent" && req.actor.agentId !== id) {
       const canRead = await actorCanReadConfigurationsForCompany(req, agent.companyId);
       if (!canRead) {
         const chainOfCommand = await svc.getChainOfCommand(agent.id);
-        res.json({ ...redactForRestrictedAgentView(withPause), chainOfCommand });
+        const redacted = redactForRestrictedAgentView(withPause);
+        const enriched = redacted ? await withPrincipalPermissionFields(req, redacted) : redacted;
+        res.json({ ...enriched, chainOfCommand });
         return;
       }
     }
     const chainOfCommand = await svc.getChainOfCommand(agent.id);
-    res.json({ ...withPause, chainOfCommand });
+    const enriched = await withPrincipalPermissionFields(req, withPause);
+    res.json({ ...enriched, chainOfCommand });
   });
 
   router.get("/agents/:id/configuration", async (req, res) => {
@@ -1024,6 +1071,13 @@ export function agentRoutes(db: Db) {
         details: { type: approval.type, linkedAgentId: agent.id },
       });
 
+      scheduleCompanyNotificationEvent(db, companyId, "approval.created", {
+        approvalId: approval.id,
+        type: approval.type,
+        status: approval.status,
+        linkedAgentId: agent.id,
+      });
+
       const hirePolicy = await hireApprovalPolicies.getForCompany(companyId, "hire_agent");
       const budgetForPolicy =
         typeof normalizedHireInput.budgetMonthlyCents === "number"
@@ -1144,7 +1198,32 @@ export function agentRoutes(db: Db) {
       }
     }
 
-    const agent = await svc.updatePermissions(id, req.body);
+    const { canCreateAgents, canManageProjects } = req.body;
+
+    if (canCreateAgents !== undefined) {
+      const afterCreate = await svc.updatePermissions(id, { canCreateAgents });
+      if (!afterCreate) {
+        res.status(404).json({ error: "Agent not found" });
+        return;
+      }
+    }
+
+    if (canManageProjects !== undefined) {
+      const current = await svc.getById(id);
+      if (!current) {
+        res.status(404).json({ error: "Agent not found" });
+        return;
+      }
+      const grants = await access.listPrincipalGrants(current.companyId, "agent", id);
+      const without = grants.filter((g) => g.permissionKey !== "projects:manage");
+      const nextGrants = canManageProjects
+        ? [...without, { permissionKey: "projects:manage" as const }]
+        : without;
+      const grantedByUserId = req.actor.type === "board" ? req.actor.userId ?? null : null;
+      await access.setPrincipalGrants(current.companyId, "agent", id, nextGrants, grantedByUserId);
+    }
+
+    const agent = await svc.getById(id);
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
       return;
@@ -1163,7 +1242,7 @@ export function agentRoutes(db: Db) {
       details: req.body,
     });
 
-    res.json(agent);
+    res.json(await withPrincipalPermissionFields(req, agent));
   });
 
   router.patch("/agents/:id/instructions-path", validate(updateAgentInstructionsPathSchema), async (req, res) => {
@@ -1632,19 +1711,90 @@ export function agentRoutes(db: Db) {
     res.json(result);
   });
 
+  router.get("/companies/:companyId/heartbeat-runs/quality-summary", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyIntegrationScope(db, req, companyId, "agents:read");
+    const parsed = heartbeatRunsQualityQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid query", details: parsed.error.flatten() });
+      return;
+    }
+    const { from, to } = parsed.data;
+    if (from.getTime() > to.getTime()) {
+      res.status(400).json({ error: "from must be <= to" });
+      return;
+    }
+    const rq = runQualityService(db);
+    const summary = await rq.qualitySummary(companyId, from, to);
+    res.json(summary);
+  });
+
+  router.get("/companies/:companyId/heartbeat-runs/error-clusters", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyIntegrationScope(db, req, companyId, "agents:read");
+    const parsed = heartbeatRunsQualityQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid query", details: parsed.error.flatten() });
+      return;
+    }
+    const { from, to } = parsed.data;
+    if (from.getTime() > to.getTime()) {
+      res.status(400).json({ error: "from must be <= to" });
+      return;
+    }
+    const rq = runQualityService(db);
+    const clusters = await rq.errorClusters(companyId, from, to);
+    res.json(clusters);
+  });
+
   router.get("/companies/:companyId/heartbeat-runs", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
-    const agentId = req.query.agentId as string | undefined;
-    const limitParam = req.query.limit as string | undefined;
-    const limit = limitParam ? Math.max(1, Math.min(1000, parseInt(limitParam, 10) || 200)) : undefined;
-    const runs = await heartbeat.list(companyId, agentId, limit);
+    await assertCompanyIntegrationScope(db, req, companyId, "agents:read");
+    const parsed = heartbeatRunsListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid query", details: parsed.error.flatten() });
+      return;
+    }
+    const q = parsed.data;
+    const rawStatus = typeof req.query.status === "string" ? req.query.status : undefined;
+    const rawInv = typeof req.query.invocationSource === "string" ? req.query.invocationSource : undefined;
+    const statuses = parseHeartbeatRunsListStatuses(rawStatus);
+    const invocationSources = parseHeartbeatRunsListInvocationSources(rawInv);
+    if (rawStatus && !statuses) {
+      res.status(400).json({ error: "Invalid status filter" });
+      return;
+    }
+    if (rawInv && !invocationSources) {
+      res.status(400).json({ error: "Invalid invocationSource filter" });
+      return;
+    }
+    let cursorCreatedAt: Date | undefined;
+    let cursorId: string | undefined;
+    if (q.cursor) {
+      const c = decodeHeartbeatRunCursor(q.cursor);
+      if (!c) {
+        res.status(400).json({ error: "Invalid cursor" });
+        return;
+      }
+      cursorCreatedAt = c.createdAt;
+      cursorId = c.id;
+    }
+    const runs = await heartbeat.list(companyId, {
+      agentId: q.agentId,
+      limit: q.limit,
+      startedAfter: q.startedAfter,
+      endedBefore: q.endedBefore,
+      statuses,
+      invocationSources,
+      cursorCreatedAt,
+      cursorId,
+    });
     res.json(runs);
   });
 
   router.get("/companies/:companyId/live-runs", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "agents:read");
 
     const minCountParam = req.query.minCount as string | undefined;
     const minCount = minCountParam ? Math.max(0, Math.min(20, parseInt(minCountParam, 10) || 0)) : 0;
@@ -1707,7 +1857,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Heartbeat run not found" });
       return;
     }
-    await assertCompanyAccess(req, run.companyId, db);
+    await assertCompanyIntegrationScope(db, req, run.companyId, "agents:read");
     res.json(redactCurrentUserValue(run));
   });
 
@@ -1736,6 +1886,27 @@ export function agentRoutes(db: Db) {
     res.json(run);
   });
 
+  router.post("/heartbeat-runs/:runId/retry-wake", async (req, res) => {
+    const runId = req.params.runId as string;
+    const existingRun = await heartbeat.getRun(runId);
+    if (!existingRun) {
+      res.status(404).json({ error: "Heartbeat run not found" });
+      return;
+    }
+    await assertCompanyPermission(db, req, existingRun.companyId, "agents:admin");
+    const newRun = await heartbeat.retryWakeFromRun(runId);
+    await logActivity(db, {
+      companyId: existingRun.companyId,
+      actorType: "user",
+      actorId: req.actor.userId ?? "board",
+      action: "heartbeat.retry_wake",
+      entityType: "heartbeat_run",
+      entityId: existingRun.id,
+      details: { agentId: existingRun.agentId, newRunId: newRun?.id ?? null },
+    });
+    res.json({ runId: newRun?.id ?? null });
+  });
+
   router.get("/heartbeat-runs/:runId/events", async (req, res) => {
     const runId = req.params.runId as string;
     const run = await heartbeat.getRun(runId);
@@ -1743,7 +1914,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Heartbeat run not found" });
       return;
     }
-    await assertCompanyAccess(req, run.companyId, db);
+    await assertCompanyIntegrationScope(db, req, run.companyId, "agents:read");
 
     const afterSeq = Number(req.query.afterSeq ?? 0);
     const limit = Number(req.query.limit ?? 200);
@@ -1764,7 +1935,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Heartbeat run not found" });
       return;
     }
-    await assertCompanyAccess(req, run.companyId, db);
+    await assertCompanyIntegrationScope(db, req, run.companyId, "agents:read");
 
     const offset = Number(req.query.offset ?? 0);
     const limitBytes = Number(req.query.limitBytes ?? 256000);
@@ -1785,7 +1956,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    await assertCompanyAccess(req, issue.companyId, db);
+    await assertCompanyIntegrationScope(db, req, issue.companyId, "agents:read");
 
     const liveRuns = await db
       .select({
@@ -1823,7 +1994,7 @@ export function agentRoutes(db: Db) {
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    await assertCompanyAccess(req, issue.companyId, db);
+    await assertCompanyIntegrationScope(db, req, issue.companyId, "issues:read");
 
     let run = issue.executionRunId ? await heartbeat.getRun(issue.executionRunId) : null;
     if (run && run.status !== "queued" && run.status !== "running") {

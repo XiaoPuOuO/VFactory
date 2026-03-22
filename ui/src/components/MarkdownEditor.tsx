@@ -35,7 +35,7 @@ import { buildProjectMentionHref, parseProjectMentionHref } from "@paperclipai/s
 export interface MentionOption {
   id: string;
   name: string;
-  kind?: "agent" | "project";
+  kind?: "agent" | "project" | "user";
   projectId?: string;
   projectColor?: string | null;
 }

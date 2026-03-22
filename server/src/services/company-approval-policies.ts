@@ -22,9 +22,61 @@ async function selectPolicyForCompany(
 }
 
 export function companyApprovalPolicyService(db: Db) {
+  async function upsertPolicy(
+    companyId: string,
+    input: {
+      approvalType: string;
+      enabled: boolean;
+      maxBudgetMonthlyCents: number | null;
+    },
+  ): Promise<CompanyApprovalPolicyRow> {
+    const existing = await db
+      .select()
+      .from(companyApprovalPolicies)
+      .where(
+        and(
+          eq(companyApprovalPolicies.companyId, companyId),
+          eq(companyApprovalPolicies.approvalType, input.approvalType),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    const now = new Date();
+    if (existing) {
+      const rows = await db
+        .update(companyApprovalPolicies)
+        .set({
+          enabled: input.enabled,
+          maxBudgetMonthlyCents: input.maxBudgetMonthlyCents,
+          updatedAt: now,
+        })
+        .where(eq(companyApprovalPolicies.id, existing.id))
+        .returning();
+      return rows[0]!;
+    }
+    const rows = await db
+      .insert(companyApprovalPolicies)
+      .values({
+        companyId,
+        approvalType: input.approvalType,
+        enabled: input.enabled,
+        maxBudgetMonthlyCents: input.maxBudgetMonthlyCents,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    return rows[0]!;
+  }
+
   return {
     async getForCompany(companyId: string, approvalType: string = "hire_agent") {
       return selectPolicyForCompany(db, companyId, approvalType);
+    },
+
+    async listAllForCompany(companyId: string) {
+      return db
+        .select()
+        .from(companyApprovalPolicies)
+        .where(eq(companyApprovalPolicies.companyId, companyId));
     },
 
     /**
@@ -50,36 +102,17 @@ export function companyApprovalPolicyService(db: Db) {
       };
     },
 
+    upsertPolicy,
+
     async upsertHirePolicy(
       companyId: string,
       input: { enabled: boolean; maxBudgetMonthlyCents: number | null },
     ): Promise<CompanyApprovalPolicyRow> {
-      const existing = await selectPolicyForCompany(db, companyId, "hire_agent");
-      const now = new Date();
-      if (existing) {
-        const rows = await db
-          .update(companyApprovalPolicies)
-          .set({
-            enabled: input.enabled,
-            maxBudgetMonthlyCents: input.maxBudgetMonthlyCents,
-            updatedAt: now,
-          })
-          .where(eq(companyApprovalPolicies.id, existing.id))
-          .returning();
-        return rows[0]!;
-      }
-      const rows = await db
-        .insert(companyApprovalPolicies)
-        .values({
-          companyId,
-          approvalType: "hire_agent",
-          enabled: input.enabled,
-          maxBudgetMonthlyCents: input.maxBudgetMonthlyCents,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning();
-      return rows[0]!;
+      return upsertPolicy(companyId, {
+        approvalType: "hire_agent",
+        enabled: input.enabled,
+        maxBudgetMonthlyCents: input.maxBudgetMonthlyCents,
+      });
     },
   };
 }

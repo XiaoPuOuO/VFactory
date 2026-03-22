@@ -6,6 +6,16 @@ export type ScheduleKind = "cron" | "once" | "ranges";
 /** 日期區間視窗（該時區的「日」YYYY-MM-DD） */
 export type ScheduleWindow = { start: string; end: string };
 
+/** GET .../schedules/conflicts 單筆（同 agent 兩排程未來觸發過近） */
+export type ScheduleConflictRow = {
+  agentId: string;
+  scheduleIdA: string;
+  scheduleIdB: string;
+  nextFireAtA: string;
+  nextFireAtB: string;
+  deltaSec: number;
+};
+
 export type AgentSchedule = {
   id: string;
   companyId: string;

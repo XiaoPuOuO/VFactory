@@ -1,0 +1,412 @@
+# Change Log：2026-03-23 02:11
+
+## 變更總覽（繁體中文）
+
+本次工作樹包含 **285 個已追蹤檔案的差異**（相對於上次提交），統計為 **6365 行新增、26692 行刪除**；另有 **76 個未追蹤路徑**（新檔案或新目錄）。功能面向大致如下：
+
+- **資料層**：新增遷移 `0034`～`0039` 及對應 Drizzle meta snapshot；擴充 schema（公司自動化規則、通知目的地、Webhook 端點、整合 API 金鑰、Issue 儲存視圖、Issue 訂閱、SCIM 佈建金鑰、使用者通知偏好等）。
+- **共用套件（`packages/shared`）**：新增維護模式常數／工具、多組型別與 Zod 驗證器（通知、Webhook、heartbeat 品質、Issue 儲存視圖、整合權杖、自動化規則等）；擴充 API 常數與匯出。
+- **伺服器**：新設 SCIM 相關中介層與路由、整合權杖／範圍、公司通知目的地與 Webhook、Issue 儲存視圖、可提及使用者（mentionables）等；新增通知派發、執行品質、額度觸發通知等服務；調整多數既有路由與服務以配合新欄位與匯出（含 CSV 參數工具）；Express 型別擴充。
+- **CLI**：`db-backup`／`heartbeat-run`／`company` 等指令調整；**新增** `db-restore`；`index` 註冊新指令；測試小幅更新。
+- **轉接器**：多個 `execute.ts` 對執行／錯誤處理做一致化或小修正；`adapter-utils` 的 `server-utils` 擴充。
+- **前端（UI）**：React Query 持久化、離線橫幅、快捷鍵對話框、Issue 清單大量操作與儲存視圖選單；公司設定內整合代幣／通知／Webhook 區塊；新頁面（公司自動化、合規保留、執行品質）；多頁版面與樣式、i18n（en／zh-TW）大量更新。
+- **專案結構清理**：移除大量 `doc/`、`docs/`、`documents/backup.md`、Docker 與 compose、部分 GitHub Actions、`.changeset`、根目錄 `AGENTS.md`／`CONTRIBUTING.md`、舊版 `skills/` 與 `.agents`／`.claude` 內部分技能、E2E Playwright 設定與範例 spec、`releases/` 下檔案等（詳見下方刪除清單）。
+
+## 逐行程式差異（已追蹤檔案）
+
+已追蹤檔案之 **完整 unified diff**（約 3.8 萬行、1.4MB）已寫入同資料夾：
+
+- `2026-03-23-02-11_ChangeLog-unified.diff`
+
+請以該檔對照 **每一行** 的增刪與上下文；本 Markdown 檔提供分類索引與 `git diff --stat` 全文。
+
+---
+
+## [Created] 未追蹤（新增）檔案與目錄說明
+
+| 路徑 | 說明 |
+|------|------|
+| `cli/src/commands/db-restore.ts` | 資料庫還原 CLI 指令實作。 |
+| `packages/db/src/migrations/0034_*.sql`～`0039_*.sql` | 六個 SQL 遷移檔。 |
+| `packages/db/src/migrations/meta/0034_snapshot.json`～`0039_snapshot.json` | 各遷移對應之 Drizzle schema 快照。 |
+| `packages/db/src/schema/company_automation_rules.ts` | 公司自動化規則資料表 schema。 |
+| `packages/db/src/schema/company_notification_destinations.ts` | 公司通知目的地 schema。 |
+| `packages/db/src/schema/company_webhook_endpoints.ts` | 公司 Webhook 端點 schema。 |
+| `packages/db/src/schema/integration_api_keys.ts` | 整合 API 金鑰 schema。 |
+| `packages/db/src/schema/issue_saved_views.ts` | Issue 儲存視圖 schema。 |
+| `packages/db/src/schema/issue_subscriptions.ts` | Issue 訂閱 schema。 |
+| `packages/db/src/schema/scim_provisioning_keys.ts` | SCIM 佈建金鑰 schema。 |
+| `packages/db/src/schema/user_notification_preferences.ts` | 使用者通知偏好 schema。 |
+| `packages/shared/src/maintenance.ts` | 維護模式相關共用邏輯／常數。 |
+| `packages/shared/src/types/company-notification-destination.ts` | 通知目的地型別。 |
+| `packages/shared/src/types/company-webhook.ts` | 公司 Webhook 型別。 |
+| `packages/shared/src/types/heartbeat-quality.ts` | Heartbeat 品質相關型別。 |
+| `packages/shared/src/types/issue-saved-view.ts` | Issue 儲存視圖型別。 |
+| `packages/shared/src/validators/automation-rules.ts` | 自動化規則驗證。 |
+| `packages/shared/src/validators/company-notification-destination.ts` | 通知目的地驗證。 |
+| `packages/shared/src/validators/company-webhook.ts` | Webhook 驗證。 |
+| `packages/shared/src/validators/heartbeat-runs.ts` | Heartbeat 執行驗證。 |
+| `packages/shared/src/validators/integration-tokens.ts` | 整合權杖驗證。 |
+| `packages/shared/src/validators/issue-saved-view.ts` | 儲存視圖驗證。 |
+| `scripts/restore-db.sh` | 還原資料庫之 shell 輔助腳本。 |
+| `server/src/__tests__/find-mentioned-users.test.ts` | 提及使用者解析之測試。 |
+| `server/src/__tests__/run-error-normalize.test.ts` | 執行錯誤正規化之測試。 |
+| `server/src/lib/export-csv-params.ts` | CSV 匯出查詢參數處理。 |
+| `server/src/middleware/scim-auth.ts` | SCIM 請求驗證中介層。 |
+| `server/src/routes/company-notification-destinations.ts` | 通知目的地 REST 路由。 |
+| `server/src/routes/company-webhooks.ts` | 公司 Webhook 路由。 |
+| `server/src/routes/integration-scope.ts` | 整合範圍相關路由。 |
+| `server/src/routes/integration-tokens.ts` | 整合權杖路由。 |
+| `server/src/routes/issue-saved-views.ts` | Issue 儲存視圖路由。 |
+| `server/src/routes/mentionables.ts` | 可提及使用者路由。 |
+| `server/src/routes/scim-provisioning-keys.ts` | SCIM 佈建金鑰路由。 |
+| `server/src/routes/scim.ts` | SCIM 協定端點路由。 |
+| `server/src/services/automation-rules.ts` | 自動化規則服務。 |
+| `server/src/services/company-notification-dispatch.ts` | 公司通知派發。 |
+| `server/src/services/company-webhooks.ts` | Webhook 服務。 |
+| `server/src/services/issue-comment-notify.ts` | Issue 留言通知。 |
+| `server/src/services/limit-breach-notify.ts` | 額度／限制觸發通知。 |
+| `server/src/services/notification-destinations.ts` | 通知目的地服務。 |
+| `server/src/services/run-quality.ts` | 執行品質服務。 |
+| `server/src/utils/run-error-normalize.ts` | 將執行錯誤正規化為一致格式。 |
+| `ui/src/api/companyNotificationDestinations.ts` | 通知目的地 API 用戶端。 |
+| `ui/src/api/companyWebhooks.ts` | Webhook API 用戶端。 |
+| `ui/src/api/integrationTokens.ts` | 整合代幣 API 用戶端。 |
+| `ui/src/api/issue-saved-views.ts` | 儲存視圖 API 用戶端。 |
+| `ui/src/api/mentionables.ts` | 可提及使用者 API 用戶端。 |
+| `ui/src/components/CompanyIntegrationTokensSection.tsx` | 公司整合代幣設定區塊。 |
+| `ui/src/components/CompanyNotificationDestinationsSection.tsx` | 通知目的地設定區塊。 |
+| `ui/src/components/CompanyWebhooksSection.tsx` | Webhook 設定區塊。 |
+| `ui/src/components/IssuesBulkBar.tsx` | Issue 清單大量操作列。 |
+| `ui/src/components/IssuesSavedViewsMenu.tsx` | Issue 儲存視圖選單。 |
+| `ui/src/components/KeyboardShortcutsDialog.tsx` | 快捷鍵說明對話框。 |
+| `ui/src/components/OfflineBanner.tsx` | 離線狀態橫幅。 |
+| `ui/src/lib/emptyCollections.ts` | 空集合輔助。 |
+| `ui/src/lib/issues-list-selection.test.ts` | Issue 清單選取邏輯測試。 |
+| `ui/src/lib/issues-list-selection.ts` | Issue 清單選取狀態邏輯。 |
+| `ui/src/lib/queryClient.ts` | React Query 用戶端設定。 |
+| `ui/src/lib/react-query-persist.ts` | React Query 持久化設定。 |
+| `ui/src/pages/CompanyAutomation.css` / `CompanyAutomation.tsx` | 公司自動化頁。 |
+| `ui/src/pages/ComplianceRetentionSettings.css` / `ComplianceRetentionSettings.tsx` | 合規／保留設定頁。 |
+| `ui/src/pages/RunQuality.css` / `RunQuality.tsx` | 執行品質頁。 |
+
+---
+
+## [Deleted] 已刪除之已追蹤檔案（依 `git diff --name-status` 之 `D`）
+
+下列路徑於索引中標記為刪除（內容自版本庫移除；實際逐行差異見 `ChangeLog-unified.diff`）：
+
+- `.agents/skills/pr-report/`（含 `SKILL.md`、`assets/html-report-starter.html`、`references/style-guide.md`）
+- `.agents/skills/release-changelog/SKILL.md`、`.agents/skills/release/SKILL.md`
+- `.changeset/README.md`、`.changeset/config.json`
+- `.claude/skills/design-guide/`（含 `SKILL.md`、`references/component-index.md`）、`.claude/skills/paperclip`
+- `.dockerignore`、`.mailmap`
+- `.github/workflows/`：`e2e.yml`、`pr-policy.yml`、`pr-verify.yml`、`refresh-lockfile.yml`、`release.yml`
+- 根目錄：`AGENTS.md`、`CONTRIBUTING.md`、`Dockerfile`、`Dockerfile.onboard-smoke`
+- `doc/` 下全部已列於 diff 之 Markdown、規格、計畫與 `doc/assets/` 圖檔／SVG／JPG／PNG
+- `docker-compose.quickstart.yml`、`docker-compose.yml`、`docker/openclaw-smoke/`（`Dockerfile`、`server.mjs`）
+- `docs/` 下整棵公開文件樹（adapters、api、cli、deploy、guides、images、plugins、specs、start、troubleshooting、`docs.json`、`favicon.svg`、`agents-runtime.md`）
+- `documents/backup.md`
+- `releases/.gitkeep`、`releases/v0.2.7.md`、`releases/v0.3.0.md`
+- `skills/` 下 `create-agent-adapter`、`paperclip`、`paperclip-create-agent`、`para-memory-files` 等 SKILL 與 references
+- `tests/e2e/onboarding.spec.ts`、`tests/e2e/playwright.config.ts`
+
+---
+
+## [Modified] 已修改檔案之統計（完整 `git diff --stat`）
+
+```
+ .agents/skills/pr-report/SKILL.md                  |  202 ---
+ .../pr-report/assets/html-report-starter.html      |  426 -----
+ .agents/skills/pr-report/references/style-guide.md |  149 --
+ .agents/skills/release-changelog/SKILL.md          |  178 --
+ .agents/skills/release/SKILL.md                    |  261 ---
+ .changeset/README.md                               |    8 -
+ .changeset/config.json                             |   11 -
+ .claude/skills/design-guide/SKILL.md               |  351 ----
+ .../design-guide/references/component-index.md     |  323 ----
+ .claude/skills/paperclip                           |    1 -
+ .dockerignore                                      |   10 -
+ .github/workflows/e2e.yml                          |   44 -
+ .github/workflows/pr-policy.yml                    |   49 -
+ .github/workflows/pr-verify.yml                    |   42 -
+ .github/workflows/refresh-lockfile.yml             |   81 -
+ .github/workflows/release.yml                      |  132 --
+ .gitignore                                         |    3 +-
+ .mailmap                                           |    1 -
+ AGENTS.md                                          |  142 --
+ CONTRIBUTING.md                                    |   41 -
+ Dockerfile                                         |   56 -
+ Dockerfile.onboard-smoke                           |   40 -
+ cli/src/__tests__/company-delete.test.ts           |    4 +
+ cli/src/commands/client/company.ts                 |   12 +-
+ cli/src/commands/db-backup.ts                      |    2 +-
+ cli/src/commands/heartbeat-run.ts                  |    5 +-
+ cli/src/index.ts                                   |   22 +
+ doc/CLI.md                                         |  195 ---
+ doc/CLIPHUB.md                                     |  336 ----
+ doc/DATABASE.md                                    |  178 --
+ doc/DEPLOYMENT-MODES.md                            |  111 --
+ doc/DEVELOPING.md                                  |  441 -----
+ doc/DOCKER.md                                      |  128 --
+ doc/GOAL.md                                        |   55 -
+ doc/MULTI-TENANT-AND-USERS.md                      |  123 --
+ doc/OPENCLAW_ONBOARDING.md                         |   94 --
+ doc/PRODUCT.md                                     |   96 --
+ doc/PUBLISHING.md                                  |  121 --
+ doc/README-draft.md                                |   78 -
+ doc/RELEASING.md                                   |  422 -----
+ doc/SPEC-implementation.md                         |  928 -----------
+ doc/SPEC.md                                        |  525 ------
+ doc/TASKS-mcp.md                                   |  567 -------
+ doc/TASKS.md                                       |  407 -----
+ doc/assets/avatars/dark-circle.png                 |  Bin 35520 -> 0 bytes
+ doc/assets/avatars/dark-circle.svg                 |    4 -
+ doc/assets/avatars/dark.png                        |  Bin 27446 -> 0 bytes
+ doc/assets/avatars/dark.svg                        |    4 -
+ doc/assets/avatars/gradient-cool.png               |  Bin 37623 -> 0 bytes
+ doc/assets/avatars/gradient-cool.svg               |   10 -
+ doc/assets/avatars/gradient-warm.png               |  Bin 36607 -> 0 bytes
+ doc/assets/avatars/gradient-warm.svg               |   10 -
+ doc/assets/avatars/light.png                       |  Bin 29137 -> 0 bytes
+ doc/assets/avatars/light.svg                       |    5 -
+ doc/assets/avatars/zinc.png                        |  Bin 27949 -> 0 bytes
+ doc/assets/avatars/zinc.svg                        |    4 -
+ doc/assets/footer.jpg                              |  Bin 484526 -> 0 bytes
+ doc/assets/header.png                              |  Bin 736570 -> 0 bytes
+ doc/assets/logos/bash.svg                          |    5 -
+ doc/assets/logos/claude.svg                        |    3 -
+ doc/assets/logos/codex.svg                         |    4 -
+ doc/assets/logos/cursor.svg                        |    4 -
+ doc/assets/logos/http.svg                          |    7 -
+ doc/assets/logos/openclaw.svg                      |   17 -
+ doc/execution-workspace.md                         |   26 -
+ doc/experimental/issue-worktree-support.md         |   62 -
+ doc/plan/humans-and-permissions-implementation.md  |  643 --------
+ doc/plan/humans-and-permissions.md                 |  421 -----
+ doc/plans/agent-authentication-implementation.md   |   72 -
+ doc/plans/agent-authentication.md                  |  222 ---
+ ...agent-chat-ui-and-issue-backed-conversations.md |  329 ----
+ doc/plans/ceo-agent-creation-and-hiring.md         |  389 -----
+ doc/plans/cursor-cloud-adapter.md                  |  476 ------
+ doc/plans/deployment-auth-mode-consolidation.md    |  226 ---
+ doc/plans/governance-v2.md                         |   30 -
+ doc/plans/issue-run-orchestration-plan.md          |  141 --
+ doc/plans/module-system.md                         |  685 --------
+ doc/plans/storage-system-implementation.md         |  206 ---
+ doc/plans/workspace-strategy-and-git-worktrees.md  | 1335 ---------------
+ doc/plugins/PLUGIN_SPEC.md                         | 1617 ------------------
+ doc/plugins/ideas-from-opencode.md                 | 1738 --------------------
+ doc/spec/agent-runs.md                             |  756 ---------
+ doc/spec/agents-runtime.md                         |  172 --
+ doc/spec/ui.md                                     | 1005 -----------
+ docker-compose.quickstart.yml                      |   18 -
+ docker-compose.yml                                 |   38 -
+ docker/openclaw-smoke/Dockerfile                   |    8 -
+ docker/openclaw-smoke/server.mjs                   |  103 --
+ docs/adapters/claude-local.md                      |   65 -
+ docs/adapters/codex-local.md                       |   48 -
+ docs/adapters/creating-an-adapter.md               |  107 --
+ docs/adapters/gemini-local.md                      |   45 -
+ docs/adapters/http.md                              |   51 -
+ docs/adapters/overview.md                          |   61 -
+ docs/adapters/process.md                           |   50 -
+ docs/agents-runtime.md                             |  175 --
+ docs/api/activity.md                               |   46 -
+ docs/api/agents.md                                 |  145 --
+ docs/api/approvals.md                              |  116 --
+ docs/api/authentication.md                         |   56 -
+ docs/api/chat.md                                   |  107 --
+ docs/api/companies.md                              |  116 --
+ docs/api/costs.md                                  |  114 --
+ docs/api/dashboard.md                              |   30 -
+ docs/api/goals-and-projects.md                     |  146 --
+ docs/api/governance.md                             |   50 -
+ docs/api/issues.md                                 |  141 --
+ docs/api/overview.md                               |   62 -
+ docs/api/secrets.md                                |   55 -
+ docs/cli/control-plane-commands.md                 |  109 --
+ docs/cli/overview.md                               |   67 -
+ docs/cli/setup-commands.md                         |  117 --
+ docs/deploy/database.md                            |   77 -
+ docs/deploy/deployment-modes.md                    |   85 -
+ docs/deploy/docker.md                              |   69 -
+ docs/deploy/environment-variables.md               |   50 -
+ docs/deploy/local-development.md                   |   98 --
+ docs/deploy/overview.md                            |   55 -
+ docs/deploy/secrets.md                             |   83 -
+ docs/deploy/storage.md                             |   39 -
+ docs/deploy/tailscale-private-access.md            |   77 -
+ docs/docs.json                                     |  142 --
+ docs/favicon.svg                                   |    4 -
+ docs/guides/agent-developer/chat.md                |  107 --
+ .../agent-developer/comments-and-communication.md  |   57 -
+ docs/guides/agent-developer/cost-reporting.md      |   52 -
+ docs/guides/agent-developer/handling-approvals.md  |   65 -
+ docs/guides/agent-developer/heartbeat-protocol.md  |  108 --
+ docs/guides/agent-developer/how-agents-work.md     |   52 -
+ docs/guides/agent-developer/task-workflow.md       |  104 --
+ docs/guides/agent-developer/writing-a-skill.md     |   60 -
+ docs/guides/board-operator/activity-log.md         |   55 -
+ docs/guides/board-operator/approvals.md            |   62 -
+ docs/guides/board-operator/costs-and-budgets.md    |  102 --
+ docs/guides/board-operator/creating-a-company.md   |   55 -
+ docs/guides/board-operator/dashboard.md            |   36 -
+ docs/guides/board-operator/managing-agents.md      |   76 -
+ docs/guides/board-operator/managing-tasks.md       |   67 -
+ docs/guides/board-operator/org-structure.md        |   37 -
+ docs/guides/openclaw-docker-setup.md               |  349 ----
+ docs/images/logo-dark.svg                          |    6 -
+ docs/images/logo-light.svg                         |    6 -
+ docs/plugins/built-in-plugins.md                   |   32 -
+ docs/specs/agent-config-ui.md                      |  286 ----
+ docs/specs/cliphub-plan.md                         |  524 ------
+ docs/start/architecture.md                         |   98 --
+ docs/start/core-concepts.md                        |   75 -
+ docs/start/quickstart.md                           |   50 -
+ docs/start/what-is-paperclip.md                    |   39 -
+ .../troubleshooting/heartbeat-and-model-billing.md |  121 --
+ documents/backup.md                                |  108 --
+ package.json                                       |    1 +
+ packages/adapter-utils/src/server-utils.ts         |   60 +
+ .../adapters/claude-local/src/server/execute.ts    |    8 +-
+ .../adapters/codex-local/src/server/execute.ts     |    5 +-
+ .../adapters/cursor-local/src/server/execute.ts    |    6 +-
+ .../adapters/gemini-local/src/server/execute.ts    |    7 +-
+ .../openclaw-gateway/src/server/execute.ts         |    7 +-
+ .../adapters/opencode-local/src/server/execute.ts  |    6 +-
+ packages/adapters/pi-local/src/server/execute.ts   |   24 +-
+ packages/db/src/migrations/meta/_journal.json      |   42 +
+ packages/db/src/schema/companies.ts                |   22 +-
+ packages/db/src/schema/index.ts                    |   11 +
+ packages/db/src/schema/issues.ts                   |    7 +
+ packages/db/src/schema/projects.ts                 |    7 +
+ packages/shared/src/api.ts                         |   26 +
+ packages/shared/src/constants.ts                   |   40 +
+ packages/shared/src/index.ts                       |   73 +
+ packages/shared/src/types/agent.ts                 |    5 +
+ packages/shared/src/types/company-portability.ts   |   22 +
+ packages/shared/src/types/company.ts               |   11 +
+ packages/shared/src/types/cost.ts                  |   20 +
+ packages/shared/src/types/dashboard.ts             |   15 +
+ packages/shared/src/types/index.ts                 |   20 +-
+ packages/shared/src/types/issue.ts                 |    4 +-
+ packages/shared/src/types/project.ts               |    3 +
+ packages/shared/src/types/schedule.ts              |   10 +
+ packages/shared/src/validators/agent.ts            |   12 +-
+ .../shared/src/validators/company-portability.ts   |   38 +-
+ packages/shared/src/validators/company.ts          |   11 +
+ packages/shared/src/validators/index.ts            |   62 +
+ .../shared/src/validators/instance-settings.ts     |    7 +
+ packages/shared/src/validators/issue.ts            |   13 +
+ packages/shared/src/validators/me.ts               |    6 +
+ packages/shared/src/validators/project.ts          |    2 +
+ pnpm-lock.yaml                                     |   70 +-
+ releases/.gitkeep                                  |    0
+ releases/v0.2.7.md                                 |   15 -
+ releases/v0.3.0.md                                 |   53 -
+ server/package.json                                |   10 +-
+ .../__tests__/companies-route-path-guard.test.ts   |    7 +
+ server/src/app.ts                                  |   15 +
+ server/src/middleware/auth.ts                      |   45 +
+ server/src/routes/activity.ts                      |   85 +-
+ server/src/routes/agents.ts                        |  211 ++-
+ server/src/routes/approvals.ts                     |   92 +-
+ server/src/routes/authz.ts                         |    6 +
+ server/src/routes/companies.ts                     |  104 ++
+ server/src/routes/company-permission.ts            |    3 +
+ server/src/routes/costs.ts                         |   97 +-
+ server/src/routes/dashboard.ts                     |    9 +
+ server/src/routes/goals.ts                         |   19 +-
+ server/src/routes/instance-settings.ts             |   13 +-
+ server/src/routes/issues.ts                        |  175 +-
+ server/src/routes/me.ts                            |   32 +-
+ server/src/routes/projects.ts                      |   49 +-
+ server/src/routes/schedules.ts                     |   14 +
+ server/src/services/access.ts                      |   50 +-
+ server/src/services/activity.ts                    |  136 +-
+ server/src/services/agents.ts                      |   82 +-
+ server/src/services/approvals.ts                   |  120 +-
+ server/src/services/budget-policies.ts             |   48 +-
+ server/src/services/company-approval-policies.ts   |   85 +-
+ server/src/services/company-portability.ts         |  175 +-
+ server/src/services/costs.ts                       |  305 +++-
+ server/src/services/dashboard.ts                   |  110 +-
+ server/src/services/heartbeat.ts                   |  142 +-
+ server/src/services/index.ts                       |   16 +-
+ server/src/services/instance-settings.ts           |   43 +-
+ server/src/services/issues.ts                      |  116 +-
+ server/src/services/schedules.ts                   |  105 +-
+ server/src/types/express.d.ts                      |   14 +-
+ skills/create-agent-adapter/SKILL.md               |  718 --------
+ skills/paperclip-create-agent/SKILL.md             |  139 --
+ .../references/api-reference.md                    |   95 --
+ skills/paperclip/SKILL.md                          |  387 -----
+ skills/paperclip/references/api-reference.md       |  586 -------
+ skills/para-memory-files/SKILL.md                  |  104 --
+ skills/para-memory-files/references/schemas.md     |   35 -
+ tests/e2e/onboarding.spec.ts                       |  172 --
+ tests/e2e/playwright.config.ts                     |   35 -
+ ui/package.json                                    |    4 +-
+ ui/src/App.tsx                                     |   49 +-
+ ui/src/api/activity.ts                             |   66 +-
+ ui/src/api/agents.ts                               |   19 +-
+ ui/src/api/approvals.ts                            |   63 +-
+ ui/src/api/companies.ts                            |   54 +-
+ ui/src/api/costs.ts                                |   69 +-
+ ui/src/api/dashboard.ts                            |    4 +-
+ ui/src/api/heartbeats.ts                           |   52 +-
+ ui/src/api/instanceSettings.ts                     |    9 +
+ ui/src/api/issues.ts                               |    3 +
+ ui/src/api/schedules.ts                            |   10 +-
+ ui/src/components/ActivityCharts.tsx               |  135 +-
+ ui/src/components/BreadcrumbBar.tsx                |   10 +-
+ ui/src/components/CommandPalette.tsx               |   18 +
+ ui/src/components/IssueProperties.tsx              |  101 +-
+ ui/src/components/IssuesList.tsx                   |  169 +-
+ ui/src/components/KanbanBoard.tsx                  |   47 +-
+ ui/src/components/Layout.tsx                       |  279 +++-
+ ui/src/components/MarkdownEditor.tsx               |    2 +-
+ ui/src/components/MobileBottomNav.tsx              |    9 +-
+ ui/src/components/ProjectProperties.tsx            |  126 +-
+ ui/src/components/Sidebar.tsx                      |    4 +
+ ui/src/context/CompanyContext.tsx                  |    4 +-
+ ui/src/hooks/useInboxBadge.ts                      |    2 +-
+ ui/src/i18n.ts                                     |    2 +
+ ui/src/index.css                                   |   71 +
+ ui/src/lib/inbox.test.ts                           |    1 +
+ ui/src/lib/queryKeys.ts                            |   21 +
+ ui/src/locales/en.json                             |  259 ++-
+ ui/src/locales/zh-TW.json                          |  528 ++++--
+ ui/src/main.tsx                                    |   28 +-
+ ui/src/pages/Activity.css                          |    6 +
+ ui/src/pages/Activity.tsx                          |   61 +-
+ ui/src/pages/AgentDetail.tsx                       |   45 +-
+ ui/src/pages/Agents.tsx                            |    2 +-
+ ui/src/pages/Approvals.tsx                         |   33 +
+ ui/src/pages/CompanySettings.css                   |  180 ++
+ ui/src/pages/CompanySettings.tsx                   |  304 +++-
+ ui/src/pages/Costs.css                             |   48 +
+ ui/src/pages/Costs.tsx                             |  139 +-
+ ui/src/pages/Dashboard.css                         |   10 +
+ ui/src/pages/Dashboard.tsx                         |   44 +-
+ ui/src/pages/Inbox.tsx                             |    2 +-
+ ui/src/pages/InstanceSettings.tsx                  |   14 +-
+ ui/src/pages/IssueDetail.tsx                       |   55 +-
+ ui/src/pages/Issues.tsx                            |   13 +-
+ ui/src/pages/ProjectDetail.tsx                     |   14 +-
+ ui/src/pages/Schedules.css                         |   51 +
+ ui/src/pages/Schedules.tsx                         |   32 +-
+ ui/src/styles/board.css                            |   78 +
+ ui/src/styles/issues-list.css                      |  221 +++
+ ui/src/styles/ui.css                               |   87 +
+ ui/vite.config.ts                                  |    2 +
+ 285 files changed, 6365 insertions(+), 26692 deletions(-)
+```
+
+---
+
+## 備註
+
+- **敏感檔案**：本次 `git status` 所列變更中未見 `.env`、私鑰、`credentials.json`、`node_modules` 等典型敏感路徑。
+- **未執行 `git push`**（依工作流預設）。

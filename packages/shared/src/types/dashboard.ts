@@ -1,5 +1,20 @@
 import type { LimitBreachEvent } from "./cost.js";
 
+/** 儀表板趨勢序列（每日 UTC 日界）。 */
+export interface DashboardTrendsDay {
+  date: string;
+  issuesCreated: number;
+  issuesCompleted: number;
+  activeAgents: number;
+  goalLinkedIssuesCompleted: number;
+}
+
+export interface DashboardTrends {
+  companyId: string;
+  days: number;
+  series: DashboardTrendsDay[];
+}
+
 export interface DashboardSummary {
   companyId: string;
   agents: {

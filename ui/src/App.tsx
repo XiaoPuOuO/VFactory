@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "@/lib/router";
-import { useQuery } from "@tanstack/react-query";
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "@/lib/router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Layout } from "./components/Layout";
 import { OnboardingWizard } from "./components/OnboardingWizard";
@@ -18,6 +19,7 @@ import { IssueDetail } from "./pages/IssueDetail";
 import { Goals } from "./pages/Goals";
 import { GoalDetail } from "./pages/GoalDetail";
 import { Schedules } from "./pages/Schedules";
+import { RunQuality } from "./pages/RunQuality";
 import { Approvals } from "./pages/Approvals";
 import { ApprovalDetail } from "./pages/ApprovalDetail";
 import { Costs } from "./pages/Costs";
@@ -28,10 +30,12 @@ import { Chat } from "./pages/Chat";
 import { ChatEmpty } from "./pages/ChatEmpty";
 import { ChatRoom } from "./pages/ChatRoom";
 import { CompanySettings } from "./pages/CompanySettings";
+import { CompanyAutomation } from "./pages/CompanyAutomation";
 import { Account } from "./pages/Account";
 import { DesignGuide } from "./pages/DesignGuide";
 import { InstanceSettings } from "./pages/InstanceSettings";
 import { DefaultCompanyPathSettings } from "./pages/DefaultCompanyPathSettings";
+import { ComplianceRetentionSettings } from "./pages/ComplianceRetentionSettings";
 import { ArchiveCompanySettings } from "./pages/ArchiveCompanySettings";
 import { InstanceCompanyManagement } from "./pages/InstanceCompanyManagement";
 import { InstanceGroupManagement } from "./pages/InstanceGroupManagement";
@@ -51,6 +55,37 @@ import { getTenantSlug } from "./api/client";
 import { useCompany } from "./context/CompanyContext";
 import { useDialog } from "./context/DialogContext";
 import { loadLastInboxTab } from "./lib/inbox";
+
+/** 閘道頁（無公司前導等）提供帳號與登出，避免使用者困在單一 CTA。 */
+function AppGateSessionActions() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [signingOut, setSigningOut] = useState(false);
+
+  return (
+    <div className="app-gate-session" role="navigation" aria-label={t("app.gateSessionNavLabel")}>
+      <button
+        type="button"
+        className="app-gate-session-signout app-gate-session-signout--solo"
+        disabled={signingOut}
+        onClick={async () => {
+          setSigningOut(true);
+          try {
+            await authApi.signOut();
+            await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
+            navigate("/landing", { replace: true });
+          } finally {
+            setSigningOut(false);
+          }
+        }}
+      >
+        <LogOut className="app-gate-session-icon" aria-hidden />
+        {signingOut ? t("account.signingOut") : t("account.signOut")}
+      </button>
+    </div>
+  );
+}
 
 function BootstrapPendingPage({ hasActiveInvite = false }: { hasActiveInvite?: boolean }) {
   const { t } = useTranslation();
@@ -171,6 +206,7 @@ function boardRoutes() {
       <Route path="onboarding" element={<OnboardingRoutePage />} />
       <Route path="companies" element={<Companies />} />
       <Route path="company/settings" element={<CompanySettings />} />
+      <Route path="company/automation" element={<CompanyAutomation />} />
       <Route path="settings" element={<LegacySettingsRedirect />} />
       <Route path="settings/*" element={<LegacySettingsRedirect />} />
       <Route path="org" element={<OrgChart />} />
@@ -200,6 +236,7 @@ function boardRoutes() {
       <Route path="goals" element={<Goals />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />
       <Route path="schedules" element={<Schedules />} />
+      <Route path="runs" element={<RunQuality />} />
       <Route path="approvals" element={<Navigate to="/approvals/pending" replace />} />
       <Route path="approvals/pending" element={<Approvals />} />
       <Route path="approvals/all" element={<Approvals />} />
@@ -285,6 +322,7 @@ function OnboardingRoutePage() {
             {matchedCompany ? t("app.addAgent") : t("app.startOnboarding")}
           </Button>
         </div>
+        <AppGateSessionActions />
       </div>
     </div>
   );
@@ -364,6 +402,7 @@ function NoCompaniesStartPage({ autoOpen = true }: { autoOpen?: boolean }) {
         <div className="app-gate-actions">
           <Button onClick={() => openOnboarding()}>{t("app.newCompany")}</Button>
         </div>
+        <AppGateSessionActions />
       </div>
     </div>
   );
@@ -388,6 +427,9 @@ export function App() {
           </Route>
           <Route path="instance/default-company-path" element={<Layout />}>
             <Route index element={<DefaultCompanyPathSettings />} />
+          </Route>
+          <Route path="instance/compliance-retention" element={<Layout />}>
+            <Route index element={<ComplianceRetentionSettings />} />
           </Route>
           <Route path="instance/archive-company" element={<Layout />}>
             <Route index element={<ArchiveCompanySettings />} />
@@ -420,6 +462,7 @@ export function App() {
           <Route path="chat" element={<UnprefixedBoardRedirect />} />
           <Route path="chat/:roomId" element={<UnprefixedBoardRedirect />} />
           <Route path="schedules" element={<UnprefixedBoardRedirect />} />
+          <Route path="runs" element={<UnprefixedBoardRedirect />} />
           <Route path="tests/ux/runs" element={<UnprefixedBoardRedirect />} />
           <Route path="account" element={<Layout />}>
             <Route index element={<Account />} />

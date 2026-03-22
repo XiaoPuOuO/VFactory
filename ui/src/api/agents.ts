@@ -61,7 +61,11 @@ function withCompanyScope(path: string, companyId?: string) {
 }
 
 function agentPath(id: string, companyId?: string, suffix = "") {
-  return withCompanyScope(`/agents/${encodeURIComponent(id)}${suffix}`, companyId);
+  const trimmed = typeof id === "string" ? id.trim() : String(id ?? "").trim();
+  if (!trimmed) {
+    throw new ApiError("Agent id is required", 400, null);
+  }
+  return withCompanyScope(`/agents/${encodeURIComponent(trimmed)}${suffix}`, companyId);
 }
 
 export const agentsApi = {
@@ -110,8 +114,11 @@ export const agentsApi = {
     api.post<AgentHireResponse>(`/companies/${companyId}/agent-hires`, data),
   update: (id: string, data: Record<string, unknown>, companyId?: string) =>
     api.patch<Agent>(agentPath(id, companyId), data),
-  updatePermissions: (id: string, data: { canCreateAgents: boolean }, companyId?: string) =>
-    api.patch<Agent>(agentPath(id, companyId, "/permissions"), data),
+  updatePermissions: (
+    id: string,
+    data: { canCreateAgents?: boolean; canManageProjects?: boolean },
+    companyId?: string,
+  ) => api.patch<Agent>(agentPath(id, companyId, "/permissions"), data),
   pause: (id: string, companyId?: string) => api.post<Agent>(agentPath(id, companyId, "/pause"), {}),
   resume: (id: string, companyId?: string) => api.post<Agent>(agentPath(id, companyId, "/resume"), {}),
   terminate: (id: string, companyId?: string) => api.post<Agent>(agentPath(id, companyId, "/terminate"), {}),
@@ -159,7 +166,11 @@ export const agentsApi = {
     agentId: string,
     params?: { q?: string; sourceRoomId?: string; limit?: number },
   ) => {
-    const base = `/companies/${encodeURIComponent(companyId)}/agents/${encodeURIComponent(agentId)}/memories`;
+    const aid = typeof agentId === "string" ? agentId.trim() : String(agentId ?? "").trim();
+    if (!aid) {
+      throw new ApiError("Agent id is required", 400, null);
+    }
+    const base = `/companies/${encodeURIComponent(companyId)}/agents/${encodeURIComponent(aid)}/memories`;
     const search = new URLSearchParams();
     if (params?.q != null && params.q !== "") search.set("q", params.q);
     if (params?.sourceRoomId != null && params.sourceRoomId !== "") search.set("sourceRoomId", params.sourceRoomId);

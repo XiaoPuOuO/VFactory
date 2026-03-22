@@ -123,7 +123,7 @@ export function Agents() {
 
   const { data: runs } = useQuery({
     queryKey: queryKeys.heartbeats(selectedCompanyId!),
-    queryFn: () => heartbeatsApi.list(selectedCompanyId!),
+    queryFn: async () => (await heartbeatsApi.list(selectedCompanyId!)).runs,
     enabled: !!selectedCompanyId,
     refetchInterval: 15_000,
   });

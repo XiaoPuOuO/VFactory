@@ -54,6 +54,13 @@ export const issues = pgTable(
     } | null>(),
     /** Issue: 顯示用標籤（如 Frontend-A），可帶入 run context / UI，不影響排程。 */
     executionLabel: text("execution_label"),
+    /** PR／branch／CI 連結與狀態（手動維護，非 Git 整合）。 */
+    vcsLinks: jsonb("vcs_links").$type<{
+      prUrl?: string | null;
+      branch?: string | null;
+      ciStatus?: string | null;
+      ciUrl?: string | null;
+    } | null>(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),

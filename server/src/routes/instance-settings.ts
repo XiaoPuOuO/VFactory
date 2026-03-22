@@ -4,7 +4,7 @@ import type { Db } from "@paperclipai/db";
 import { validate } from "../middleware/validate.js";
 import { assertInstanceSetting } from "./authz.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
-import { setDefaultCompanyPathSchema } from "@paperclipai/shared";
+import { setComplianceDefaultRetentionSchema, setDefaultCompanyPathSchema } from "@paperclipai/shared";
 
 /**
  * 此站設定 API：預設公司路徑等。
@@ -28,6 +28,17 @@ export function instanceSettingsRoutes(db: Db) {
     const value = (req.body.defaultCompanyPath as string).trim();
     const result = await svc.setDefaultCompanyPath(value);
     res.json({ defaultCompanyPath: result ?? "" });
+  });
+
+  router.get("/compliance-default-retention", async (_req, res) => {
+    const days = await svc.getComplianceDefaultRetentionDays();
+    res.json({ complianceDefaultRetentionDays: days });
+  });
+
+  router.put("/compliance-default-retention", validate(setComplianceDefaultRetentionSchema), async (req, res) => {
+    const raw = req.body.complianceDefaultRetentionDays as number | null;
+    const result = await svc.setComplianceDefaultRetentionDays(raw);
+    res.json({ complianceDefaultRetentionDays: result });
   });
 
   return router;

@@ -7,8 +7,11 @@ import {
   companyPortabilityExportSchema,
   companyPortabilityImportSchema,
   companyPortabilityPreviewSchema,
+  createAutomationRuleSchema,
   createCompanySchema,
   DEFAULT_OWNER_GRANTS,
+  importPoliciesFromCompanySchema,
+  updateAutomationRuleSchema,
   updateCompanySchema,
   upsertCompanyHireApprovalPolicySchema,
 } from "@paperclipai/shared";
@@ -16,6 +19,7 @@ import { forbidden } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import {
   accessService,
+  automationRuleService,
   companyApprovalPolicyService,
   companyPortabilityService,
   companyService,
@@ -33,6 +37,7 @@ export function companyRoutes(db: Db) {
   const access = accessService(db);
   const governance = governanceService(db);
   const approvalPolicies = companyApprovalPolicyService(db);
+  const automationRules = automationRuleService(db);
 
   router.get("/", async (req, res) => {
     if (req.actor.type === "banned") throw forbidden("Account banned");
@@ -104,6 +109,105 @@ export function companyRoutes(db: Db) {
     const summary = await governance.hub(companyId);
     res.json(summary);
   });
+
+  /** 自動化規則列表（board 可讀）。 */
+  router.get("/:companyId/automation-rules", async (req, res) => {
+    assertBoard(req);
+    const companyId = req.params.companyId as string;
+    await assertCompanyAccess(req, companyId, db);
+    const rules = await automationRules.list(companyId);
+    res.json({ rules });
+  });
+
+  router.post("/:companyId/automation-rules", validate(createAutomationRuleSchema), async (req, res) => {
+    assertBoard(req);
+    const companyId = req.params.companyId as string;
+    await assertCompanyPermission(db, req, companyId, "governance:policies:manage");
+    const row = await automationRules.create(companyId, req.body);
+    await logActivity(db, {
+      companyId,
+      actorType: "user",
+      actorId: req.actor.userId ?? "board",
+      action: "company.automation_rule_created",
+      entityType: "automation_rule",
+      entityId: row.id,
+      details: { name: row.name },
+    });
+    res.status(201).json(row);
+  });
+
+  router.patch(
+    "/:companyId/automation-rules/:ruleId",
+    validate(updateAutomationRuleSchema),
+    async (req, res) => {
+      assertBoard(req);
+      const companyId = req.params.companyId as string;
+      const ruleId = req.params.ruleId as string;
+      await assertCompanyPermission(db, req, companyId, "governance:policies:manage");
+      const row = await automationRules.update(companyId, ruleId, req.body);
+      if (!row) {
+        res.status(404).json({ error: "Automation rule not found" });
+        return;
+      }
+      await logActivity(db, {
+        companyId,
+        actorType: "user",
+        actorId: req.actor.userId ?? "board",
+        action: "company.automation_rule_updated",
+        entityType: "automation_rule",
+        entityId: ruleId,
+        details: req.body,
+      });
+      res.json(row);
+    },
+  );
+
+  router.delete("/:companyId/automation-rules/:ruleId", async (req, res) => {
+    assertBoard(req);
+    const companyId = req.params.companyId as string;
+    const ruleId = req.params.ruleId as string;
+    await assertCompanyPermission(db, req, companyId, "governance:policies:manage");
+    const ok = await automationRules.delete(companyId, ruleId);
+    if (!ok) {
+      res.status(404).json({ error: "Automation rule not found" });
+      return;
+    }
+    await logActivity(db, {
+      companyId,
+      actorType: "user",
+      actorId: req.actor.userId ?? "board",
+      action: "company.automation_rule_deleted",
+      entityType: "automation_rule",
+      entityId: ruleId,
+    });
+    res.json({ ok: true });
+  });
+
+  /** 從另一公司複製核准／預算政策。 */
+  router.post(
+    "/:companyId/policies/import-from",
+    validate(importPoliciesFromCompanySchema),
+    async (req, res) => {
+      assertBoard(req);
+      const companyId = req.params.companyId as string;
+      await assertCompanyPermission(db, req, companyId, "governance:policies:manage");
+      const sourceCompanyId = req.body.sourceCompanyId as string;
+      await assertCompanyAccess(req, sourceCompanyId, db);
+      const { warnings } = await portability.importPoliciesFromCompany(companyId, sourceCompanyId, {
+        replaceExisting: req.body.replaceExisting === true,
+      });
+      await logActivity(db, {
+        companyId,
+        actorType: "user",
+        actorId: req.actor.userId ?? "board",
+        action: "company.policies_imported",
+        entityType: "company",
+        entityId: companyId,
+        details: { sourceCompanyId, replaceExisting: req.body.replaceExisting === true },
+      });
+      res.json({ ok: true, warnings });
+    },
+  );
 
   /** 讀取 hire 自動核准政策（租戶內 board 可見）。 */
   router.get("/:companyId/approval-policies/hire", async (req, res) => {

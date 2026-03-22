@@ -12,6 +12,7 @@ import { usePanel } from "../context/PanelContext";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
+import { EMPTY_ISSUE_LIST } from "../lib/emptyCollections";
 import { ProjectProperties, type ProjectConfigFieldKey, type ProjectFieldSaveState } from "../components/ProjectProperties";
 import { InlineEditor } from "../components/InlineEditor";
 import { StatusBadge } from "../components/StatusBadge";
@@ -177,16 +178,25 @@ function ProjectIssuesList({ projectId, companyId }: { projectId: string; compan
     },
   });
 
+  const removeIssue = useMutation({
+    mutationFn: (id: string) => issuesApi.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues.listByProject(companyId, projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues.list(companyId) });
+    },
+  });
+
   return (
     <IssuesList
-      issues={issues ?? []}
+      issues={issues ?? EMPTY_ISSUE_LIST}
       isLoading={isLoading}
       error={error as Error | null}
       agents={agents}
       liveIssueIds={liveIssueIds}
       projectId={projectId}
       viewStateKey={`paperclip:project-view:${projectId}`}
-      onUpdateIssue={(id, data) => updateIssue.mutate({ id, data })}
+      onUpdateIssue={(id, data) => updateIssue.mutateAsync({ id, data })}
+      onRemoveIssue={(id) => removeIssue.mutateAsync(id)}
     />
   );
 }

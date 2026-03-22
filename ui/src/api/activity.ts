@@ -1,5 +1,5 @@
 import type { ActivityEvent } from "@paperclipai/shared";
-import { api } from "./client";
+import { api, ApiError, getTenantSlug } from "./client";
 
 export interface RunForIssue {
   runId: string;
@@ -23,6 +23,70 @@ export interface IssueForRun {
 
 export const activityApi = {
   list: (companyId: string) => api.get<ActivityEvent[]>(`/companies/${companyId}/activity`),
+
+  /**
+   * 下載 Activity CSV（依 X-Export-Next-Cursor 串接至完整）。
+   */
+  async downloadActivityCsv(
+    companyId: string,
+    opts?: { scopeAll?: boolean; entityType?: string; from?: string; to?: string },
+  ): Promise<void> {
+    const buildUrl = (cursor?: string): string => {
+      const params = new URLSearchParams();
+      if (opts?.scopeAll) params.set("scope", "all");
+      else {
+        if (opts?.from) params.set("from", opts.from);
+        if (opts?.to) params.set("to", opts.to);
+      }
+      if (opts?.entityType) params.set("entityType", opts.entityType);
+      params.set("limit", "5000");
+      if (cursor) params.set("cursor", cursor);
+      return `/companies/${companyId}/activity/export?${params.toString()}`;
+    };
+
+    const fetchExport = async (cursor?: string): Promise<Response> => {
+      const headers = new Headers();
+      if (getTenantSlug()) headers.set("X-Tenant-Slug", getTenantSlug()!);
+      return fetch(`/api${buildUrl(cursor)}`, { credentials: "include", headers });
+    };
+
+    const first = await fetchExport();
+    if (!first.ok) {
+      const errorBody = await first.json().catch(() => null);
+      throw new ApiError(
+        (errorBody as { error?: string } | null)?.error ?? `Export failed: ${first.status}`,
+        first.status,
+        errorBody,
+      );
+    }
+    let text = await first.text();
+    let cursor = first.headers.get("X-Export-Next-Cursor");
+    while (cursor) {
+      const next = await fetchExport(cursor);
+      if (!next.ok) {
+        const errorBody = await next.json().catch(() => null);
+        throw new ApiError(
+          (errorBody as { error?: string } | null)?.error ?? `Export failed: ${next.status}`,
+          next.status,
+          errorBody,
+        );
+      }
+      const body = await next.text();
+      const lines = body.split("\n");
+      if (lines.length > 1) {
+        text += lines.slice(1).join("\n");
+      }
+      cursor = next.headers.get("X-Export-Next-Cursor");
+    }
+
+    const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `activity-${companyId.slice(0, 8)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   forIssue: (issueId: string) => api.get<ActivityEvent[]>(`/issues/${issueId}/activity`),
   runsForIssue: (issueId: string) => api.get<RunForIssue[]>(`/issues/${issueId}/runs`),
   issuesForRun: (runId: string) => api.get<IssueForRun[]>(`/heartbeat-runs/${runId}/issues`),

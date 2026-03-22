@@ -11,6 +11,8 @@ import { validate } from "../middleware/validate.js";
 import { projectService, logActivity } from "../services/index.js";
 import { conflict } from "../errors.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
+import { assertCompanyPermission } from "./company-permission.js";
+import { assertCompanyIntegrationScope } from "./integration-scope.js";
 
 export function projectRoutes(db: Db) {
   const router = Router();
@@ -27,6 +29,9 @@ export function projectRoutes(db: Db) {
       return requestedCompanyId;
     }
     if (req.actor.type === "agent" && req.actor.companyId) {
+      return req.actor.companyId;
+    }
+    if (req.actor.type === "service" && req.actor.companyId) {
       return req.actor.companyId;
     }
     return null;
@@ -54,7 +59,7 @@ export function projectRoutes(db: Db) {
 
   router.get("/companies/:companyId/projects", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "projects:read");
     const result = await svc.list(companyId);
     res.json(result);
   });
@@ -66,13 +71,20 @@ export function projectRoutes(db: Db) {
       res.status(404).json({ error: "Project not found" });
       return;
     }
-    await assertCompanyAccess(req, project.companyId, db);
+    await assertCompanyIntegrationScope(db, req, project.companyId, "projects:read");
     res.json(project);
   });
 
   router.post("/companies/:companyId/projects", validate(createProjectSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot create projects" });
+      return;
+    }
+    if (req.actor.type === "agent") {
+      await assertCompanyPermission(db, req, companyId, "projects:manage");
+    }
     type CreateProjectPayload = Parameters<typeof svc.create>[1] & {
       workspace?: Parameters<typeof svc.createWorkspace>[1];
     };
@@ -116,6 +128,9 @@ export function projectRoutes(db: Db) {
       return;
     }
     await assertCompanyAccess(req, existing.companyId, db);
+    if (req.actor.type === "agent") {
+      await assertCompanyPermission(db, req, existing.companyId, "projects:manage");
+    }
     const project = await svc.update(id, req.body);
     if (!project) {
       res.status(404).json({ error: "Project not found" });
@@ -144,7 +159,7 @@ export function projectRoutes(db: Db) {
       res.status(404).json({ error: "Project not found" });
       return;
     }
-    await assertCompanyAccess(req, existing.companyId, db);
+    await assertCompanyIntegrationScope(db, req, existing.companyId, "projects:read");
     const workspaces = await svc.listWorkspaces(id);
     res.json(workspaces);
   });
@@ -157,6 +172,13 @@ export function projectRoutes(db: Db) {
       return;
     }
     await assertCompanyAccess(req, existing.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot create workspaces" });
+      return;
+    }
+    if (req.actor.type === "agent") {
+      await assertCompanyPermission(db, req, existing.companyId, "projects:manage");
+    }
     const workspace = await svc.createWorkspace(id, req.body);
     if (!workspace) {
       res.status(422).json({ error: "Invalid project workspace payload" });
@@ -195,6 +217,13 @@ export function projectRoutes(db: Db) {
         return;
       }
       await assertCompanyAccess(req, existing.companyId, db);
+      if (req.actor.type === "service") {
+        res.status(403).json({ error: "Integration token cannot update workspaces" });
+        return;
+      }
+      if (req.actor.type === "agent") {
+        await assertCompanyPermission(db, req, existing.companyId, "projects:manage");
+      }
       const workspaceExists = (await svc.listWorkspaces(id)).some((workspace) => workspace.id === workspaceId);
       if (!workspaceExists) {
         res.status(404).json({ error: "Project workspace not found" });
@@ -234,6 +263,13 @@ export function projectRoutes(db: Db) {
       return;
     }
     await assertCompanyAccess(req, existing.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot delete workspaces" });
+      return;
+    }
+    if (req.actor.type === "agent") {
+      await assertCompanyPermission(db, req, existing.companyId, "projects:manage");
+    }
     const workspace = await svc.removeWorkspace(id, workspaceId);
     if (!workspace) {
       res.status(404).json({ error: "Project workspace not found" });
@@ -266,6 +302,13 @@ export function projectRoutes(db: Db) {
       return;
     }
     await assertCompanyAccess(req, existing.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot delete projects" });
+      return;
+    }
+    if (req.actor.type === "agent") {
+      await assertCompanyPermission(db, req, existing.companyId, "projects:manage");
+    }
     const project = await svc.remove(id);
     if (!project) {
       res.status(404).json({ error: "Project not found" });

@@ -94,8 +94,14 @@ export const testAdapterEnvironmentSchema = z.object({
 
 export type TestAdapterEnvironment = z.infer<typeof testAdapterEnvironmentSchema>;
 
-export const updateAgentPermissionsSchema = z.object({
-  canCreateAgents: z.boolean(),
-});
+export const updateAgentPermissionsSchema = z
+  .object({
+    canCreateAgents: z.boolean().optional(),
+    /** 對應 principal grant `projects:manage`（建立／編輯／刪除專案與工作區）。 */
+    canManageProjects: z.boolean().optional(),
+  })
+  .refine((body) => body.canCreateAgents !== undefined || body.canManageProjects !== undefined, {
+    message: "At least one of canCreateAgents or canManageProjects is required",
+  });
 
 export type UpdateAgentPermissions = z.infer<typeof updateAgentPermissionsSchema>;

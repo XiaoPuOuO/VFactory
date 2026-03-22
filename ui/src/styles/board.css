@@ -3,6 +3,25 @@
  * 多個 Page 共用，無 Tailwind。
  */
 
+/* 離線唯讀提示（Layout 頂部） */
+.offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+
+.offline-banner-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
 /* ==========================================================================
    Layout 根
    ========================================================================== */
@@ -97,6 +116,12 @@
   overflow: hidden;
 }
 
+/* 無 Company Rail 時（僅 instance 導覽等單欄），讓導覽區佔滿剩餘寬度 */
+.board-sidebar-wrap-mobile .board-sidebar-inner > :only-child {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
 .board-sidebar-wrap-desktop {
   display: flex;
   flex-direction: column;
@@ -130,6 +155,45 @@
 }
 
 .board-sidebar-footer-icon-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* 無公司、非 instance：無側欄，主內容全寬；底部預留固定列 */
+.board-root-desktop.board-root--no-company-board .board-main-wrap {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.board-root--no-company-board .board-main {
+  padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+}
+
+.board-no-company-chrome {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--background);
+}
+
+.board-no-company-chrome-spacer {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.board-no-company-chrome-signout {
+  gap: 0.35rem;
+}
+
+.board-no-company-chrome-icon {
   width: 1rem;
   height: 1rem;
 }
@@ -836,6 +900,20 @@
 .board-nav-item:not(.active):hover {
   background: color-mix(in oklab, var(--accent) 50%, transparent);
   color: var(--foreground);
+}
+
+button.board-nav-item {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font: inherit;
+}
+
+button.board-nav-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .board-nav-item-icon {

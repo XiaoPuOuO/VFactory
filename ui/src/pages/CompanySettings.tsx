@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@/lib/router";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
-import type { CompanyPortabilityExportResult } from "@paperclipai/shared";
+import type { CompanyMaintenanceWindow, CompanyPortabilityExportResult } from "@paperclipai/shared";
 import { companiesApi } from "../api/companies";
+import { instanceSettingsApi } from "../api/instanceSettings";
 import { downloadCompanyPortabilityZip } from "../lib/company-portability";
 import { companyPluginsApi } from "../api/plugins";
 import { accessApi } from "../api/access";
@@ -31,6 +33,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import "./CompanySettings.css";
+import { CompanyWebhooksSection } from "../components/CompanyWebhooksSection";
+import { CompanyIntegrationTokensSection } from "../components/CompanyIntegrationTokensSection";
+import { CompanyNotificationDestinationsSection } from "../components/CompanyNotificationDestinationsSection";
 
 type AgentSnippetInput = {
   onboardingTextUrl: string;
@@ -56,6 +61,11 @@ export function CompanySettings() {
   const [description, setDescription] = useState("");
   const [brandColor, setBrandColor] = useState("");
   const [workingDirectory, setWorkingDirectory] = useState("");
+  const [wakeupsPausedUntilLocal, setWakeupsPausedUntilLocal] = useState("");
+  const [wakeupsPausedReasonLocal, setWakeupsPausedReasonLocal] = useState("");
+  const [maintenanceWindowsJson, setMaintenanceWindowsJson] = useState("[]");
+  const [complianceRetentionLocal, setComplianceRetentionLocal] = useState("");
+  const [complianceError, setComplianceError] = useState<string | null>(null);
 
   // Sync local state from selected company
   useEffect(() => {
@@ -64,7 +74,29 @@ export function CompanySettings() {
     setDescription(selectedCompany.description ?? "");
     setBrandColor(selectedCompany.brandColor ?? "");
     setWorkingDirectory(selectedCompany.workingDirectory ?? "");
+    const u = selectedCompany.wakeupsPausedUntil;
+    if (u) {
+      const d = u instanceof Date ? u : new Date(u as unknown as string);
+      setWakeupsPausedUntilLocal(Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 16) : "");
+    } else {
+      setWakeupsPausedUntilLocal("");
+    }
+    setWakeupsPausedReasonLocal(selectedCompany.wakeupsPausedReason ?? "");
+    setMaintenanceWindowsJson(JSON.stringify(selectedCompany.maintenanceWindows ?? [], null, 2));
+    setComplianceRetentionLocal(
+      selectedCompany.complianceDataRetentionDays != null
+        ? String(selectedCompany.complianceDataRetentionDays)
+        : "",
+    );
+    setComplianceError(null);
   }, [selectedCompany]);
+
+  const { data: instanceRetention } = useQuery({
+    queryKey: queryKeys.instanceSettings.complianceDefaultRetention,
+    queryFn: () => instanceSettingsApi.getComplianceDefaultRetention(),
+    enabled: !!selectedCompanyId && meProfile?.group === "admin",
+    retry: false,
+  });
 
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSnippet, setInviteSnippet] = useState<string | null>(null);
@@ -82,6 +114,11 @@ export function CompanySettings() {
   const [showIconDialog, setShowIconDialog] = useState(false);
   const [exportIncludeCompany, setExportIncludeCompany] = useState(true);
   const [exportIncludeAgents, setExportIncludeAgents] = useState(true);
+  const [exportIncludeApprovalPolicies, setExportIncludeApprovalPolicies] = useState(false);
+  const [exportIncludeBudgetPolicies, setExportIncludeBudgetPolicies] = useState(false);
+  const [policySourceCompanyId, setPolicySourceCompanyId] = useState("");
+  const [policyReplaceBudget, setPolicyReplaceBudget] = useState(false);
+  const [policyImportMessage, setPolicyImportMessage] = useState<string | null>(null);
   const [lastExportResult, setLastExportResult] = useState<CompanyPortabilityExportResult | null>(null);
 
   const generalMutation = useMutation({
@@ -105,12 +142,62 @@ export function CompanySettings() {
     },
   });
 
+  const complianceMutation = useMutation({
+    mutationFn: () => {
+      const raw = complianceRetentionLocal.trim();
+      if (raw === "") {
+        return companiesApi.update(selectedCompanyId!, { complianceDataRetentionDays: null });
+      }
+      const n = Number.parseInt(raw, 10);
+      if (!Number.isFinite(n) || n < 1 || n > 3650) {
+        throw new Error("complianceInvalid");
+      }
+      return companiesApi.update(selectedCompanyId!, { complianceDataRetentionDays: n });
+    },
+    onSuccess: () => {
+      setComplianceError(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
+    },
+    onError: (err) => {
+      setComplianceError(
+        err instanceof Error && err.message === "complianceInvalid"
+          ? t("complianceRetentionInvalid")
+          : err instanceof Error
+            ? err.message
+            : t("complianceRetentionSaveFailed"),
+      );
+    },
+  });
+
+  const maintenanceMutation = useMutation({
+    mutationFn: async () => {
+      let maintenanceWindows: CompanyMaintenanceWindow[] | null = null;
+      try {
+        const parsed = JSON.parse(maintenanceWindowsJson || "[]") as unknown;
+        if (!Array.isArray(parsed)) throw new Error("maintenanceJson");
+        maintenanceWindows = parsed as CompanyMaintenanceWindow[];
+      } catch {
+        throw new Error("maintenanceJson");
+      }
+      return companiesApi.update(selectedCompanyId!, {
+        wakeupsPausedUntil: wakeupsPausedUntilLocal ? new Date(wakeupsPausedUntilLocal) : null,
+        wakeupsPausedReason: wakeupsPausedReasonLocal.trim() || null,
+        maintenanceWindows,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
+    },
+  });
+
   const exportMutation = useMutation({
     mutationFn: () =>
       companiesApi.exportBundle(selectedCompanyId!, {
         include: {
           company: exportIncludeCompany,
           agents: exportIncludeAgents,
+          approvalPolicies: exportIncludeApprovalPolicies,
+          budgetPolicies: exportIncludeBudgetPolicies,
         },
       }),
     onSuccess: (data) => {
@@ -196,12 +283,34 @@ export function CompanySettings() {
     }
   });
 
+  const importPoliciesMutation = useMutation({
+    mutationFn: () =>
+      companiesApi.importPoliciesFromCompany(selectedCompanyId!, {
+        sourceCompanyId: policySourceCompanyId,
+        replaceExisting: policyReplaceBudget,
+      }),
+    onSuccess: (data) => {
+      setPolicyImportMessage(
+        data.warnings.length
+          ? `${t("policyImportSuccess")} — ${data.warnings.join("; ")}`
+          : t("policyImportSuccess"),
+      );
+      queryClient.invalidateQueries({ queryKey: queryKeys.budgetPolicies(selectedCompanyId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.governance.hirePolicy(selectedCompanyId!) });
+    },
+    onError: (err) => {
+      setPolicyImportMessage(err instanceof Error ? err.message : t("exportFailed"));
+    },
+  });
+
   useEffect(() => {
     setInviteError(null);
     setInviteSnippet(null);
     setSnippetCopied(false);
     setSnippetCopyDelightId(0);
     setLastExportResult(null);
+    setPolicyImportMessage(null);
+    setPolicySourceCompanyId("");
   }, [selectedCompanyId]);
   const archiveMutation = useMutation({
     mutationFn: ({
@@ -273,6 +382,9 @@ export function CompanySettings() {
         <Settings />
         <h1 className="company-settings-title">{t("companySettings")}</h1>
       </div>
+      <p className="company-settings-automation-link">
+        <Link to="/company/automation">{t("automationTitle")}</Link>
+      </p>
 
       {/* General */}
       <div className="company-settings-section">
@@ -481,6 +593,128 @@ export function CompanySettings() {
         </div>
       </div>
 
+      {/* Outbound webhooks */}
+      {selectedCompanyId && (
+        <div className="company-settings-section">
+          <div className="company-settings-section-label">{t("sectionWebhooks")}</div>
+          <CompanyWebhooksSection companyId={selectedCompanyId} />
+        </div>
+      )}
+
+      {selectedCompanyId && (
+        <div className="company-settings-section">
+          <div className="company-settings-section-label">{t("sectionNotificationDestinations")}</div>
+          <CompanyNotificationDestinationsSection companyId={selectedCompanyId} />
+        </div>
+      )}
+
+      {selectedCompanyId && (
+        <div className="company-settings-section">
+          <div className="company-settings-section-label">{t("sectionIntegrationTokens")}</div>
+          <CompanyIntegrationTokensSection companyId={selectedCompanyId} />
+        </div>
+      )}
+
+      {selectedCompanyId && (
+        <div className="company-settings-section">
+          <div className="company-settings-section-label">{t("sectionCompliance")}</div>
+          <div className="company-settings-block">
+            <div className="company-settings-invite-desc-row">
+              <span className="company-settings-invite-desc">{t("complianceRetentionHint")}</span>
+            </div>
+            {meProfile?.group === "admin" &&
+              instanceRetention?.complianceDefaultRetentionDays != null && (
+                <p className="company-settings-compliance-instance">
+                  {t("complianceRetentionInstanceDefault", {
+                    days: instanceRetention.complianceDefaultRetentionDays,
+                  })}
+                </p>
+              )}
+            <Field label={t("complianceRetentionDays")}>
+              <input
+                type="text"
+                inputMode="numeric"
+                className="company-settings-input"
+                value={complianceRetentionLocal}
+                onChange={(e) => setComplianceRetentionLocal(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder={
+                  instanceRetention?.complianceDefaultRetentionDays != null
+                    ? String(instanceRetention.complianceDefaultRetentionDays)
+                    : "—"
+                }
+                aria-label={t("complianceRetentionDays")}
+              />
+            </Field>
+            <div className="company-settings-invite-buttons">
+              <Button
+                size="sm"
+                onClick={() => complianceMutation.mutate()}
+                disabled={complianceMutation.isPending}
+              >
+                {complianceMutation.isPending ? t("common:saving") : t("complianceRetentionSave")}
+              </Button>
+            </div>
+            {complianceError && (
+              <p className="company-settings-invite-error" role="alert">
+                {complianceError}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {selectedCompanyId && (
+        <div className="company-settings-section">
+          <div className="company-settings-section-label">{t("sectionOperations")}</div>
+          <div className="company-settings-block">
+            <div className="company-settings-invite-desc-row">
+              <span className="company-settings-invite-desc">{t("maintenanceHint")}</span>
+            </div>
+            <Field label={t("wakeupsPausedUntil")}>
+              <input
+                type="datetime-local"
+                className="company-settings-input"
+                value={wakeupsPausedUntilLocal}
+                onChange={(e) => setWakeupsPausedUntilLocal(e.target.value)}
+              />
+            </Field>
+            <Field label={t("wakeupsPausedReason")}>
+              <input
+                type="text"
+                className="company-settings-input"
+                value={wakeupsPausedReasonLocal}
+                onChange={(e) => setWakeupsPausedReasonLocal(e.target.value)}
+              />
+            </Field>
+            <Field label={t("maintenanceWindowsJson")}>
+              <textarea
+                className="company-settings-maintenance-json"
+                rows={6}
+                value={maintenanceWindowsJson}
+                onChange={(e) => setMaintenanceWindowsJson(e.target.value)}
+              />
+            </Field>
+            <div className="company-settings-invite-buttons">
+              <Button
+                size="sm"
+                onClick={() => maintenanceMutation.mutate()}
+                disabled={maintenanceMutation.isPending}
+              >
+                {maintenanceMutation.isPending ? t("common:saving") : t("maintenanceSave")}
+              </Button>
+            </div>
+            {maintenanceMutation.isError && (
+              <p className="company-settings-invite-error">
+                {maintenanceMutation.error instanceof Error &&
+                maintenanceMutation.error.message === "maintenanceJson"
+                  ? t("maintenanceInvalidJson")
+                  : String(maintenanceMutation.error)}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Invites */}
       <div className="company-settings-section">
         <div className="company-settings-section-label">
@@ -573,13 +807,32 @@ export function CompanySettings() {
             />
             <span>{t("exportIncludeAgents")}</span>
           </label>
+          <label className="company-settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={exportIncludeApprovalPolicies}
+              onChange={(e) => setExportIncludeApprovalPolicies(e.target.checked)}
+            />
+            <span>{t("exportIncludeApprovalPolicies")}</span>
+          </label>
+          <label className="company-settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={exportIncludeBudgetPolicies}
+              onChange={(e) => setExportIncludeBudgetPolicies(e.target.checked)}
+            />
+            <span>{t("exportIncludeBudgetPolicies")}</span>
+          </label>
           <Button
             type="button"
             size="sm"
             variant="outline"
             disabled={
               exportMutation.isPending ||
-              (!exportIncludeCompany && !exportIncludeAgents)
+              (!exportIncludeCompany &&
+                !exportIncludeAgents &&
+                !exportIncludeApprovalPolicies &&
+                !exportIncludeBudgetPolicies)
             }
             onClick={() => exportMutation.mutate()}
           >
@@ -604,6 +857,53 @@ export function CompanySettings() {
               {t("exportRequiredSecretsHint")}
             </p>
           )}
+          <div className="company-settings-policy-import">
+            <div className="company-settings-section-label company-settings-policy-import-label">
+              {t("policyImportTitle")}
+            </div>
+            <p className="company-settings-portability-desc">{t("policyImportDesc")}</p>
+            <label className="company-settings-field-row">
+              <span>{t("policyImportSource")}</span>
+              <select
+                className="company-settings-input"
+                value={policySourceCompanyId}
+                onChange={(e) => setPolicySourceCompanyId(e.target.value)}
+              >
+                <option value="">{t("common:choose")}</option>
+                {companies
+                  .filter((c) => c.id !== selectedCompanyId && c.status !== "archived")
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="company-settings-checkbox-row">
+              <input
+                type="checkbox"
+                checked={policyReplaceBudget}
+                onChange={(e) => setPolicyReplaceBudget(e.target.checked)}
+              />
+              <span>{t("policyImportReplace")}</span>
+            </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={
+                importPoliciesMutation.isPending ||
+                !policySourceCompanyId ||
+                policySourceCompanyId === selectedCompanyId
+              }
+              onClick={() => importPoliciesMutation.mutate()}
+            >
+              {importPoliciesMutation.isPending ? t("exporting") : t("policyImportRun")}
+            </Button>
+            {policyImportMessage && (
+              <p className="company-settings-policy-import-msg">{policyImportMessage}</p>
+            )}
+          </div>
         </div>
       </div>
 

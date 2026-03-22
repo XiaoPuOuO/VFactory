@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { Moon, Settings, Sun, User } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { LogOut, Moon, Settings, Sun, User } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@/lib/router";
 import { CompanyRail } from "./CompanyRail";
 import { Sidebar } from "./Sidebar";
@@ -10,6 +10,8 @@ import { SidebarNavItem } from "./SidebarNavItem";
 import { BreadcrumbBar } from "./BreadcrumbBar";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { CommandPalette } from "./CommandPalette";
+import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
+import { OfflineBanner } from "./OfflineBanner";
 import { NewIssueDialog } from "./NewIssueDialog";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { NewGoalDialog } from "./NewGoalDialog";
@@ -28,8 +30,90 @@ import { meApi, canAccessInstanceSettings } from "../api/me";
 import { queryKeys } from "../lib/queryKeys";
 import { NotFoundPage } from "../pages/NotFound";
 import { Button } from "@/components/ui/button";
+import { authApi } from "../api/auth";
 
 import "../styles/board.css";
+
+/** 無公司且非 instance 設定時的底部列：僅登出與主題（無側欄）。 */
+function NoCompanyBoardChrome() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { theme, toggleTheme } = useTheme();
+  const [signingOut, setSigningOut] = useState(false);
+
+  return (
+    <div className="board-no-company-chrome" role="toolbar" aria-label={t("app.noCompanyChromeNavLabel")}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="board-no-company-chrome-signout"
+        disabled={signingOut}
+        onClick={async () => {
+          setSigningOut(true);
+          try {
+            await authApi.signOut();
+            await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
+            navigate("/landing", { replace: true });
+          } finally {
+            setSigningOut(false);
+          }
+        }}
+      >
+        <LogOut className="board-no-company-chrome-icon" aria-hidden />
+        {signingOut ? t("account.signingOut") : t("account.signOut")}
+      </Button>
+      <span className="board-no-company-chrome-spacer" aria-hidden />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="board-sidebar-footer-icon-btn"
+        onClick={toggleTheme}
+        aria-label={theme === "dark" ? t("nav.switchToLightMode") : t("nav.switchToDarkMode")}
+        title={theme === "dark" ? t("nav.switchToLightMode") : t("nav.switchToDarkMode")}
+      >
+        {theme === "dark" ? <Sun /> : <Moon />}
+      </Button>
+    </div>
+  );
+}
+
+/** 側欄底部：無公司時改為登出（不再顯示帳號管理連結）。 */
+function LayoutSignOutNavButton() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isMobile, setSidebarOpen } = useSidebar();
+  const [signingOut, setSigningOut] = useState(false);
+
+  return (
+    <button
+      type="button"
+      className="board-nav-item"
+      disabled={signingOut}
+      onClick={async () => {
+        if (isMobile) setSidebarOpen(false);
+        setSigningOut(true);
+        try {
+          await authApi.signOut();
+          await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
+          navigate("/landing", { replace: true });
+        } finally {
+          setSigningOut(false);
+        }
+      }}
+    >
+      <span className="board-nav-item-icon">
+        <LogOut />
+      </span>
+      <span className="board-nav-item-label">
+        {signingOut ? t("account.signingOut") : t("account.signOut")}
+      </span>
+    </button>
+  );
+}
 
 export function Layout() {
   const { t } = useTranslation();
@@ -39,6 +123,7 @@ export function Layout() {
   const {
     companies,
     loading: companiesLoading,
+    error: companiesError,
     selectedCompany,
     selectedCompanyId,
     setSelectedCompanyId,
@@ -51,6 +136,7 @@ export function Layout() {
   const onboardingTriggered = useRef(false);
   const lastMainScrollTop = useRef(0);
   const [mobileNavVisible, setMobileNavVisible] = useState(true);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);
   const nextTheme = theme === "dark" ? "light" : "dark";
@@ -61,7 +147,7 @@ export function Layout() {
   }, [companies, companyPrefix]);
   const hasUnknownCompanyPrefix =
     Boolean(companyPrefix) && !companiesLoading && companies.length > 0 && !matchedCompany;
-  const { data: health } = useQuery({
+  const { data: health, isPending: healthPending } = useQuery({
     queryKey: queryKeys.health,
     queryFn: () => healthApi.get(),
     retry: false,
@@ -72,15 +158,23 @@ export function Layout() {
     retry: false,
   });
   const showSettingsButton = canAccessInstanceSettings(meProfile);
+  const companiesReady = !companiesLoading && !companiesError;
+  const noCompaniesReady = companiesReady && companies.length === 0;
+  /** 無公司時不顯示看板側欄（例如 /account）；instance 設定仍保留導覽。 */
+  const hideEntireSidebar = noCompaniesReady && !isInstanceSettingsRoute;
 
   useEffect(() => {
     if (companiesLoading || onboardingTriggered.current) return;
+    // 部署模式尚未就緒時不可推論「沒有公司」：否則 authenticated 環境會短暫誤開建立公司精靈。
+    if (healthPending) return;
     if (health?.deploymentMode === "authenticated") return;
+    // 列表載入失敗時 data 可能為空陣列，不得當成「確實零間公司」。
+    if (companiesError) return;
     if (companies.length === 0) {
       onboardingTriggered.current = true;
       openOnboarding();
     }
-  }, [companies, companiesLoading, openOnboarding, health?.deploymentMode]);
+  }, [companies, companiesLoading, companiesError, openOnboarding, health?.deploymentMode, healthPending]);
 
   useEffect(() => {
     if (!companyPrefix || companiesLoading || companies.length === 0) return;
@@ -144,6 +238,26 @@ export function Layout() {
   });
 
   useEffect(() => {
+    function onOpenShortcuts() {
+      setShortcutsOpen(true);
+    }
+    window.addEventListener("paperclip:open-shortcuts", onOpenShortcuts);
+    return () => window.removeEventListener("paperclip:open-shortcuts", onOpenShortcuts);
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement;
+      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable) return;
+      e.preventDefault();
+      setShortcutsOpen(true);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
     if (!isMobile) {
       setMobileNavVisible(true);
       return;
@@ -154,7 +268,7 @@ export function Layout() {
 
   // Swipe gesture to open/close sidebar on mobile
   useEffect(() => {
-    if (!isMobile) return;
+    if (!isMobile || hideEntireSidebar) return;
 
     const EDGE_ZONE = 30; // px from left edge to start open-swipe
     const MIN_DISTANCE = 50; // minimum horizontal swipe distance
@@ -195,7 +309,7 @@ export function Layout() {
       document.removeEventListener("touchstart", onTouchStart);
       document.removeEventListener("touchend", onTouchEnd);
     };
-  }, [isMobile, sidebarOpen, setSidebarOpen]);
+  }, [isMobile, sidebarOpen, setSidebarOpen, hideEntireSidebar]);
 
   const onResizePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -268,12 +382,18 @@ export function Layout() {
 
   return (
     <div
-      className={`board-root ${isMobile ? "board-root-mobile" : "board-root-desktop"}`}
+      className={[
+        "board-root",
+        isMobile ? "board-root-mobile" : "board-root-desktop",
+        hideEntireSidebar && "board-root--no-company-board",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       <a href="#main-content" className="board-skip-link">
         {t("common.skipToMainContent")}
       </a>
-      {isMobile && sidebarOpen && (
+      {isMobile && sidebarOpen && !hideEntireSidebar && (
         <button
           type="button"
           className="board-backdrop"
@@ -282,66 +402,20 @@ export function Layout() {
         />
       )}
 
-      {isMobile ? (
-        <div className={`board-sidebar-wrap-mobile ${sidebarOpen ? "open" : "closed"}`}>
-          <div className="board-sidebar-inner">
-            <CompanyRail />
-            {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
-          </div>
-          <div className="board-sidebar-footer">
-            <div className="board-sidebar-footer-btn-wrap">
-              <SidebarNavItem
-                to="/account"
-                label={t("nav.account")}
-                icon={User}
-              />
-            </div>
-            {showSettingsButton && (
-              <Button variant="ghost" size="icon-sm" className="board-sidebar-footer-icon-btn" asChild>
-                <Link
-                  to="/instance/settings"
-                  aria-label={t("nav.instanceSettings")}
-                  title={t("nav.instanceSettings")}
-                  onClick={() => {
-                    if (isMobile) setSidebarOpen(false);
-                  }}
-                >
-                  <Settings />
-                </Link>
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="board-sidebar-footer-icon-btn"
-              onClick={toggleTheme}
-              aria-label={theme === "dark" ? t("nav.switchToLightMode") : t("nav.switchToDarkMode")}
-              title={theme === "dark" ? t("nav.switchToLightMode") : t("nav.switchToDarkMode")}
-            >
-              {theme === "dark" ? <Sun /> : <Moon />}
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="board-sidebar-wrap-desktop">
+      {!hideEntireSidebar &&
+        (isMobile ? (
+          <div className={`board-sidebar-wrap-mobile ${sidebarOpen ? "open" : "closed"}`}>
             <div className="board-sidebar-inner">
-              <CompanyRail />
-              <div
-                className="board-sidebar-collapsible"
-                style={{ width: sidebarOpen ? sidebarWidth : 0 }}
-              >
-                {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
-              </div>
+              {!noCompaniesReady && <CompanyRail />}
+              {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
             </div>
             <div className="board-sidebar-footer">
               <div className="board-sidebar-footer-btn-wrap">
-                <SidebarNavItem
-                  to="/account"
-                  label={t("nav.account")}
-                  icon={User}
-                />
+                {noCompaniesReady ? (
+                  <LayoutSignOutNavButton />
+                ) : (
+                  <SidebarNavItem to="/account" label={t("nav.account")} icon={User} />
+                )}
               </div>
               {showSettingsButton && (
                 <Button variant="ghost" size="icon-sm" className="board-sidebar-footer-icon-btn" asChild>
@@ -363,29 +437,79 @@ export function Layout() {
                 size="icon-sm"
                 className="board-sidebar-footer-icon-btn"
                 onClick={toggleTheme}
-                aria-label={`Switch to ${nextTheme} mode`}
-                title={`Switch to ${nextTheme} mode`}
+                aria-label={theme === "dark" ? t("nav.switchToLightMode") : t("nav.switchToDarkMode")}
+                title={theme === "dark" ? t("nav.switchToLightMode") : t("nav.switchToDarkMode")}
               >
                 {theme === "dark" ? <Sun /> : <Moon />}
               </Button>
             </div>
           </div>
+        ) : (
+          <>
+            <div className="board-sidebar-wrap-desktop">
+              <div className="board-sidebar-inner">
+                {!noCompaniesReady && <CompanyRail />}
+                <div
+                  className="board-sidebar-collapsible"
+                  style={{ width: sidebarOpen ? sidebarWidth : 0 }}
+                >
+                  {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
+                </div>
+              </div>
+              <div className="board-sidebar-footer">
+                <div className="board-sidebar-footer-btn-wrap">
+                  {noCompaniesReady ? (
+                    <LayoutSignOutNavButton />
+                  ) : (
+                    <SidebarNavItem to="/account" label={t("nav.account")} icon={User} />
+                  )}
+                </div>
+                {showSettingsButton && (
+                  <Button variant="ghost" size="icon-sm" className="board-sidebar-footer-icon-btn" asChild>
+                    <Link
+                      to="/instance/settings"
+                      aria-label={t("nav.instanceSettings")}
+                      title={t("nav.instanceSettings")}
+                      onClick={() => {
+                        if (isMobile) setSidebarOpen(false);
+                      }}
+                    >
+                      <Settings />
+                    </Link>
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="board-sidebar-footer-icon-btn"
+                  onClick={toggleTheme}
+                  aria-label={`Switch to ${nextTheme} mode`}
+                  title={`Switch to ${nextTheme} mode`}
+                >
+                  {theme === "dark" ? <Sun /> : <Moon />}
+                </Button>
+              </div>
+            </div>
 
-          {sidebarOpen && (
-            <button
-              type="button"
-              className="board-resize-handle"
-              onPointerDown={onResizePointerDown}
-              aria-label={t("common.resizeSidebar")}
-            />
-          )}
-        </>
-      )}
+            {sidebarOpen && (
+              <button
+                type="button"
+                className="board-resize-handle"
+                onPointerDown={onResizePointerDown}
+                aria-label={t("common.resizeSidebar")}
+              />
+            )}
+          </>
+        ))}
+
+      {hideEntireSidebar && <NoCompanyBoardChrome />}
 
       <div className={`board-main-wrap ${isMobile ? "board-main-wrap-mobile" : "board-main-wrap-desktop"}`}>
         <div className={isMobile ? "board-breadcrumb-bar-mobile-sticky" : ""}>
           <BreadcrumbBar />
         </div>
+        <OfflineBanner />
         <div className={["board-content-row", isMobile && "board-content-row-mobile"].filter(Boolean).join(" ")}>
           <main
             id="main-content"
@@ -404,8 +528,9 @@ export function Layout() {
           <PropertiesPanel />
         </div>
       </div>
-      {isMobile && <MobileBottomNav visible={mobileNavVisible} />}
+      {isMobile && !hideEntireSidebar && <MobileBottomNav visible={mobileNavVisible} />}
       <CommandPalette />
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <NewIssueDialog />
       <NewProjectDialog />
       <NewGoalDialog />

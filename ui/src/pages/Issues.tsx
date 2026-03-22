@@ -8,6 +8,7 @@ import { heartbeatsApi } from "../api/heartbeats";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
+import { EMPTY_ISSUE_LIST } from "../lib/emptyCollections";
 import { createIssueDetailLocationState } from "../lib/issueDetailBreadcrumb";
 import { EmptyState } from "../components/EmptyState";
 import { IssuesList } from "../components/IssuesList";
@@ -94,13 +95,20 @@ export function Issues() {
     },
   });
 
+  const removeIssue = useMutation({
+    mutationFn: (id: string) => issuesApi.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues.list(selectedCompanyId!) });
+    },
+  });
+
   if (!selectedCompanyId) {
     return <EmptyState icon={CircleDot} message="Select a company to view issues." />;
   }
 
   return (
     <IssuesList
-      issues={issues ?? []}
+      issues={issues ?? EMPTY_ISSUE_LIST}
       isLoading={isLoading}
       error={error as Error | null}
       agents={agents}
@@ -110,7 +118,8 @@ export function Issues() {
       initialAssignees={searchParams.get("assignee") ? [searchParams.get("assignee")!] : undefined}
       initialSearch={initialSearch}
       onSearchChange={handleSearchChange}
-      onUpdateIssue={(id, data) => updateIssue.mutate({ id, data })}
+      onUpdateIssue={(id, data) => updateIssue.mutateAsync({ id, data })}
+      onRemoveIssue={(id) => removeIssue.mutateAsync(id)}
     />
   );
 }

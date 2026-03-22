@@ -7,3 +7,9 @@ export const updateMeDeveloperModeSchema = z.object({
 
 export type UpdateMeDeveloperMode = z.infer<typeof updateMeDeveloperModeSchema>;
 
+export const updateMeNotificationPreferencesSchema = z.object({
+  emailEnabled: z.boolean(),
+});
+
+export type UpdateMeNotificationPreferences = z.infer<typeof updateMeNotificationPreferencesSchema>;
+

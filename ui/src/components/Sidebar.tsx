@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import {
+  Activity,
   Inbox,
   CircleDot,
   Target,
@@ -14,6 +15,7 @@ import {
   Settings,
   MessageCircle,
   Calendar,
+  Zap,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarSection } from "./SidebarSection";
@@ -92,6 +94,7 @@ export function Sidebar() {
           <SidebarNavItem to="/issues" label={t("nav.issues")} icon={CircleDot} />
           <SidebarNavItem to="/goals" label={t("nav.goals")} icon={Target} />
           <SidebarNavItem to="/schedules" label={t("nav.schedules")} icon={Calendar} />
+          <SidebarNavItem to="/runs" label={t("nav.runQuality")} icon={Activity} />
         </SidebarSection>
 
         <SidebarProjects />
@@ -102,6 +105,7 @@ export function Sidebar() {
           <SidebarNavItem to="/org" label={t("nav.orgChart")} icon={Network} />
           <SidebarNavItem to="/goal-map" label={t("nav.goalMap")} icon={Map} />
           <SidebarNavItem to="/governance" label={t("nav.governance")} icon={Scale} />
+          <SidebarNavItem to="/company/automation" label={t("nav.automation")} icon={Zap} />
           <SidebarNavItem to="/costs" label={t("nav.costs")} icon={DollarSign} />
           <SidebarNavItem to="/activity" label={t("nav.activity")} icon={History} />
           <SidebarNavItem to="/company/settings" label={t("nav.settings")} icon={Settings} />

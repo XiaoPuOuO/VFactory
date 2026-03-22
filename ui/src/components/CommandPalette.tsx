@@ -29,6 +29,7 @@ import {
   History,
   SquarePen,
   Plus,
+  Keyboard,
 } from "lucide-react";
 import { Identity } from "./Identity";
 import { agentUrl, projectUrl } from "../lib/utils";
@@ -231,7 +232,24 @@ export function CommandPalette() {
             </CommandGroup>
           </>
         )}
+
+        <CommandSeparator />
+        <CommandGroup heading={t("shortcuts.title")}>
+          <CommandItem
+            onSelect={() => {
+              setOpen(false);
+              window.dispatchEvent(new Event("paperclip:open-shortcuts"));
+            }}
+          >
+            <Keyboard className="ui-cmd-icon" />
+            {t("shortcuts.showHelpDesc")}
+          </CommandItem>
+        </CommandGroup>
       </CommandList>
+      <div className="ui-command-footer" aria-hidden>
+        <kbd className="ui-command-footer-kbd">?</kbd>
+        <span>{t("shortcutsFooterHint")}</span>
+      </div>
     </CommandDialog>
   );
 }

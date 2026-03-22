@@ -73,4 +73,7 @@ export const issuesApi = {
     api.post<Approval[]>(`/issues/${id}/approvals`, { approvalId }),
   unlinkApproval: (id: string, approvalId: string) =>
     api.delete<{ ok: true }>(`/issues/${id}/approvals/${approvalId}`),
+  getSubscription: (id: string) => api.get<{ subscribed: boolean }>(`/issues/${id}/subscription`),
+  subscribe: (id: string) => api.post<void>(`/issues/${id}/subscription`, {}),
+  unsubscribe: (id: string) => api.delete<void>(`/issues/${id}/subscription`),
 };

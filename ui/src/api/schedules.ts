@@ -1,4 +1,4 @@
-import type { AgentSchedule, CreateSchedule, UpdateSchedule } from "@paperclipai/shared";
+import type { AgentSchedule, CreateSchedule, ScheduleConflictRow, UpdateSchedule } from "@paperclipai/shared";
 import { api } from "./client";
 
 export type ListSchedulesFilters = { agentId?: string; enabled?: boolean };
@@ -21,4 +21,12 @@ export const schedulesApi = {
     api.patch<AgentSchedule>(`/companies/${companyId}/schedules/${scheduleId}`, data),
   remove: (companyId: string, scheduleId: string) =>
     api.delete<AgentSchedule>(`/companies/${companyId}/schedules/${scheduleId}`),
+  conflicts: (companyId: string, horizonDays = 7, thresholdSec = 60) => {
+    const params = new URLSearchParams();
+    params.set("horizonDays", String(horizonDays));
+    params.set("thresholdSec", String(thresholdSec));
+    return api.get<ScheduleConflictRow[]>(
+      `/companies/${companyId}/schedules/conflicts?${params.toString()}`,
+    );
+  },
 };

@@ -10,6 +10,8 @@ import {
   asString,
   asStringArray,
   buildPaperclipEnv,
+  mergePaperclipContextIntoEnv,
+  renderChatProjectScopeNote,
   ensureAbsoluteDirectory,
   ensureCommandResolvable,
   ensurePathInEnv,
@@ -394,6 +396,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   if (workspaceRepoRef) env.PAPERCLIP_WORKSPACE_REPO_REF = workspaceRepoRef;
   if (workspaceHints.length > 0) env.PAPERCLIP_WORKSPACES_JSON = JSON.stringify(workspaceHints);
 
+  mergePaperclipContextIntoEnv(env, context);
+
   for (const [key, value] of Object.entries(envConfig)) {
     if (typeof value === "string") env[key] = value;
   }
@@ -496,6 +500,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     chatRoomIdForPrompt && chatRoomTypeForPrompt
       ? [
           "You are currently responding inside a live VFactory chat room, not an issue comment.",
+          "If PAPERCLIP_COMPANY_PROJECTS_JSON is set, parse it: it lists every active project in this company (id, name, optional description). Use it when the user asks what the company builds or names a project; do not infer the company's product list only from the local workspace directory (PAPERCLIP_WORKSPACE_CWD may be agent home or one checkout).",
           "In this run you MUST reply in the chat. Do NOT only check assigned issues and then exit; read the chat transcript below and write a direct reply to the latest Board message.",
           "You MUST send your reply by calling POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\": \"your reply text\"} (and include header X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID). The reply will only appear in the chat when you POST it; do not only output reply text in your response without calling this API.",
           "Treat this heartbeat as a single conversational turn directed at you.",
@@ -526,7 +531,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     : "";
   const paperclipEnvNote = renderPaperclipEnvNote(env);
   const apiAccessNote = renderApiAccessNote(env);
-  const prompt = `${instructionsPrefix}${paperclipEnvNote}${apiAccessNote}${chatModePrefix}${crossChatBlock}${roomEarlierBlock}${chatHistoryBlock}${renderedPrompt}`;
+  const prompt = `${instructionsPrefix}${paperclipEnvNote}${apiAccessNote}${chatModePrefix}${renderChatProjectScopeNote(env)}${crossChatBlock}${roomEarlierBlock}${chatHistoryBlock}${renderedPrompt}`;
 
   const buildArgs = (resumeSessionId: string | null) => {
     const args = ["--output-format", "stream-json"];

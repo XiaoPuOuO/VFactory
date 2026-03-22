@@ -8,6 +8,7 @@ import {
   authUsers,
   companies,
   companyMemberships,
+  integrationApiKeys,
   instanceSettings,
   tenantMemberships,
 } from "@paperclipai/db";
@@ -153,6 +154,50 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
       .then((rows) => rows[0] ?? null);
 
     if (!key) {
+      const intKey = await db
+        .select()
+        .from(integrationApiKeys)
+        .where(and(eq(integrationApiKeys.keyHash, tokenHash), isNull(integrationApiKeys.revokedAt)))
+        .then((rows) => rows[0] ?? null);
+
+      if (intKey) {
+        await db
+          .update(integrationApiKeys)
+          .set({ lastUsedAt: new Date() })
+          .where(eq(integrationApiKeys.id, intKey.id));
+
+        const companyRow = await db
+          .select({ tenantId: companies.tenantId })
+          .from(companies)
+          .where(eq(companies.id, intKey.companyId))
+          .then((rows) => rows[0] ?? null);
+        if (!companyRow) {
+          next();
+          return;
+        }
+        if (req.tenantId && companyRow.tenantId !== req.tenantId) {
+          next();
+          return;
+        }
+        if (!req.tenantId) req.tenantId = companyRow.tenantId;
+
+        const rawScopes = intKey.scopes;
+        const integrationScopes = Array.isArray(rawScopes)
+          ? rawScopes.filter((s): s is string => typeof s === "string")
+          : [];
+
+        req.actor = {
+          type: "service",
+          companyId: intKey.companyId,
+          keyId: intKey.id,
+          integrationScopes,
+          source: "integration_key",
+          runId: runIdHeader ?? undefined,
+        };
+        next();
+        return;
+      }
+
       const claims = verifyLocalAgentJwt(token);
       if (!claims) {
         next();

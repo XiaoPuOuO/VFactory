@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Project } from "@paperclipai/shared";
+import type { IssueVcsLinks, Project } from "@paperclipai/shared";
 import { StatusBadge } from "./StatusBadge";
 import { formatDate } from "../lib/utils";
 import { goalsApi } from "../api/goals";
@@ -43,7 +43,8 @@ export type ProjectConfigFieldKey =
   | "execution_workspace_branch_template"
   | "execution_workspace_worktree_parent_dir"
   | "execution_workspace_provision_command"
-  | "execution_workspace_teardown_command";
+  | "execution_workspace_teardown_command"
+  | "vcs";
 
 const REPO_ONLY_CWD_SENTINEL = "/__paperclip_repo_only__";
 
@@ -236,6 +237,20 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
     if ((!onUpdate && !onFieldUpdate) || linkedGoalIds.includes(goalId)) return;
     commitField("goals", { goalIds: [...linkedGoalIds, goalId] });
     setGoalOpen(false);
+  };
+
+  const normalizeProjectVcs = (v: IssueVcsLinks | null | undefined): IssueVcsLinks => ({
+    prUrl: v?.prUrl ?? null,
+    branch: v?.branch ?? null,
+    ciStatus: v?.ciStatus ?? null,
+    ciUrl: v?.ciUrl ?? null,
+  });
+
+  const patchProjectVcs = (partial: Partial<IssueVcsLinks>) => {
+    if (!onUpdate && !onFieldUpdate) return;
+    const next = { ...normalizeProjectVcs(project.vcsLinks), ...partial };
+    const empty = !next.prUrl && !next.branch && !next.ciStatus && !next.ciUrl;
+    commitField("vcs", { vcsLinks: empty ? null : next });
   };
 
   const updateExecutionWorkspacePolicy = (patch: Record<string, unknown>) => {
@@ -555,6 +570,113 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
               <span className="text-sm">{formatDate(project.targetDate)}</span>
             </PropertyRow>
           )}
+        </div>
+      </div>
+
+      {/* 版本控制／CI */}
+      <div className="space-y-4">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {t("project:sectionVcs")}
+        </div>
+        <div className="space-y-1 rounded-md border border-border px-4 py-4">
+          <PropertyRow label={<FieldLabel label={t("project:vcsPrUrl")} state={fieldState("vcs")} />}>
+            {onUpdate || onFieldUpdate ? (
+              <div className="flex w-full items-center gap-1.5 min-w-0">
+                <DraftInput
+                  value={normalizeProjectVcs(project.vcsLinks).prUrl ?? ""}
+                  onCommit={(v) => patchProjectVcs({ prUrl: v.trim() || null })}
+                  immediate
+                  className="w-full min-w-0 rounded border border-border bg-transparent px-2 py-1 text-sm outline-none"
+                  placeholder="https://..."
+                />
+                {normalizeProjectVcs(project.vcsLinks).prUrl ? (
+                  <a
+                    href={normalizeProjectVcs(project.vcsLinks).prUrl!}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    aria-label={t("project:vcsOpenPr")}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                ) : null}
+              </div>
+            ) : normalizeProjectVcs(project.vcsLinks).prUrl ? (
+              <a
+                href={normalizeProjectVcs(project.vcsLinks).prUrl!}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
+              >
+                <span className="truncate max-w-[240px]">{normalizeProjectVcs(project.vcsLinks).prUrl}</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              </a>
+            ) : (
+              <span className="text-sm text-muted-foreground">—</span>
+            )}
+          </PropertyRow>
+          <PropertyRow label={<FieldLabel label={t("project:vcsBranch")} state={fieldState("vcs")} />}>
+            {onUpdate || onFieldUpdate ? (
+              <DraftInput
+                value={normalizeProjectVcs(project.vcsLinks).branch ?? ""}
+                onCommit={(v) => patchProjectVcs({ branch: v.trim() || null })}
+                immediate
+                className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm outline-none"
+                placeholder={t("project:vcsBranchPlaceholder")}
+              />
+            ) : (
+              <span className="text-sm">{normalizeProjectVcs(project.vcsLinks).branch ?? "—"}</span>
+            )}
+          </PropertyRow>
+          <PropertyRow label={<FieldLabel label={t("project:vcsCiStatus")} state={fieldState("vcs")} />}>
+            {onUpdate || onFieldUpdate ? (
+              <DraftInput
+                value={normalizeProjectVcs(project.vcsLinks).ciStatus ?? ""}
+                onCommit={(v) => patchProjectVcs({ ciStatus: v.trim() || null })}
+                immediate
+                className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm outline-none"
+                placeholder={t("project:vcsCiStatusPlaceholder")}
+              />
+            ) : (
+              <span className="text-sm">{normalizeProjectVcs(project.vcsLinks).ciStatus ?? "—"}</span>
+            )}
+          </PropertyRow>
+          <PropertyRow label={<FieldLabel label={t("project:vcsCiUrl")} state={fieldState("vcs")} />}>
+            {onUpdate || onFieldUpdate ? (
+              <div className="flex w-full items-center gap-1.5 min-w-0">
+                <DraftInput
+                  value={normalizeProjectVcs(project.vcsLinks).ciUrl ?? ""}
+                  onCommit={(v) => patchProjectVcs({ ciUrl: v.trim() || null })}
+                  immediate
+                  className="w-full min-w-0 rounded border border-border bg-transparent px-2 py-1 text-sm outline-none"
+                  placeholder="https://..."
+                />
+                {normalizeProjectVcs(project.vcsLinks).ciUrl ? (
+                  <a
+                    href={normalizeProjectVcs(project.vcsLinks).ciUrl!}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    aria-label={t("project:vcsOpenCi")}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                ) : null}
+              </div>
+            ) : normalizeProjectVcs(project.vcsLinks).ciUrl ? (
+              <a
+                href={normalizeProjectVcs(project.vcsLinks).ciUrl!}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
+              >
+                <span className="truncate max-w-[240px]">{normalizeProjectVcs(project.vcsLinks).ciUrl}</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              </a>
+            ) : (
+              <span className="text-sm text-muted-foreground">—</span>
+            )}
+          </PropertyRow>
         </div>
       </div>
 

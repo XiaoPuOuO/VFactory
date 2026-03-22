@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useLocation } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { approvalsApi } from "../api/approvals";
@@ -10,12 +11,14 @@ import { PageTabBar } from "../components/PageTabBar";
 import "./Approvals.css";
 import { Tabs } from "@/components/ui/tabs";
 import { ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ApprovalCard } from "../components/ApprovalCard";
 import { PageSkeleton } from "../components/PageSkeleton";
 
 type StatusFilter = "pending" | "all";
 
 export function Approvals() {
+  const { t } = useTranslation("approvals");
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
@@ -24,6 +27,8 @@ export function Approvals() {
   const pathSegment = location.pathname.split("/").pop() ?? "pending";
   const statusFilter: StatusFilter = pathSegment === "all" ? "all" : "pending";
   const [actionError, setActionError] = useState<string | null>(null);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     setBreadcrumbs([{ label: "Approvals" }]);
@@ -95,10 +100,38 @@ export function Approvals() {
             { value: "all", label: "All" },
           ]} />
         </Tabs>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="approvals-export-csv"
+          disabled={!selectedCompanyId || exportingCsv}
+          onClick={async () => {
+            if (!selectedCompanyId) return;
+            setExportError(null);
+            setExportingCsv(true);
+            try {
+              await approvalsApi.downloadApprovalsCsv(selectedCompanyId);
+            } catch (err) {
+              const message =
+                err instanceof Error ? err.message : err != null ? String(err) : t("exportCsvFailed");
+              setExportError(message);
+            } finally {
+              setExportingCsv(false);
+            }
+          }}
+        >
+          {exportingCsv ? t("exportCsvLoading") : t("exportCsv")}
+        </Button>
       </div>
 
       {error && <p className="approvals-error">{error.message}</p>}
       {actionError && <p className="approvals-error">{actionError}</p>}
+      {exportError && (
+        <p className="approvals-error" role="alert">
+          {exportError}
+        </p>
+      )}
 
       {filtered.length === 0 && (
         <div className="approvals-empty">

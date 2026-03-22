@@ -6,3 +6,10 @@ export const setDefaultCompanyPathSchema = z.object({
 });
 
 export type SetDefaultCompanyPath = z.infer<typeof setDefaultCompanyPathSchema>;
+
+/** 實例預設合規留存天數；null 表示未設定（公司繼承語意由前端／營運自行解讀）。 */
+export const setComplianceDefaultRetentionSchema = z.object({
+  complianceDefaultRetentionDays: z.number().int().min(1).max(3650).nullable(),
+});
+
+export type SetComplianceDefaultRetention = z.infer<typeof setComplianceDefaultRetentionSchema>;

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   activityLog,
@@ -12,6 +12,7 @@ import {
 } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
 import { budgetPolicyService } from "./budget-policies.js";
+import { notifyLimitBreach } from "./limit-breach-notify.js";
 
 export interface CostDateRange {
   from?: Date;
@@ -35,6 +36,80 @@ function pastDaysRange(days: number): { from: Date; to: Date } {
   from.setDate(from.getDate() - days);
   return { from, to };
 }
+
+const COST_EXPORT_MAX_LIMIT = 5000;
+const COST_EXPORT_DEFAULT_LIMIT = 2000;
+/** 週對週花費異常倍率（最近 7 天 > 此倍率 × 前 7 天）。 */
+const SPEND_SPIKE_MULTIPLIER = 2;
+
+function csvEscapeCell(value: unknown): string {
+  if (value == null) return "";
+  const s = String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+export interface CostEventExportRow {
+  id: string;
+  occurredAt: Date;
+  costCents: number;
+  inputTokens: number;
+  outputTokens: number;
+  provider: string;
+  model: string;
+  agentId: string;
+  agentName: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  goalId: string | null;
+  issueId: string | null;
+  billingCode: string | null;
+}
+
+export function formatCostEventsCsv(rows: CostEventExportRow[]): string {
+  const header = [
+    "id",
+    "occurredAt",
+    "costCents",
+    "inputTokens",
+    "outputTokens",
+    "provider",
+    "model",
+    "agentId",
+    "agentName",
+    "projectId",
+    "projectName",
+    "goalId",
+    "issueId",
+    "billingCode",
+  ];
+  const lines = [
+    header.join(","),
+    ...rows.map((r) =>
+      [
+        r.id,
+        r.occurredAt.toISOString(),
+        r.costCents,
+        r.inputTokens,
+        r.outputTokens,
+        r.provider,
+        r.model,
+        r.agentId,
+        r.agentName ?? "",
+        r.projectId ?? "",
+        r.projectName ?? "",
+        r.goalId ?? "",
+        r.issueId ?? "",
+        r.billingCode ?? "",
+      ]
+        .map(csvEscapeCell)
+        .join(","),
+    ),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+export { COST_EXPORT_MAX_LIMIT, COST_EXPORT_DEFAULT_LIMIT };
 
 export function costService(db: Db) {
   const budgetPolicies = budgetPolicyService(db);
@@ -91,15 +166,25 @@ export function costService(db: Db) {
           .set({ status: "paused", autoPauseReason: "budget_limit", updatedAt: new Date() })
           .where(eq(agents.id, updatedAgent.id));
         const { from } = currentMonthRange();
-        await db.insert(limitBreachEvents).values({
-          companyId,
-          type: "budget_breach",
-          occurredAt: new Date(),
-          amountCents: updatedAgent.spentMonthlyCents,
-          tokenUsage: null,
-          agentId: updatedAgent.id,
-          details: { agentName: updatedAgent.name },
-        });
+        const [breachRow] = await db
+          .insert(limitBreachEvents)
+          .values({
+            companyId,
+            type: "budget_breach",
+            occurredAt: new Date(),
+            amountCents: updatedAgent.spentMonthlyCents,
+            tokenUsage: null,
+            agentId: updatedAgent.id,
+            details: { agentName: updatedAgent.name },
+          })
+          .returning();
+        if (breachRow) {
+          await notifyLimitBreach(db, companyId, {
+            id: breachRow.id,
+            type: breachRow.type,
+            details: (breachRow.details as Record<string, unknown> | null) ?? null,
+          });
+        }
       }
 
       const { from: monthStart } = currentMonthRange();
@@ -136,15 +221,25 @@ export function costService(db: Db) {
             )
             .limit(1);
           if (!existing) {
-            await db.insert(limitBreachEvents).values({
-              companyId,
-              type: "token_limit_breach",
-              occurredAt: new Date(),
-              amountCents: null,
-              tokenUsage,
-              agentId: null,
-              details: { tokenLimit },
-            });
+            const [breachRow] = await db
+              .insert(limitBreachEvents)
+              .values({
+                companyId,
+                type: "token_limit_breach",
+                occurredAt: new Date(),
+                amountCents: null,
+                tokenUsage,
+                agentId: null,
+                details: { tokenLimit },
+              })
+              .returning();
+            if (breachRow) {
+              await notifyLimitBreach(db, companyId, {
+                id: breachRow.id,
+                type: breachRow.type,
+                details: (breachRow.details as Record<string, unknown> | null) ?? null,
+              });
+            }
           }
         }
         if (priceLimitCents != null && spendCents >= priceLimitCents) {
@@ -160,15 +255,25 @@ export function costService(db: Db) {
             )
             .limit(1);
           if (!existing) {
-            await db.insert(limitBreachEvents).values({
-              companyId,
-              type: "price_limit_breach",
-              occurredAt: new Date(),
-              amountCents: spendCents,
-              tokenUsage: null,
-              agentId: null,
-              details: { priceLimitCents },
-            });
+            const [breachRow] = await db
+              .insert(limitBreachEvents)
+              .values({
+                companyId,
+                type: "price_limit_breach",
+                occurredAt: new Date(),
+                amountCents: spendCents,
+                tokenUsage: null,
+                agentId: null,
+                details: { priceLimitCents },
+              })
+              .returning();
+            if (breachRow) {
+              await notifyLimitBreach(db, companyId, {
+                id: breachRow.id,
+                type: breachRow.type,
+                details: (breachRow.details as Record<string, unknown> | null) ?? null,
+              });
+            }
           }
         }
       }
@@ -306,16 +411,158 @@ export function costService(db: Db) {
         createdAt: r.createdAt,
       }));
 
+      const now = new Date();
+      const { from: monthStartUtc } = currentMonthRange();
+      const [mtdTotals] = await db
+        .select({
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+        })
+        .from(costEvents)
+        .where(and(eq(costEvents.companyId, companyId), gte(costEvents.occurredAt, monthStartUtc)));
+      const monthToDateSpendCents = Number(mtdTotals?.spendCents ?? 0);
+
+      const last7From = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const prev7From = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+      const prev7ToExclusive = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      const [last7Row] = await db
+        .select({
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+        })
+        .from(costEvents)
+        .where(
+          and(
+            eq(costEvents.companyId, companyId),
+            gte(costEvents.occurredAt, last7From),
+            lte(costEvents.occurredAt, now),
+          ),
+        );
+      const [prev7Row] = await db
+        .select({
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+        })
+        .from(costEvents)
+        .where(
+          and(
+            eq(costEvents.companyId, companyId),
+            gte(costEvents.occurredAt, prev7From),
+            lt(costEvents.occurredAt, prev7ToExclusive),
+          ),
+        );
+
+      const last7DaysSpendCents = Number(last7Row?.spendCents ?? 0);
+      const previous7DaysSpendCents = Number(prev7Row?.spendCents ?? 0);
+      const spendSpikeVsPreviousWeek =
+        previous7DaysSpendCents > 0 && last7DaysSpendCents > SPEND_SPIKE_MULTIPLIER * previous7DaysSpendCents;
+
+      const y = now.getUTCFullYear();
+      const m = now.getUTCMonth();
+      const daysInMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      const dayOfMonth = Math.max(1, now.getUTCDate());
+      const monthProjectedSpendCents = Math.round((monthToDateSpendCents / dayOfMonth) * daysInMonth);
+      const budgetCents = company.budgetMonthlyCents;
+      const monthProjectedUtilizationPercent =
+        budgetCents > 0 ? Number(((monthProjectedSpendCents / budgetCents) * 100).toFixed(2)) : 0;
+      const likelyMonthBudgetBreach = budgetCents > 0 && monthProjectedSpendCents >= budgetCents;
+
+      const forecast = {
+        monthToDateSpendCents,
+        monthProjectedSpendCents,
+        monthProjectedUtilizationPercent,
+        likelyMonthBudgetBreach,
+        last7DaysSpendCents,
+        previous7DaysSpendCents,
+        spendSpikeVsPreviousWeek,
+      };
+
       return {
         companyId,
         spendCents,
-        budgetCents: company.budgetMonthlyCents,
+        budgetCents,
         utilizationPercent: Number(utilization.toFixed(2)),
         tokenUsage,
         tokenLimit: company.tokenLimit != null ? Number(company.tokenLimit) : null,
         priceLimitCents: company.priceLimitCents ?? null,
         breachEvents,
+        forecast,
       };
+    },
+
+    listCostEventsForExport: async (
+      companyId: string,
+      opts: {
+        range: CostDateRange;
+        limit: number;
+        cursor?: { occurredAt: Date; id: string };
+      },
+    ): Promise<{
+      rows: CostEventExportRow[];
+      nextCursor: { occurredAt: Date; id: string } | null;
+    }> => {
+      const take = Math.min(Math.max(1, opts.limit), COST_EXPORT_MAX_LIMIT);
+      const conditions = [eq(costEvents.companyId, companyId)];
+      if (opts.range.from) conditions.push(gte(costEvents.occurredAt, opts.range.from));
+      if (opts.range.to) conditions.push(lte(costEvents.occurredAt, opts.range.to));
+      if (opts.cursor) {
+        const c = opts.cursor;
+        conditions.push(
+          or(
+            lt(costEvents.occurredAt, c.occurredAt),
+            and(eq(costEvents.occurredAt, c.occurredAt), lt(costEvents.id, c.id)),
+          )!,
+        );
+      }
+
+      const rawRows = await db
+        .select({
+          id: costEvents.id,
+          occurredAt: costEvents.occurredAt,
+          costCents: costEvents.costCents,
+          inputTokens: costEvents.inputTokens,
+          outputTokens: costEvents.outputTokens,
+          provider: costEvents.provider,
+          model: costEvents.model,
+          agentId: costEvents.agentId,
+          agentName: agents.name,
+          projectId: costEvents.projectId,
+          projectName: projects.name,
+          goalId: costEvents.goalId,
+          issueId: costEvents.issueId,
+          billingCode: costEvents.billingCode,
+        })
+        .from(costEvents)
+        .leftJoin(agents, eq(costEvents.agentId, agents.id))
+        .leftJoin(projects, eq(costEvents.projectId, projects.id))
+        .where(and(...conditions))
+        .orderBy(desc(costEvents.occurredAt), desc(costEvents.id))
+        .limit(take + 1);
+
+      const hasMore = rawRows.length > take;
+      const slice = rawRows.slice(0, take);
+      const last = slice[slice.length - 1];
+      const nextCursor =
+        hasMore && last
+          ? { occurredAt: last.occurredAt, id: last.id }
+          : null;
+
+      const rows: CostEventExportRow[] = slice.map((r) => ({
+        id: r.id,
+        occurredAt: r.occurredAt,
+        costCents: r.costCents,
+        inputTokens: r.inputTokens,
+        outputTokens: r.outputTokens,
+        provider: r.provider,
+        model: r.model,
+        agentId: r.agentId,
+        agentName: r.agentName,
+        projectId: r.projectId,
+        projectName: r.projectName,
+        goalId: r.goalId,
+        issueId: r.issueId,
+        billingCode: r.billingCode,
+      }));
+
+      return { rows, nextCursor };
     },
 
     byAgent: async (companyId: string, range?: CostDateRange) => {

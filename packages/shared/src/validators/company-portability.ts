@@ -4,6 +4,8 @@ export const portabilityIncludeSchema = z
   .object({
     company: z.boolean().optional(),
     agents: z.boolean().optional(),
+    approvalPolicies: z.boolean().optional(),
+    budgetPolicies: z.boolean().optional(),
   })
   .partial();
 
@@ -39,6 +41,23 @@ export const portabilityAgentManifestEntrySchema = z.object({
   metadata: z.record(z.unknown()).nullable(),
 });
 
+export const portabilityApprovalPolicyEntrySchema = z.object({
+  approvalType: z.string().min(1),
+  enabled: z.boolean(),
+  maxBudgetMonthlyCents: z.number().int().nullable(),
+});
+
+export const portabilityBudgetPolicyEntrySchema = z.object({
+  scopeType: z.enum(["project", "billing_code", "company"]),
+  /** 匯出時之專案名稱，匯入時依名稱對應目標公司專案 */
+  projectName: z.string().min(1).nullable().optional(),
+  billingCode: z.string().nullable().optional(),
+  limitCents: z.number().int().nonnegative(),
+  period: z.string().min(1),
+  onExceed: z.enum(["record_only", "block_new_runs_for_scope", "pause_agents"]),
+  enabled: z.boolean(),
+});
+
 export const portabilityManifestSchema = z.object({
   schemaVersion: z.number().int().positive(),
   generatedAt: z.string().datetime(),
@@ -48,12 +67,23 @@ export const portabilityManifestSchema = z.object({
       companyName: z.string().min(1),
     })
     .nullable(),
-  includes: z.object({
-    company: z.boolean(),
-    agents: z.boolean(),
-  }),
+  includes: z
+    .object({
+      company: z.boolean(),
+      agents: z.boolean(),
+      approvalPolicies: z.boolean().optional(),
+      budgetPolicies: z.boolean().optional(),
+    })
+    .transform((inc) => ({
+      company: inc.company,
+      agents: inc.agents,
+      approvalPolicies: inc.approvalPolicies ?? false,
+      budgetPolicies: inc.budgetPolicies ?? false,
+    })),
   company: portabilityCompanyManifestEntrySchema.nullable(),
   agents: z.array(portabilityAgentManifestEntrySchema),
+  approvalPolicies: z.array(portabilityApprovalPolicyEntrySchema).optional(),
+  budgetPolicies: z.array(portabilityBudgetPolicyEntrySchema).optional(),
   requiredSecrets: z.array(portabilitySecretRequirementSchema).default([]),
 });
 

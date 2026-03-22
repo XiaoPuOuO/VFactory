@@ -856,3 +856,224 @@
   font-size: 10px;
   color: var(--muted-foreground);
 }
+
+/* ---------------------------------------------------------------------------
+   多選列與批次操作列
+   --------------------------------------------------------------------------- */
+.issues-row-container {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+
+.issues-row-container:last-child {
+  border-bottom: none;
+}
+
+.issues-row-container .issues-row.issues-row--in-container {
+  flex: 1 1 0%;
+  min-width: 0;
+  border-bottom: none;
+}
+
+.issues-row-container--selected {
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+}
+
+.issues-row-select {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-start;
+  justify-content: center;
+  width: 2rem;
+  padding-top: 0.5rem;
+  padding-left: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+@media (min-width: 640px) {
+  .issues-row-select {
+    align-items: center;
+    padding-top: 0;
+  }
+}
+
+.issues-row-container:hover .issues-row-select,
+.issues-list-has-selection .issues-row-select,
+.issues-row-container--selected .issues-row-select {
+  opacity: 1;
+}
+
+.issues-page:has(.issues-bulk-bar) {
+  padding-bottom: 5rem;
+}
+
+.issues-bulk-bar {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 4px 24px color-mix(in oklab, var(--foreground) 12%, transparent);
+  transform: translateX(-50%);
+}
+
+.issues-bulk-count {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.issues-bulk-chevron {
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-left: 0.125rem;
+  opacity: 0.65;
+}
+
+.issues-bulk-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.25rem;
+}
+
+.issues-bulk-popover {
+  min-width: 11rem;
+}
+
+.kanban-card-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+}
+
+.kanban-card-select {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+/* Issues 儲存視圖選單 */
+.issues-saved-views-popover {
+  width: min(20rem, 92vw);
+  padding: 0;
+}
+
+.issues-saved-views-inner {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.issues-saved-views-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.issues-saved-views-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+}
+
+.issues-saved-views-loading {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+.issues-saved-views-spinner {
+  width: 1rem;
+  height: 1rem;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.issues-saved-views-empty {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+
+.issues-saved-views-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.issues-saved-views-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.issues-saved-views-apply {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 0.875rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.issues-saved-views-apply:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.issues-saved-views-delete {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.issues-saved-views-delete:hover {
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+}
+
+.issues-saved-views-delete-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.issues-saved-views-save-btn {
+  width: 100%;
+}
+
+.issues-saved-view-dialog {
+  max-width: 22rem;
+}

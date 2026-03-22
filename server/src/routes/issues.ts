@@ -20,11 +20,14 @@ import {
   issueApprovalService,
   issueService,
   logActivity,
+  notifyIssueCommentCreated,
   projectService,
+  scheduleCompanyNotificationEvent,
 } from "../services/index.js";
 import { logger } from "../middleware/logger.js";
 import { forbidden, HttpError, unauthorized } from "../errors.js";
-import { assertCompanyAccess, getActorInfo, hasCompanyViewAll } from "./authz.js";
+import { assertBoard, assertCompanyAccess, getActorInfo, hasCompanyViewAll } from "./authz.js";
+import { assertCompanyIntegrationScope } from "./integration-scope.js";
 import { shouldWakeAssigneeOnCheckout } from "./issues-checkout-wakeup.js";
 import { isAllowedContentType, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
 import type { ChatServiceInstance } from "./chat.js";
@@ -190,7 +193,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
 
   router.get("/companies/:companyId/issues", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "issues:read");
     const assigneeUserFilterRaw = req.query.assigneeUserId as string | undefined;
     const touchedByUserFilterRaw = req.query.touchedByUserId as string | undefined;
     const unreadForUserFilterRaw = req.query.unreadForUserId as string | undefined;
@@ -236,7 +239,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
 
   router.get("/companies/:companyId/labels", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "issues:read");
     const result = await svc.listLabels(companyId);
     res.json(result);
   });
@@ -244,6 +247,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
   router.post("/companies/:companyId/labels", validate(createIssueLabelSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot manage labels" });
+      return;
+    }
     const label = await svc.createLabel(companyId, req.body);
     const actor = getActorInfo(req);
     await logActivity(db, {
@@ -268,6 +275,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       return;
     }
     await assertCompanyAccess(req, existing.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot manage labels" });
+      return;
+    }
     const removed = await svc.deleteLabel(labelId);
     if (!removed) {
       res.status(404).json({ error: "Label not found" });
@@ -295,7 +306,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    await assertCompanyAccess(req, issue.companyId, db);
+    await assertCompanyIntegrationScope(db, req, issue.companyId, "issues:read");
     const [ancestors, project, goal, mentionedProjectIds] = await Promise.all([
       svc.getAncestors(issue.id),
       issue.projectId ? projectsSvc.getById(issue.projectId) : null,
@@ -358,7 +369,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    await assertCompanyAccess(req, issue.companyId, db);
+    await assertCompanyIntegrationScope(db, req, issue.companyId, "issues:read");
     const approvals = await issueApprovalsSvc.listApprovalsForIssue(id);
     res.json(approvals);
   });
@@ -425,6 +436,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
   router.post("/companies/:companyId/issues", validate(createIssueSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot create issues" });
+      return;
+    }
     if (req.body.assigneeAgentId || req.body.assigneeUserId) {
       await assertCanAssignTasks(req, companyId);
     }
@@ -446,6 +461,14 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       entityType: "issue",
       entityId: issue.id,
       details: { title: issue.title, identifier: issue.identifier },
+    });
+
+    scheduleCompanyNotificationEvent(db, companyId, "issue.created", {
+      issueId: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      status: issue.status,
+      projectId: issue.projectId,
     });
 
     if (issue.assigneeAgentId && issue.status !== "backlog") {
@@ -473,6 +496,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       return;
     }
     await assertCompanyAccess(req, existing.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot update issues" });
+      return;
+    }
     const assigneeWillChange =
       (req.body.assigneeAgentId !== undefined && req.body.assigneeAgentId !== existing.assigneeAgentId) ||
       (req.body.assigneeUserId !== undefined && req.body.assigneeUserId !== existing.assigneeUserId);
@@ -554,6 +581,16 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
         ...(commentBody ? { source: "comment" } : {}),
         _previous: hasFieldChanges ? previous : undefined,
       },
+    });
+
+    scheduleCompanyNotificationEvent(db, issue.companyId, "issue.updated", {
+      issueId: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      status: issue.status,
+      projectId: issue.projectId,
+      changedFields: hasFieldChanges ? Object.keys(previous) : [],
+      commentAdded: Boolean(commentBody),
     });
 
     let comment = null;
@@ -749,6 +786,22 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       }
     })();
 
+    if (commentBody && comment) {
+      void notifyIssueCommentCreated(db, {
+        companyId: issue.companyId,
+        issueId: issue.id,
+        issueIdentifier: issue.identifier,
+        issueTitle: issue.title,
+        commentId: comment.id,
+        commentBody,
+        bodySnippet: comment.body.slice(0, 200),
+        authorUserId: actor.actorType === "user" ? actor.actorId : null,
+        authorAgentId: actor.actorType === "agent" ? actor.actorId : null,
+      }).catch((err) =>
+        logger.warn({ err, issueId: issue.id }, "notifyIssueCommentCreated failed"),
+      );
+    }
+
     res.json({ ...issue, comment });
   });
 
@@ -760,6 +813,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       return;
     }
     await assertCompanyAccess(req, existing.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot delete issues" });
+      return;
+    }
     const attachments = await svc.listAttachments(id);
 
     const issue = await svc.remove(id);
@@ -799,6 +856,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       return;
     }
     await assertCompanyAccess(req, issue.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot checkout issues" });
+      return;
+    }
 
     if (req.actor.type === "agent" && req.actor.agentId !== req.body.agentId) {
       res.status(403).json({ error: "Agent can only checkout as itself" });
@@ -854,6 +915,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       return;
     }
     await assertCompanyAccess(req, existing.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot release issues" });
+      return;
+    }
     if (!(await assertAgentRunCheckoutOwnership(req, res, existing))) return;
     const actorRunId = requireAgentRunId(req, res);
     if (req.actor.type === "agent" && !actorRunId) return;
@@ -890,7 +955,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    await assertCompanyAccess(req, issue.companyId, db);
+    await assertCompanyIntegrationScope(db, req, issue.companyId, "issues:read");
     const comments = await svc.listComments(id);
     res.json(comments);
   });
@@ -903,7 +968,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    await assertCompanyAccess(req, issue.companyId, db);
+    await assertCompanyIntegrationScope(db, req, issue.companyId, "issues:read");
     const comment = await svc.getComment(commentId);
     if (!comment || comment.issueId !== id) {
       res.status(404).json({ error: "Comment not found" });
@@ -920,6 +985,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       return;
     }
     await assertCompanyAccess(req, issue.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot add issue comments" });
+      return;
+    }
     if (!(await assertAgentRunCheckoutOwnership(req, res, issue))) return;
 
     const actor = getActorInfo(req);
@@ -957,6 +1026,18 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
           source: "comment",
           identifier: currentIssue.identifier,
         },
+      });
+
+      scheduleCompanyNotificationEvent(db, currentIssue.companyId, "issue.updated", {
+        issueId: currentIssue.id,
+        identifier: currentIssue.identifier,
+        title: currentIssue.title,
+        status: currentIssue.status,
+        projectId: currentIssue.projectId,
+        changedFields: ["status"],
+        reopened: true,
+        reopenedFrom: reopenFromStatus,
+        source: "comment",
       });
     }
 
@@ -1122,6 +1203,20 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       }
     })();
 
+    void notifyIssueCommentCreated(db, {
+      companyId: currentIssue.companyId,
+      issueId: currentIssue.id,
+      issueIdentifier: currentIssue.identifier,
+      issueTitle: currentIssue.title,
+      commentId: comment.id,
+      commentBody: req.body.body,
+      bodySnippet: comment.body.slice(0, 200),
+      authorUserId: actor.actorType === "user" ? actor.actorId : null,
+      authorAgentId: actor.actorType === "agent" ? actor.actorId : null,
+    }).catch((err) =>
+      logger.warn({ err, issueId: currentIssue.id }, "notifyIssueCommentCreated failed"),
+    );
+
     res.status(201).json(comment);
   });
 
@@ -1132,7 +1227,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       res.status(404).json({ error: "Issue not found" });
       return;
     }
-    await assertCompanyAccess(req, issue.companyId, db);
+    await assertCompanyIntegrationScope(db, req, issue.companyId, "issues:read");
     const attachments = await svc.listAttachments(issueId);
     res.json(attachments.map(withContentPath));
   });
@@ -1141,6 +1236,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
     const companyId = req.params.companyId as string;
     const issueId = req.params.issueId as string;
     await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot upload attachments" });
+      return;
+    }
     const issue = await svc.getById(issueId);
     if (!issue) {
       res.status(404).json({ error: "Issue not found" });
@@ -1235,7 +1334,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       res.status(404).json({ error: "Attachment not found" });
       return;
     }
-    await assertCompanyAccess(req, attachment.companyId, db);
+    await assertCompanyIntegrationScope(db, req, attachment.companyId, "issues:read");
 
     const object = await storage.getObject(attachment.companyId, attachment.objectKey);
     res.setHeader("Content-Type", attachment.contentType || object.contentType || "application/octet-stream");
@@ -1258,6 +1357,10 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       return;
     }
     await assertCompanyAccess(req, attachment.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot delete attachments" });
+      return;
+    }
 
     try {
       await storage.deleteObject(attachment.companyId, attachment.objectKey);
@@ -1287,6 +1390,60 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
     });
 
     res.json({ ok: true });
+  });
+
+  router.get("/issues/:id/subscription", async (req, res) => {
+    assertBoard(req);
+    const id = req.params.id as string;
+    const issue = await svc.getById(id);
+    if (!issue) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+    await assertCompanyAccess(req, issue.companyId, db);
+    const userId = req.actor.userId;
+    if (!userId) {
+      res.status(403).json({ error: "User id required" });
+      return;
+    }
+    const subscribed = await svc.isIssueSubscribed(id, userId);
+    res.json({ subscribed });
+  });
+
+  router.post("/issues/:id/subscription", async (req, res) => {
+    assertBoard(req);
+    const id = req.params.id as string;
+    const issue = await svc.getById(id);
+    if (!issue) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+    await assertCompanyAccess(req, issue.companyId, db);
+    const userId = req.actor.userId;
+    if (!userId) {
+      res.status(403).json({ error: "User id required" });
+      return;
+    }
+    await svc.subscribeIssue(issue.companyId, id, userId);
+    res.status(204).send();
+  });
+
+  router.delete("/issues/:id/subscription", async (req, res) => {
+    assertBoard(req);
+    const id = req.params.id as string;
+    const issue = await svc.getById(id);
+    if (!issue) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+    await assertCompanyAccess(req, issue.companyId, db);
+    const userId = req.actor.userId;
+    if (!userId) {
+      res.status(403).json({ error: "User id required" });
+      return;
+    }
+    await svc.unsubscribeIssue(issue.companyId, id, userId);
+    res.status(204).send();
   });
 
   return router;

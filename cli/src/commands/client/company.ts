@@ -55,14 +55,20 @@ function normalizeSelector(input: string): string {
 }
 
 function parseInclude(input: string | undefined): CompanyPortabilityInclude {
-  if (!input || !input.trim()) return { company: true, agents: true };
+  if (!input || !input.trim()) {
+    return { company: true, agents: true, approvalPolicies: false, budgetPolicies: false };
+  }
   const values = input.split(",").map((part) => part.trim().toLowerCase()).filter(Boolean);
   const include = {
     company: values.includes("company"),
     agents: values.includes("agents"),
+    approvalPolicies: values.includes("approval-policies") || values.includes("approval"),
+    budgetPolicies: values.includes("budget-policies") || values.includes("budget"),
   };
-  if (!include.company && !include.agents) {
-    throw new Error("Invalid --include value. Use one or both of: company,agents");
+  if (!include.company && !include.agents && !include.approvalPolicies && !include.budgetPolicies) {
+    throw new Error(
+      "Invalid --include value. Use one or more of: company, agents, approval-policies, budget-policies",
+    );
   }
   return include;
 }

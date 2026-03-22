@@ -103,6 +103,66 @@ export function redactEnvForLogs(env: Record<string, string>): Record<string, st
   return redacted;
 }
 
+/** 超過此長度的專案目錄 JSON 不寫入環境變數，避免撐爆環境或提示詞。 */
+const MAX_COMPANY_PROJECTS_JSON_CHARS = 512 * 1024;
+
+export type PaperclipCompanyProjectEntry = {
+  id: string;
+  name: string;
+  description: string | null;
+};
+
+/**
+ * 將 heartbeat 注入的 `context.paperclipCompanyProjects` 寫入 `PAPERCLIP_COMPANY_PROJECTS_JSON`，
+ * 供本機 CLI 代理辨識「公司底下有哪些專案」（與當前 cwd 是否為產品 repo 無關）。
+ */
+export function mergePaperclipContextIntoEnv(
+  env: Record<string, string>,
+  context: Record<string, unknown>,
+): void {
+  const raw = context.paperclipCompanyProjects;
+  if (!Array.isArray(raw)) return;
+
+  const normalized: PaperclipCompanyProjectEntry[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    const id = typeof rec.id === "string" ? rec.id.trim() : "";
+    const name = typeof rec.name === "string" ? rec.name.trim() : "";
+    if (!id || !name) continue;
+    const description =
+      typeof rec.description === "string"
+        ? rec.description
+        : rec.description === null
+          ? null
+          : null;
+    normalized.push({ id, name, description });
+  }
+
+  const json = JSON.stringify(normalized);
+  if (json.length > MAX_COMPANY_PROJECTS_JSON_CHARS) return;
+
+  env.PAPERCLIP_COMPANY_PROJECTS_JSON = json;
+}
+
+/**
+ * 當聊天訊息帶有「針對專案」時，後端會設定 PAPERCLIP_CHAT_PROJECT_ID／NAME。
+ * 模型常忽略環境變數列表，故在 prompt 開頭用自然語言重申範圍。
+ */
+export function renderChatProjectScopeNote(env: Record<string, string>): string {
+  const id = (env.PAPERCLIP_CHAT_PROJECT_ID ?? "").trim();
+  const name = (env.PAPERCLIP_CHAT_PROJECT_NAME ?? "").trim();
+  if (!id && !name) return "";
+  const scopeLine = name && id ? `${name} (projectId: ${id})` : name || id;
+  return [
+    "",
+    "【針對專案／Project scope】The Board selected a company project in the chat composer for this message (UI: 針對專案).",
+    `This turn is scoped to: ${scopeLine}.`,
+    "Answer in that project context unless the user clearly switches topic. Do not say you were not told which project—the scope is set here and in PAPERCLIP_CHAT_PROJECT_ID / PAPERCLIP_CHAT_PROJECT_NAME.",
+    "",
+  ].join("\n");
+}
+
 export function buildPaperclipEnv(agent: { id: string; companyId: string }): Record<string, string> {
   const resolveHostForUrl = (rawHost: string): string => {
     const host = rawHost.trim();

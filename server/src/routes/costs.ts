@@ -14,9 +14,13 @@ import {
   companyService,
   agentService,
   logActivity,
+  COST_EXPORT_DEFAULT_LIMIT,
+  COST_EXPORT_MAX_LIMIT,
+  formatCostEventsCsv,
 } from "../services/index.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { assertCompanyPermission } from "./company-permission.js";
+import { assertCompanyIntegrationScope } from "./integration-scope.js";
 
 export function costRoutes(db: Db) {
   const router = Router();
@@ -28,6 +32,11 @@ export function costRoutes(db: Db) {
   router.post("/companies/:companyId/cost-events", validate(createCostEventSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertCompanyAccess(req, companyId, db);
+
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot report costs" });
+      return;
+    }
 
     if (req.actor.type === "agent" && req.actor.agentId !== req.body.agentId) {
       res.status(403).json({ error: "Agent can only report its own costs" });
@@ -62,7 +71,7 @@ export function costRoutes(db: Db) {
 
   router.get("/companies/:companyId/costs/summary", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "costs:read");
     const range = parseDateRange(req.query);
     const summary = await costs.summary(companyId, range);
     res.json(summary);
@@ -70,7 +79,7 @@ export function costRoutes(db: Db) {
 
   router.get("/companies/:companyId/costs/by-agent", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "costs:read");
     const range = parseDateRange(req.query);
     const rows = await costs.byAgent(companyId, range);
     res.json(rows);
@@ -78,7 +87,7 @@ export function costRoutes(db: Db) {
 
   router.get("/companies/:companyId/costs/by-project", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "costs:read");
     const range = parseDateRange(req.query);
     const rows = await costs.byProject(companyId, range);
     res.json(rows);
@@ -86,7 +95,7 @@ export function costRoutes(db: Db) {
 
   router.get("/companies/:companyId/costs/by-billing-code", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "costs:read");
     const range = parseDateRange(req.query);
     const rows = await costs.byBillingCode(companyId, range);
     res.json(rows);
@@ -94,10 +103,83 @@ export function costRoutes(db: Db) {
 
   router.get("/companies/:companyId/costs/by-request-depth", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "costs:read");
     const range = parseDateRange(req.query);
     const rows = await costs.byRequestDepth(companyId, range);
     res.json(rows);
+  });
+
+  /** 事件級 CSV 匯出（支援 cursor 分頁，見 X-Export-* 回應標頭）。 */
+  router.get("/companies/:companyId/costs/export", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyIntegrationScope(db, req, companyId, "costs:read");
+
+    let range = parseDateRange(req.query);
+    const scopeAll = req.query.scope === "all";
+    if (scopeAll) {
+      range = undefined;
+    } else if (!range?.from && !range?.to) {
+      const now = new Date();
+      range = {
+        from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+        to: undefined,
+      };
+    }
+
+    const limitRaw = req.query.limit != null ? Number(req.query.limit) : COST_EXPORT_DEFAULT_LIMIT;
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(COST_EXPORT_MAX_LIMIT, Math.max(1, Math.floor(limitRaw)))
+      : COST_EXPORT_DEFAULT_LIMIT;
+
+    let cursor: { occurredAt: Date; id: string } | undefined;
+    if (req.query.cursor != null && String(req.query.cursor) !== "") {
+      try {
+        const raw = Buffer.from(String(req.query.cursor), "base64url").toString("utf8");
+        const parsed = JSON.parse(raw) as { o?: string; id?: string };
+        if (!parsed.o || !parsed.id) {
+          res.status(400).json({ error: "Invalid cursor" });
+          return;
+        }
+        cursor = { occurredAt: new Date(parsed.o), id: parsed.id };
+      } catch {
+        res.status(400).json({ error: "Invalid cursor" });
+        return;
+      }
+    }
+
+    const { rows, nextCursor } = await costs.listCostEventsForExport(companyId, {
+      range: scopeAll ? {} : { from: range?.from, to: range?.to },
+      limit,
+      cursor,
+    });
+
+    const csv = formatCostEventsCsv(rows);
+    const fromLabel = scopeAll
+      ? "all"
+      : range?.from
+        ? new Date(range.from).toISOString().slice(0, 10)
+        : "start";
+    const toLabel = scopeAll
+      ? "all"
+      : range?.to
+        ? new Date(range.to).toISOString().slice(0, 10)
+        : "open";
+    const filename = `cost-events-${companyId.slice(0, 8)}-${fromLabel}_${toLabel}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    if (nextCursor) {
+      res.setHeader("X-Export-Truncated", "true");
+      const nextPayload = Buffer.from(
+        JSON.stringify({
+          o: nextCursor.occurredAt.toISOString(),
+          id: nextCursor.id,
+        }),
+        "utf8",
+      ).toString("base64url");
+      res.setHeader("X-Export-Next-Cursor", nextPayload);
+    }
+    res.send(csv);
   });
 
   router.patch("/companies/:companyId/budgets", validate(updateBudgetSchema), async (req, res) => {
@@ -245,6 +327,11 @@ export function costRoutes(db: Db) {
     const agent = await agents.getById(agentId);
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot update agent budget" });
       return;
     }
 

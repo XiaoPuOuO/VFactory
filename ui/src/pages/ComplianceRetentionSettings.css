@@ -1,0 +1,62 @@
+/**
+ * 實例合規留存設定 — 與 DefaultCompanyPathSettings 對齊的版面。
+ */
+.compliance-retention-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 40rem;
+}
+
+.compliance-retention-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.compliance-retention-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.compliance-retention-title-row svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--muted-foreground);
+}
+
+.compliance-retention-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.compliance-retention-desc {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.compliance-retention-card {
+  border: 1px solid var(--border);
+}
+
+.compliance-retention-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.compliance-retention-hint {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+
+.compliance-retention-actions {
+  display: flex;
+  gap: 0.5rem;
+}

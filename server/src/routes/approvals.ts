@@ -12,12 +12,16 @@ import {
   approvalService,
   issueApprovalService,
   logActivity,
+  scheduleCompanyNotificationEvent,
   secretService,
 } from "../services/index.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { assertCompanyPermission } from "./company-permission.js";
+import { assertCompanyIntegrationScope } from "./integration-scope.js";
 import { runApprovalApprovedFollowUp } from "../services/approval-follow-up.js";
 import { redactEventPayload } from "../redaction.js";
+import { formatApprovalsCsv } from "../services/approvals.js";
+import { parseExportCsvQuery } from "../lib/export-csv-params.js";
 
 function redactApprovalPayload<T extends { payload: Record<string, unknown> }>(approval: T): T {
   return {
@@ -35,10 +39,71 @@ export function approvalRoutes(db: Db) {
 
   router.get("/companies/:companyId/approvals", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyAccess(req, companyId, db);
+    await assertCompanyIntegrationScope(db, req, companyId, "approvals:read");
     const status = req.query.status as string | undefined;
     const result = await svc.list(companyId, status);
     res.json(result.map((approval) => redactApprovalPayload(approval)));
+  });
+
+  router.get("/companies/:companyId/approvals/export", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyIntegrationScope(db, req, companyId, "approvals:read");
+
+    let parsed;
+    try {
+      parsed = parseExportCsvQuery(req.query as Record<string, unknown>);
+    } catch {
+      res.status(400).json({ error: "Invalid cursor" });
+      return;
+    }
+
+    const { rows, nextCursor } = await svc.listApprovalsForExport(companyId, {
+      range: parsed.range ?? {},
+      limit: parsed.limit,
+      cursor: parsed.cursor,
+    });
+
+    const csv = formatApprovalsCsv(rows);
+    const fromLabel = parsed.scopeAll
+      ? "all"
+      : parsed.range?.from
+        ? new Date(parsed.range.from).toISOString().slice(0, 10)
+        : "start";
+    const toLabel = parsed.scopeAll
+      ? "all"
+      : parsed.range?.to
+        ? new Date(parsed.range.to).toISOString().slice(0, 10)
+        : "open";
+    const filename = `approvals-${companyId.slice(0, 8)}-${fromLabel}_${toLabel}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    if (nextCursor) {
+      res.setHeader("X-Export-Truncated", "true");
+      const nextPayload = Buffer.from(
+        JSON.stringify({
+          o: nextCursor.at.toISOString(),
+          id: nextCursor.id,
+        }),
+        "utf8",
+      ).toString("base64url");
+      res.setHeader("X-Export-Next-Cursor", nextPayload);
+    }
+
+    const actor = getActorInfo(req);
+    await logActivity(db, {
+      companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      runId: actor.runId,
+      action: "compliance.export",
+      entityType: "approval_export",
+      entityId: companyId,
+      details: { format: "csv", scopeAll: parsed.scopeAll },
+    });
+
+    res.send(csv);
   });
 
   router.get("/approvals/:id", async (req, res) => {
@@ -48,13 +113,17 @@ export function approvalRoutes(db: Db) {
       res.status(404).json({ error: "Approval not found" });
       return;
     }
-    await assertCompanyAccess(req, approval.companyId, db);
+    await assertCompanyIntegrationScope(db, req, approval.companyId, "approvals:read");
     res.json(redactApprovalPayload(approval));
   });
 
   router.post("/companies/:companyId/approvals", validate(createApprovalSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertCompanyAccess(req, companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot create approvals" });
+      return;
+    }
     const rawIssueIds = req.body.issueIds;
     const issueIds = Array.isArray(rawIssueIds)
       ? rawIssueIds.filter((value: unknown): value is string => typeof value === "string")
@@ -105,6 +174,13 @@ export function approvalRoutes(db: Db) {
       details: { type: approval.type, issueIds: uniqueIssueIds },
     });
 
+    scheduleCompanyNotificationEvent(db, companyId, "approval.created", {
+      approvalId: approval.id,
+      type: approval.type,
+      status: approval.status,
+      issueIds: uniqueIssueIds,
+    });
+
     res.status(201).json(redactApprovalPayload(approval));
   });
 
@@ -115,7 +191,7 @@ export function approvalRoutes(db: Db) {
       res.status(404).json({ error: "Approval not found" });
       return;
     }
-    await assertCompanyAccess(req, approval.companyId, db);
+    await assertCompanyIntegrationScope(db, req, approval.companyId, "approvals:read");
     const issues = await issueApprovalsSvc.listIssuesForApproval(id);
     res.json(issues);
   });
@@ -219,6 +295,10 @@ export function approvalRoutes(db: Db) {
       return;
     }
     await assertCompanyAccess(req, existing.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot resubmit approvals" });
+      return;
+    }
 
     if (req.actor.type === "agent" && req.actor.agentId !== existing.requestedByAgentId) {
       res.status(403).json({ error: "Only requesting agent can resubmit this approval" });
@@ -256,7 +336,7 @@ export function approvalRoutes(db: Db) {
       res.status(404).json({ error: "Approval not found" });
       return;
     }
-    await assertCompanyAccess(req, approval.companyId, db);
+    await assertCompanyIntegrationScope(db, req, approval.companyId, "approvals:read");
     const comments = await svc.listComments(id);
     res.json(comments);
   });
@@ -269,6 +349,10 @@ export function approvalRoutes(db: Db) {
       return;
     }
     await assertCompanyAccess(req, approval.companyId, db);
+    if (req.actor.type === "service") {
+      res.status(403).json({ error: "Integration token cannot comment on approvals" });
+      return;
+    }
     const actor = getActorInfo(req);
     const comment = await svc.addComment(id, req.body.body, {
       agentId: actor.agentId ?? undefined,

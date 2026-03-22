@@ -3,6 +3,7 @@ import type { Db } from "@paperclipai/db";
 import {
   agents,
   assets,
+  authUsers,
   chatRooms,
   companies,
   companyMemberships,
@@ -12,6 +13,7 @@ import {
   issueLabels,
   issueComments,
   issueReadStates,
+  issueSubscriptions,
   issues,
   labels,
   projectWorkspaces,
@@ -637,6 +639,7 @@ export function issueService(db: Db) {
     create: async (
       companyId: string,
       data: Omit<typeof issues.$inferInsert, "companyId"> & { labelIds?: string[] },
+      options?: { suppressAutomationRules?: boolean },
     ) => {
       const { labelIds: inputLabelIds, ...issueData } = data;
       if (data.assigneeAgentId && data.assigneeUserId) {
@@ -751,7 +754,11 @@ export function issueService(db: Db) {
       });
     },
 
-    update: async (id: string, data: Partial<typeof issues.$inferInsert> & { labelIds?: string[] }) => {
+    update: async (
+      id: string,
+      data: Partial<typeof issues.$inferInsert> & { labelIds?: string[] },
+      options?: { suppressAutomationRules?: boolean },
+    ) => {
       const existing = await db
         .select()
         .from(issues)
@@ -805,7 +812,7 @@ export function issueService(db: Db) {
         patch.checkoutRunId = null;
       }
 
-      return db.transaction(async (tx) => {
+      const result = await db.transaction(async (tx) => {
         const defaultCompanyGoal = await getDefaultCompanyGoal(tx, existing.companyId);
         patch.goalId = resolveNextIssueGoalId({
           currentProjectId: existing.projectId,
@@ -828,8 +835,20 @@ export function issueService(db: Db) {
           await tryAutoAchieveGoal(tx, updated.goalId ?? existing.goalId!);
         }
         const [enriched] = await withIssueLabels(tx, [updated]);
-        return enriched;
+        return { enriched, previousStatus: existing.status, nextStatus: updated.status };
       });
+      if (!result) return null;
+      const { enriched, previousStatus, nextStatus } = result;
+      if (!options?.suppressAutomationRules && previousStatus !== nextStatus) {
+        const { automationRuleService } = await import("./automation-rules.js");
+        await automationRuleService(db).evaluateIssueTransition({
+          companyId: existing.companyId,
+          issueId: id,
+          fromStatus: previousStatus,
+          toStatus: nextStatus,
+        });
+      }
+      return enriched;
     },
 
     remove: (id: string) =>
@@ -1322,6 +1341,97 @@ export function issueService(db: Db) {
       const rows = await db.select({ id: agents.id, name: agents.name })
         .from(agents).where(eq(agents.companyId, companyId));
       return rows.filter(a => tokens.has(a.name.toLowerCase())).map(a => a.id);
+    },
+
+    /**
+     * 解析 @人類成員（board user）。若 token 同時對應 agent 與 user 名稱，**agent 優先**（與 heartbeat 一致）。
+     */
+    findMentionedUsers: async (companyId: string, body: string) => {
+      const re = /\B@([^\s@,!?.]+)/g;
+      const tokens = new Set<string>();
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(body)) !== null) tokens.add(m[1].toLowerCase());
+      if (tokens.size === 0) return [];
+
+      const agentRows = await db
+        .select({ name: agents.name })
+        .from(agents)
+        .where(eq(agents.companyId, companyId));
+      const agentNameLower = new Set(agentRows.map((a) => a.name.toLowerCase()));
+
+      const members = await db
+        .select({ principalId: companyMemberships.principalId })
+        .from(companyMemberships)
+        .where(
+          and(
+            eq(companyMemberships.companyId, companyId),
+            eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.status, "active"),
+          ),
+        );
+      const userIds = members.map((x) => x.principalId);
+      if (userIds.length === 0) return [];
+
+      const users = await db
+        .select({ id: authUsers.id, name: authUsers.name })
+        .from(authUsers)
+        .where(inArray(authUsers.id, userIds));
+
+      const matched: string[] = [];
+      const seen = new Set<string>();
+      for (const u of users) {
+        const lower = u.name.toLowerCase();
+        if (!tokens.has(lower)) continue;
+        if (agentNameLower.has(lower)) continue;
+        if (seen.has(u.id)) continue;
+        seen.add(u.id);
+        matched.push(u.id);
+      }
+      return matched;
+    },
+
+    listIssueSubscriberUserIds: async (issueId: string) => {
+      const rows = await db
+        .select({ userId: issueSubscriptions.userId })
+        .from(issueSubscriptions)
+        .where(eq(issueSubscriptions.issueId, issueId));
+      return rows.map((r) => r.userId);
+    },
+
+    subscribeIssue: async (companyId: string, issueId: string, userId: string) => {
+      const issue = await db
+        .select({ companyId: issues.companyId })
+        .from(issues)
+        .where(eq(issues.id, issueId))
+        .then((rows) => rows[0] ?? null);
+      if (!issue || issue.companyId !== companyId) throw notFound("Issue not found");
+      await db
+        .insert(issueSubscriptions)
+        .values({ companyId, issueId, userId })
+        .onConflictDoNothing({ target: [issueSubscriptions.issueId, issueSubscriptions.userId] });
+    },
+
+    unsubscribeIssue: async (companyId: string, issueId: string, userId: string) => {
+      await db
+        .delete(issueSubscriptions)
+        .where(
+          and(
+            eq(issueSubscriptions.issueId, issueId),
+            eq(issueSubscriptions.userId, userId),
+            eq(issueSubscriptions.companyId, companyId),
+          ),
+        );
+    },
+
+    isIssueSubscribed: async (issueId: string, userId: string) => {
+      const row = await db
+        .select({ id: issueSubscriptions.id })
+        .from(issueSubscriptions)
+        .where(
+          and(eq(issueSubscriptions.issueId, issueId), eq(issueSubscriptions.userId, userId)),
+        )
+        .then((rows) => rows[0] ?? null);
+      return Boolean(row);
     },
 
     findMentionedProjectIds: async (issueId: string) => {

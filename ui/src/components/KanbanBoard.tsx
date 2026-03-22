@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "@/lib/router";
 import {
   DndContext,
@@ -20,6 +21,7 @@ import {
 import { StatusIcon } from "./StatusIcon";
 import { PriorityIcon } from "./PriorityIcon";
 import { Identity } from "./Identity";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Issue } from "@paperclipai/shared";
 
 const boardStatuses = [
@@ -41,11 +43,17 @@ interface Agent {
   name: string;
 }
 
+export interface KanbanSelection {
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+}
+
 interface KanbanBoardProps {
   issues: Issue[];
   agents?: Agent[];
   liveIssueIds?: Set<string>;
   onUpdateIssue: (id: string, data: Record<string, unknown>) => void;
+  selection?: KanbanSelection;
 }
 
 /* ── Droppable Column ── */
@@ -55,11 +63,13 @@ function KanbanColumn({
   issues,
   agents,
   liveIssueIds,
+  selection,
 }: {
   status: string;
   issues: Issue[];
   agents?: Agent[];
   liveIssueIds?: Set<string>;
+  selection?: KanbanSelection;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -90,6 +100,7 @@ function KanbanColumn({
               issue={issue}
               agents={agents}
               isLive={liveIssueIds?.has(issue.id)}
+              selection={selection}
             />
           ))}
         </SortableContext>
@@ -105,12 +116,15 @@ function KanbanCard({
   agents,
   isLive,
   isOverlay,
+  selection,
 }: {
   issue: Issue;
   agents?: Agent[];
   isLive?: boolean;
   isOverlay?: boolean;
+  selection?: KanbanSelection;
 }) {
+  const { t } = useTranslation();
   const {
     attributes,
     listeners,
@@ -130,16 +144,37 @@ function KanbanCard({
     return agents.find((a) => a.id === id)?.name ?? null;
   };
 
+  const selected = selection ? selection.selectedIds.has(issue.id) : false;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
-      className={`rounded-md border bg-card p-2.5 cursor-grab active:cursor-grabbing transition-shadow ${
-        isDragging && !isOverlay ? "opacity-30" : ""
-      } ${isOverlay ? "shadow-lg ring-1 ring-primary/20" : "hover:shadow-sm"}`}
+      className={[
+        "kanban-card-root rounded-md border bg-card p-2.5 transition-shadow",
+        isDragging && !isOverlay ? "opacity-30" : "",
+        isOverlay ? "shadow-lg ring-1 ring-primary/20 cursor-grabbing" : "hover:shadow-sm",
+        selected ? "ring-1 ring-primary/30" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
+      <div className="kanban-card-inner">
+        {selection && !isOverlay ? (
+          <div
+            className="kanban-card-select"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => selection.onToggle(issue.id)}
+              aria-label={t("issuesList.selectRowAria", { title: issue.title })}
+            />
+          </div>
+        ) : null}
+        <div {...listeners} className="kanban-card-drag min-w-0 flex-1 cursor-grab active:cursor-grabbing">
       <Link
         to={`/issues/${issue.identifier ?? issue.id}`}
         className="block no-underline text-inherit"
@@ -174,6 +209,8 @@ function KanbanCard({
           })()}
         </div>
       </Link>
+        </div>
+      </div>
     </div>
   );
 }
@@ -185,6 +222,7 @@ export function KanbanBoard({
   agents,
   liveIssueIds,
   onUpdateIssue,
+  selection,
 }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -261,6 +299,7 @@ export function KanbanBoard({
             issues={columnIssues[status] ?? []}
             agents={agents}
             liveIssueIds={liveIssueIds}
+            selection={selection}
           />
         ))}
       </div>

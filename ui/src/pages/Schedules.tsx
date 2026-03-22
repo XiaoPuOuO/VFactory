@@ -42,7 +42,13 @@ export function Schedules() {
   const { data: agents } = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId!),
     queryFn: () => agentsApi.list(selectedCompanyId!),
-    enabled: !!selectedCompanyId && dialogOpen,
+    enabled: !!selectedCompanyId,
+  });
+
+  const { data: conflicts } = useQuery({
+    queryKey: queryKeys.schedules.conflicts(selectedCompanyId!, 7, 60),
+    queryFn: () => schedulesApi.conflicts(selectedCompanyId!, 7, 60),
+    enabled: !!selectedCompanyId,
   });
 
   const createMutation = useMutation({
@@ -91,10 +97,34 @@ export function Schedules() {
     setDialogOpen(true);
   };
 
+  const agentName = (id: string) => agents?.find((a) => a.id === id)?.name ?? id.slice(0, 8);
+
   return (
     <div className="schedules-page">
       {error && <p className="schedules-error">{error.message}</p>}
 
+      {conflicts && conflicts.length > 0 && (
+        <div className="schedules-conflicts" role="region" aria-label={t("conflictsTitle")}>
+          <h2 className="schedules-conflicts-title">{t("conflictsTitle")}</h2>
+          <p className="schedules-conflicts-hint">
+            {t("conflictsHorizon", { days: 7, sec: 60 })}
+          </p>
+          <ul className="schedules-conflicts-list">
+            {conflicts.map((c) => (
+              <li key={`${c.scheduleIdA}-${c.scheduleIdB}`} className="schedules-conflicts-item">
+                <span className="schedules-conflicts-agent">{agentName(c.agentId)}</span>
+                <span className="schedules-conflicts-meta">
+                  {t("conflictsDelta", { sec: Math.round(c.deltaSec) })} · A {c.scheduleIdA.slice(0, 8)}… / B{" "}
+                  {c.scheduleIdB.slice(0, 8)}…
+                </span>
+                <span className="schedules-conflicts-times">
+                  {new Date(c.nextFireAtA).toLocaleString()} · {new Date(c.nextFireAtB).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {schedules && schedules.length === 0 && (
         <div className="schedules-empty-wrap">
           <div className="schedules-empty-card">

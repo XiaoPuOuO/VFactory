@@ -99,6 +99,8 @@ export function Costs() {
   const [customTo, setCustomTo] = useState("");
   const [tokenLimitInput, setTokenLimitInput] = useState<string>("");
   const [priceLimitInput, setPriceLimitInput] = useState<string>("");
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     setBreadcrumbs([{ label: t("pageTitle") }]);
@@ -205,47 +207,82 @@ export function Costs() {
 
   return (
     <div className="costs-page">
-      <Tabs
-        value={preset}
-        onValueChange={(v) => setPreset(v as DatePreset)}
-        className="costs-filters"
-      >
-        <TabsList variant="default" align="start" aria-label={t("dateRangeTabsLabel")} className="costs-preset-tabs">
-          {presetKeys.map((p) => (
-            <TabsTrigger key={p} value={p}>
-              {t(PRESET_KEYS[p])}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        {preset === "custom" && (
-          <fieldset className="costs-custom-range" aria-label={t("customRangeLegend")}>
-            <legend className="sr-only">{t("customRangeLegend")}</legend>
-            <label className="costs-custom-range-field">
-              <span className="sr-only">{t("from")}</span>
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                aria-label={t("from")}
-              />
-            </label>
-            <span aria-hidden="true">{t("to")}</span>
-            <label className="costs-custom-range-field">
-              <span className="sr-only">{t("to")}</span>
-              <input
-                type="date"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                aria-label={t("to")}
-              />
-            </label>
-          </fieldset>
-        )}
-      </Tabs>
+      <div className="costs-toolbar">
+        <Tabs
+          value={preset}
+          onValueChange={(v) => setPreset(v as DatePreset)}
+          className="costs-filters"
+        >
+          <TabsList variant="default" align="start" aria-label={t("dateRangeTabsLabel")} className="costs-preset-tabs">
+            {presetKeys.map((p) => (
+              <TabsTrigger key={p} value={p}>
+                {t(PRESET_KEYS[p])}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {preset === "custom" && (
+            <fieldset className="costs-custom-range" aria-label={t("customRangeLegend")}>
+              <legend className="sr-only">{t("customRangeLegend")}</legend>
+              <label className="costs-custom-range-field">
+                <span className="sr-only">{t("from")}</span>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  aria-label={t("from")}
+                />
+              </label>
+              <span aria-hidden="true">{t("to")}</span>
+              <label className="costs-custom-range-field">
+                <span className="sr-only">{t("to")}</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  aria-label={t("to")}
+                />
+              </label>
+            </fieldset>
+          )}
+        </Tabs>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="costs-export-csv"
+          disabled={!selectedCompanyId || exportingCsv}
+          onClick={async () => {
+            if (!selectedCompanyId) return;
+            setExportError(null);
+            setExportingCsv(true);
+            try {
+              await costsApi.downloadCostEventsCsv(
+                selectedCompanyId,
+                from || undefined,
+                to || undefined,
+                preset === "all" ? { scopeAll: true } : undefined,
+              );
+            } catch (err) {
+              const message =
+                err instanceof Error ? err.message : err != null ? String(err) : "Export failed";
+              setExportError(message);
+            } finally {
+              setExportingCsv(false);
+            }
+          }}
+        >
+          {exportingCsv ? t("exportCsvLoading") : t("exportCsv")}
+        </Button>
+      </div>
 
       {errorMessage && (
         <div className="costs-error" role="alert" aria-live="assertive">
           {errorMessage}
+        </div>
+      )}
+      {exportError && (
+        <div className="costs-error" role="alert" aria-live="assertive">
+          {exportError}
         </div>
       )}
 
@@ -321,6 +358,33 @@ export function Costs() {
                                   aria-valuemax={100}
                                   aria-valuenow={Math.min(100, Math.max(0, data.summary.utilizationPercent))}
                                 />
+                              </div>
+                            )}
+                            {data.summary.forecast && (
+                              <div className="costs-forecast">
+                                <p>
+                                  {data.summary.budgetCents > 0
+                                    ? t("forecastMonthProjectedWithBudget", {
+                                        amount: formatCents(data.summary.forecast.monthProjectedSpendCents),
+                                        pct: data.summary.forecast.monthProjectedUtilizationPercent,
+                                      })
+                                    : t("forecastMonthProjectedNoBudget", {
+                                        amount: formatCents(data.summary.forecast.monthProjectedSpendCents),
+                                      })}
+                                </p>
+                                {data.summary.budgetCents > 0 &&
+                                  data.summary.forecast.likelyMonthBudgetBreach && (
+                                    <p className="costs-forecast-alert">{t("forecastLikelyBreach")}</p>
+                                  )}
+                                {data.summary.forecast.spendSpikeVsPreviousWeek && (
+                                  <p className="costs-forecast-alert">{t("forecastSpendSpike")}</p>
+                                )}
+                                <p className="costs-forecast-week">
+                                  {t("forecastWeekCompare", {
+                                    last: formatCents(data.summary.forecast.last7DaysSpendCents),
+                                    prev: formatCents(data.summary.forecast.previous7DaysSpendCents),
+                                  })}
+                                </p>
                               </div>
                             )}
                           </div>
@@ -412,6 +476,7 @@ export function Costs() {
             <h2 id="costs-advanced-heading" className="costs-advanced-heading">
               {t("advancedAttribution")}
             </h2>
+            <p className="costs-attribution-hint">{t("attributionHint")}</p>
             <div className="costs-panels-grid">
               <Card>
                 <CardContent className="costs-panel costs-advanced-chart-wrap">

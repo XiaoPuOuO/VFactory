@@ -285,7 +285,7 @@ export function AgentDetail() {
 
   const { data: heartbeats } = useQuery({
     queryKey: queryKeys.heartbeats(resolvedCompanyId!, agent?.id ?? undefined),
-    queryFn: () => heartbeatsApi.list(resolvedCompanyId!, agent?.id ?? undefined),
+    queryFn: async () => (await heartbeatsApi.list(resolvedCompanyId!, { agentId: agent?.id })).runs,
     enabled: !!resolvedCompanyId && !!agent?.id,
   });
 
@@ -394,8 +394,8 @@ export function AgentDetail() {
   });
 
   const updatePermissions = useMutation({
-    mutationFn: (canCreateAgents: boolean) =>
-      agentsApi.updatePermissions(agentLookupRef, { canCreateAgents }, resolvedCompanyId ?? undefined),
+    mutationFn: (input: { canCreateAgents?: boolean; canManageProjects?: boolean }) =>
+      agentsApi.updatePermissions(agentLookupRef, input, resolvedCompanyId ?? undefined),
     onSuccess: () => {
       setActionError(null);
       queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(routeAgentRef) });
@@ -405,7 +405,13 @@ export function AgentDetail() {
       }
     },
     onError: (err) => {
-      setActionError(err instanceof Error ? err.message : "Failed to update permissions");
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Failed to update permissions";
+      setActionError(msg);
     },
   });
 
@@ -944,7 +950,10 @@ function AgentConfigurePage({
   onSaveActionChange: (save: (() => void) | null) => void;
   onCancelActionChange: (cancel: (() => void) | null) => void;
   onSavingChange: (saving: boolean) => void;
-  updatePermissions: { mutate: (canCreate: boolean) => void; isPending: boolean };
+  updatePermissions: {
+    mutate: (input: { canCreateAgents?: boolean; canManageProjects?: boolean }) => void;
+    isPending: boolean;
+  };
 }) {
   const { t } = useTranslation("agents");
   const queryClient = useQueryClient();
@@ -1052,7 +1061,10 @@ function ConfigurationTab({
   onSaveActionChange: (save: (() => void) | null) => void;
   onCancelActionChange: (cancel: (() => void) | null) => void;
   onSavingChange: (saving: boolean) => void;
-  updatePermissions: { mutate: (canCreate: boolean) => void; isPending: boolean };
+  updatePermissions: {
+    mutate: (input: { canCreateAgents?: boolean; canManageProjects?: boolean }) => void;
+    isPending: boolean;
+  };
 }) {
   const { t } = useTranslation("agents");
   const queryClient = useQueryClient();
@@ -1117,14 +1129,33 @@ function ConfigurationTab({
           <div className="agent-detail-permissions-row">
             <span>{t("canCreateNewAgents")}</span>
             <Button
+              type="button"
               variant={agent.permissions?.canCreateAgents ? "default" : "outline"}
               size="sm"
               onClick={() =>
-                updatePermissions.mutate(!Boolean(agent.permissions?.canCreateAgents))
+                updatePermissions.mutate({
+                  canCreateAgents: !Boolean(agent.permissions?.canCreateAgents),
+                })
               }
               disabled={updatePermissions.isPending}
             >
               {agent.permissions?.canCreateAgents ? t("enabled") : t("disabled")}
+            </Button>
+          </div>
+          <div className="agent-detail-permissions-row">
+            <span>{t("canManageProjects")}</span>
+            <Button
+              type="button"
+              variant={agent.canManageProjects ? "default" : "outline"}
+              size="sm"
+              onClick={() =>
+                updatePermissions.mutate({
+                  canManageProjects: !Boolean(agent.canManageProjects),
+                })
+              }
+              disabled={updatePermissions.isPending}
+            >
+              {agent.canManageProjects ? t("enabled") : t("disabled")}
             </Button>
           </div>
         </div>

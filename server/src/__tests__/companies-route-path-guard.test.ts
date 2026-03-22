@@ -17,6 +17,7 @@ vi.mock("../services/index.js", () => ({
     exportBundle: vi.fn(),
     previewImport: vi.fn(),
     importBundle: vi.fn(),
+    importPoliciesFromCompany: vi.fn(),
   }),
   accessService: () => ({
     canUser: vi.fn(),
@@ -29,6 +30,12 @@ vi.mock("../services/index.js", () => ({
     getForCompany: vi.fn(),
     evaluateHireBudget: vi.fn(),
     upsertHirePolicy: vi.fn(),
+  }),
+  automationRuleService: () => ({
+    list: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
   }),
   logActivity: vi.fn(),
 }));

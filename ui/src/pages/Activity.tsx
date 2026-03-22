@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { History } from "lucide-react";
 import type { Agent } from "@paperclipai/shared";
+import { Button } from "@/components/ui/button";
 import "./Activity.css";
 
 /** Map API entityType to activity filter label key (without namespace). */
@@ -33,6 +34,8 @@ export function Activity() {
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const [filter, setFilter] = useState("all");
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     setBreadcrumbs([{ label: t("pageTitle") }]);
@@ -109,22 +112,54 @@ export function Activity() {
   return (
     <div className="activity-page">
       <div className="activity-header">
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="activity-filter-trigger">
-            <SelectValue placeholder={t("filterByType")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("allTypes")}</SelectItem>
-            {entityTypes.map((type) => (
-              <SelectItem key={type} value={type}>
-                {t(filterTypeKey(type))}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="activity-header-controls">
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger className="activity-filter-trigger">
+              <SelectValue placeholder={t("filterByType")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("allTypes")}</SelectItem>
+              {entityTypes.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {t(filterTypeKey(type))}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="activity-export-csv"
+            disabled={!selectedCompanyId || exportingCsv}
+            onClick={async () => {
+              if (!selectedCompanyId) return;
+              setExportError(null);
+              setExportingCsv(true);
+              try {
+                await activityApi.downloadActivityCsv(selectedCompanyId, {
+                  entityType: filter !== "all" ? filter : undefined,
+                });
+              } catch (err) {
+                const message =
+                  err instanceof Error ? err.message : err != null ? String(err) : t("exportCsvFailed");
+                setExportError(message);
+              } finally {
+                setExportingCsv(false);
+              }
+            }}
+          >
+            {exportingCsv ? t("exportCsvLoading") : t("exportCsv")}
+          </Button>
+        </div>
       </div>
 
       {error && <p className="activity-error">{error.message}</p>}
+      {exportError && (
+        <p className="activity-error" role="alert">
+          {exportError}
+        </p>
+      )}
 
       {filtered && filtered.length === 0 && (
         <EmptyState icon={History} message={t("noActivityYet")} />

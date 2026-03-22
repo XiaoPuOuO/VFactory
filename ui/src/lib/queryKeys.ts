@@ -4,6 +4,11 @@ export const queryKeys = {
     detail: (id: string) => ["companies", id] as const,
     allowedAdapterTypes: (id: string) => ["companies", id, "allowed-adapter-types"] as const,
     plugins: (companyId: string) => ["companies", companyId, "plugins"] as const,
+    webhooks: (companyId: string) => ["companies", companyId, "webhooks"] as const,
+    integrationTokens: (companyId: string) => ["companies", companyId, "integration-tokens"] as const,
+    notificationDestinations: (companyId: string) =>
+      ["companies", companyId, "notificationDestinations"] as const,
+    mentionables: (companyId: string) => ["companies", companyId, "mentionables"] as const,
     stats: ["companies", "stats"] as const,
   },
   agents: {
@@ -31,6 +36,8 @@ export const queryKeys = {
     labels: (companyId: string) => ["issues", companyId, "labels"] as const,
     listByProject: (companyId: string, projectId: string) =>
       ["issues", companyId, "project", projectId] as const,
+    savedViews: (companyId: string, scopeKey: string) =>
+      ["issues", companyId, "savedViews", scopeKey] as const,
     detail: (id: string) => ["issues", "detail", id] as const,
     comments: (issueId: string) => ["issues", "comments", issueId] as const,
     attachments: (issueId: string) => ["issues", "attachments", issueId] as const,
@@ -39,6 +46,7 @@ export const queryKeys = {
     approvals: (issueId: string) => ["issues", "approvals", issueId] as const,
     liveRuns: (issueId: string) => ["issues", "live-runs", issueId] as const,
     activeRun: (issueId: string) => ["issues", "active-run", issueId] as const,
+    subscription: (issueId: string) => ["issues", "subscription", issueId] as const,
   },
   projects: {
     list: (companyId: string) => ["projects", companyId] as const,
@@ -55,6 +63,16 @@ export const queryKeys = {
       ["schedules", companyId, filters ?? null] as const,
     detail: (companyId: string, scheduleId: string) =>
       ["schedules", companyId, "detail", scheduleId] as const,
+    conflicts: (companyId: string, horizonDays: number, thresholdSec: number) =>
+      ["schedules", companyId, "conflicts", horizonDays, thresholdSec] as const,
+  },
+  runQuality: {
+    summary: (companyId: string, from: string, to: string) =>
+      ["run-quality", "summary", companyId, from, to] as const,
+    clusters: (companyId: string, from: string, to: string) =>
+      ["run-quality", "clusters", companyId, from, to] as const,
+    list: (companyId: string, filters: unknown) =>
+      ["run-quality", "list", companyId, filters] as const,
   },
   approvals: {
     list: (companyId: string, status?: string) =>
@@ -92,12 +110,15 @@ export const queryKeys = {
   },
   instanceSettings: {
     defaultCompanyPath: ["instance", "settings", "default-company-path"] as const,
+    complianceDefaultRetention: ["instance", "settings", "compliance-default-retention"] as const,
   },
   secrets: {
     list: (companyId: string) => ["secrets", companyId] as const,
     providers: (companyId: string) => ["secret-providers", companyId] as const,
   },
   dashboard: (companyId: string) => ["dashboard", companyId] as const,
+  dashboardTrends: (companyId: string, days: number) =>
+    ["dashboard", "trends", companyId, days] as const,
   sidebarBadges: (companyId: string) => ["sidebar-badges", companyId] as const,
   activity: (companyId: string) => ["activity", companyId] as const,
   costs: (companyId: string, from?: string, to?: string) =>

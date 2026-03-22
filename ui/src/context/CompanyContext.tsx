@@ -7,11 +7,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import type { Company } from "@paperclipai/shared";
 import { companiesApi } from "../api/companies";
 import { ApiError } from "../api/client";
 import { queryKeys } from "../lib/queryKeys";
+import { queryClient } from "../lib/queryClient";
 
 type CompanySelectionSource = "manual" | "route_sync" | "bootstrap";
 type CompanySelectionOptions = { source?: CompanySelectionSource };
@@ -37,7 +38,6 @@ const STORAGE_KEY = "paperclip.selectedCompanyId";
 const CompanyContext = createContext<CompanyContextValue | null>(null);
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
-  const queryClient = useQueryClient();
   const [selectionSource, setSelectionSource] = useState<CompanySelectionSource>("bootstrap");
   const [selectedCompanyId, setSelectedCompanyIdState] = useState<string | null>(() => localStorage.getItem(STORAGE_KEY));
 

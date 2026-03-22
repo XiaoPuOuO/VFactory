@@ -28,6 +28,11 @@ export interface Agent {
   budgetMonthlyCents: number;
   spentMonthlyCents: number;
   permissions: AgentPermissions;
+  /**
+   * 是否具備 `projects:manage` grant（僅在 Board、本人或 CEO 檢視他員時回傳）。
+   * 預設為未授予；Agent API 建立／變更專案與工作區需此權限。
+   */
+  canManageProjects?: boolean;
   lastHeartbeatAt: Date | null;
   metadata: Record<string, unknown> | null;
   createdAt: Date;

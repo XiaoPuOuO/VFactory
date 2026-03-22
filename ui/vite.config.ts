@@ -8,6 +8,8 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    /** 避免多份 @tanstack/react-query 導致 QueryClientProvider 與 hooks 使用不同 React Context */
+    dedupe: ["react", "react-dom", "@tanstack/react-query"],
   },
   server: {
     port: 5173,

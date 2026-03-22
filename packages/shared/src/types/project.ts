@@ -1,4 +1,5 @@
 import type { ProjectStatus } from "../constants.js";
+import type { IssueVcsLinks } from "../validators/issue.js";
 import type { ProjectExecutionWorkspacePolicy, WorkspaceRuntimeService } from "./workspace-runtime.js";
 
 export interface ProjectGoalRef {
@@ -40,6 +41,8 @@ export interface Project {
   /** API 回傳：圖示圖片 URL（/api/assets/:id/content），僅在 iconAssetId 有值時存在。 */
   iconContentPath?: string | null;
   executionWorkspacePolicy: ProjectExecutionWorkspacePolicy | null;
+  /** PR／branch／CI（手動）。 */
+  vcsLinks?: IssueVcsLinks | null;
   workspaces: ProjectWorkspace[];
   primaryWorkspace: ProjectWorkspace | null;
   archivedAt: Date | null;

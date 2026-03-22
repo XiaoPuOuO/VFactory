@@ -25,9 +25,20 @@ import { formatCents } from "../lib/utils";
 import "./Dashboard.css";
 import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
-import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
+import {
+  ChartCard,
+  RunActivityChart,
+  PriorityChart,
+  IssueStatusChart,
+  SuccessRateChart,
+  IssueThroughputTrendChart,
+  ActiveAgentsTrendChart,
+  GoalIssuesTrendChart,
+} from "../components/ActivityCharts";
 import { PageSkeleton } from "../components/PageSkeleton";
 import type { Agent, Issue } from "@paperclipai/shared";
+
+const DASHBOARD_TREND_DAYS = 14;
 
 function getRecentIssues(issues: Issue[]): Issue[] {
   return [...issues]
@@ -60,6 +71,12 @@ export function Dashboard() {
     enabled: !!selectedCompanyId,
   });
 
+  const { data: trendData } = useQuery({
+    queryKey: queryKeys.dashboardTrends(selectedCompanyId!, DASHBOARD_TREND_DAYS),
+    queryFn: () => dashboardApi.trends(selectedCompanyId!, DASHBOARD_TREND_DAYS),
+    enabled: !!selectedCompanyId,
+  });
+
   const { data: activity } = useQuery({
     queryKey: queryKeys.activity(selectedCompanyId!),
     queryFn: () => activityApi.list(selectedCompanyId!),
@@ -80,7 +97,7 @@ export function Dashboard() {
 
   const { data: runs } = useQuery({
     queryKey: queryKeys.heartbeats(selectedCompanyId!),
-    queryFn: () => heartbeatsApi.list(selectedCompanyId!),
+    queryFn: async () => (await heartbeatsApi.list(selectedCompanyId!)).runs,
     enabled: !!selectedCompanyId,
   });
 
@@ -303,6 +320,29 @@ export function Dashboard() {
               <SuccessRateChart runs={runs ?? []} />
             </ChartCard>
           </div>
+
+          {trendData && trendData.series.length > 0 && (
+            <div className="dashboard-charts-grid dashboard-trends-grid">
+              <ChartCard
+                title={t("dashboard.trendsIssueThroughput")}
+                subtitle={t("dashboard.trendsDays", { days: trendData.days })}
+              >
+                <IssueThroughputTrendChart series={trendData.series} />
+              </ChartCard>
+              <ChartCard
+                title={t("dashboard.trendsActiveAgents")}
+                subtitle={t("dashboard.trendsDays", { days: trendData.days })}
+              >
+                <ActiveAgentsTrendChart series={trendData.series} />
+              </ChartCard>
+              <ChartCard
+                title={t("dashboard.trendsGoalIssues")}
+                subtitle={t("dashboard.trendsDays", { days: trendData.days })}
+              >
+                <GoalIssuesTrendChart series={trendData.series} />
+              </ChartCard>
+            </div>
+          )}
 
           <div className="dashboard-two-col">
             {recentActivity.length > 0 && (

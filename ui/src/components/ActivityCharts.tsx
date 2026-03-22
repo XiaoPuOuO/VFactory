@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { HeartbeatRun } from "@paperclipai/shared";
+import type { DashboardTrendsDay, HeartbeatRun } from "@paperclipai/shared";
 
 /* ---- Utilities ---- */
 
@@ -250,6 +250,139 @@ export function IssueStatusChart({ issues }: { issues: { status: string; created
         color: statusColors[s] ?? "#6b7280",
         label: STATUS_LABEL_KEYS[s] ? t(STATUS_LABEL_KEYS[s]) : s,
       }))} />
+    </div>
+  );
+}
+
+const TREND_CREATED = "#3b82f6";
+const TREND_COMPLETED = "#10b981";
+const TREND_AGENTS = "#8b5cf6";
+const TREND_GOAL = "#f97316";
+
+export function IssueThroughputTrendChart({ series }: { series: DashboardTrendsDay[] }) {
+  const { t } = useTranslation();
+  const days = series.map((s) => s.date);
+  const maxValue = Math.max(
+    ...series.map((s) => s.issuesCreated + s.issuesCompleted),
+    1,
+  );
+  const hasData = series.some((s) => s.issuesCreated + s.issuesCompleted > 0);
+  if (!hasData) {
+    return <p className="dashboard-chart-card-subtitle">{t("dashboard.trendsEmpty")}</p>;
+  }
+  return (
+    <div>
+      <div className="dashboard-chart-bars">
+        {series.map((row) => {
+          const total = row.issuesCreated + row.issuesCompleted;
+          const heightPct = (total / maxValue) * 100;
+          return (
+            <div
+              key={row.date}
+              className="dashboard-chart-bar-cell"
+              title={`${row.date}: +${row.issuesCreated} / ✓${row.issuesCompleted}`}
+            >
+              {total > 0 ? (
+                <div className="dashboard-chart-bar-stack" style={{ height: `${heightPct}%` }}>
+                  {row.issuesCreated > 0 && (
+                    <div style={{ flex: row.issuesCreated, backgroundColor: TREND_CREATED }} />
+                  )}
+                  {row.issuesCompleted > 0 && (
+                    <div style={{ flex: row.issuesCompleted, backgroundColor: TREND_COMPLETED }} />
+                  )}
+                </div>
+              ) : (
+                <div className="dashboard-chart-bar-empty" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <DateLabels days={days} />
+      <ChartLegend
+        items={[
+          { color: TREND_CREATED, label: t("dashboard.trendsLegendCreated") },
+          { color: TREND_COMPLETED, label: t("dashboard.trendsLegendCompleted") },
+        ]}
+      />
+    </div>
+  );
+}
+
+export function ActiveAgentsTrendChart({ series }: { series: DashboardTrendsDay[] }) {
+  const { t } = useTranslation();
+  const days = series.map((s) => s.date);
+  const maxValue = Math.max(...series.map((s) => s.activeAgents), 1);
+  const hasData = series.some((s) => s.activeAgents > 0);
+  if (!hasData) {
+    return <p className="dashboard-chart-card-subtitle">{t("dashboard.trendsEmpty")}</p>;
+  }
+  return (
+    <div>
+      <div className="dashboard-chart-bars">
+        {series.map((row) => {
+          const heightPct = (row.activeAgents / maxValue) * 100;
+          return (
+            <div
+              key={row.date}
+              className="dashboard-chart-bar-cell"
+              title={`${row.date}: ${row.activeAgents} agents`}
+            >
+              {row.activeAgents > 0 ? (
+                <div
+                  style={{
+                    height: `${heightPct}%`,
+                    minHeight: 2,
+                    backgroundColor: TREND_AGENTS,
+                  }}
+                />
+              ) : (
+                <div className="dashboard-chart-bar-empty" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <DateLabels days={days} />
+    </div>
+  );
+}
+
+export function GoalIssuesTrendChart({ series }: { series: DashboardTrendsDay[] }) {
+  const { t } = useTranslation();
+  const days = series.map((s) => s.date);
+  const maxValue = Math.max(...series.map((s) => s.goalLinkedIssuesCompleted), 1);
+  const hasData = series.some((s) => s.goalLinkedIssuesCompleted > 0);
+  if (!hasData) {
+    return <p className="dashboard-chart-card-subtitle">{t("dashboard.trendsEmpty")}</p>;
+  }
+  return (
+    <div>
+      <div className="dashboard-chart-bars">
+        {series.map((row) => {
+          const heightPct = (row.goalLinkedIssuesCompleted / maxValue) * 100;
+          return (
+            <div
+              key={row.date}
+              className="dashboard-chart-bar-cell"
+              title={`${row.date}: ${row.goalLinkedIssuesCompleted}`}
+            >
+              {row.goalLinkedIssuesCompleted > 0 ? (
+                <div
+                  style={{
+                    height: `${heightPct}%`,
+                    minHeight: 2,
+                    backgroundColor: TREND_GOAL,
+                  }}
+                />
+              ) : (
+                <div className="dashboard-chart-bar-empty" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <DateLabels days={days} />
     </div>
   );
 }

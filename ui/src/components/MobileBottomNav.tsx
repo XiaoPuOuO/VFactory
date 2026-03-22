@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "@/lib/router";
+import { useCompany } from "../context/CompanyContext";
 import {
   House,
   CircleDot,
@@ -8,7 +9,6 @@ import {
   Users,
   Inbox,
 } from "lucide-react";
-import { useCompany } from "../context/CompanyContext";
 import { useDialog } from "../context/DialogContext";
 import { useInboxBadge } from "../hooks/useInboxBadge";
 
@@ -36,7 +36,8 @@ type MobileNavItem = MobileNavLinkItem | MobileNavActionItem;
 export function MobileBottomNav({ visible }: MobileBottomNavProps) {
   const { t } = useTranslation();
   const location = useLocation();
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, companies, loading: companiesLoading, error: companiesError } = useCompany();
+  const isInstanceSettingsRoute = location.pathname.startsWith("/instance/");
   const { openNewIssue } = useDialog();
   const inboxBadge = useInboxBadge(selectedCompanyId);
 
@@ -56,6 +57,10 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
     ],
     [openNewIssue, inboxBadge.inbox, t],
   );
+
+  const hideMobileNav =
+    !companiesLoading && !companiesError && companies.length === 0 && !isInstanceSettingsRoute;
+  if (hideMobileNav) return null;
 
   return (
     <nav

@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { COMPANY_STATUSES } from "../constants.js";
 
+const maintenanceWindowSchema = z.object({
+  start: z.string().min(1),
+  end: z.string().min(1),
+});
+
 export const createCompanySchema = z.object({
   name: z.string().min(1),
   description: z.string().optional().nullable(),
@@ -33,6 +38,12 @@ export const updateCompanySchema = createCompanySchema
     workingDirectory: z.string().trim().nullable().optional(),
     /** 僅在變更 workingDirectory 時有效：為 true 時將舊設定目錄內容搬移到新路徑；為 false 或未傳時僅更新路徑不搬移。 */
     moveWorkingDirectory: z.boolean().optional(),
+    /** 全域暫停新喚醒直到此時間；null 清除急停。 */
+    wakeupsPausedUntil: z.coerce.date().nullable().optional(),
+    wakeupsPausedReason: z.string().nullable().optional(),
+    maintenanceWindows: z.array(maintenanceWindowSchema).nullable().optional(),
+    /** 合規留存天數；null 清除以繼承實例預設。 */
+    complianceDataRetentionDays: z.number().int().min(1).max(3650).nullable().optional(),
   });
 
 export type UpdateCompany = z.infer<typeof updateCompanySchema>;

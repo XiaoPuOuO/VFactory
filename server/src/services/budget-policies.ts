@@ -8,6 +8,7 @@ import {
   projects,
 } from "@paperclipai/db";
 import { unprocessable } from "../errors.js";
+import { notifyLimitBreach } from "./limit-breach-notify.js";
 import type {
   BudgetPolicyOnExceed,
   BudgetPolicyPeriod,
@@ -230,22 +231,39 @@ export function budgetPolicyService(db: Db) {
 
         if (existingBreach) continue;
 
-        await db.insert(limitBreachEvents).values({
-          companyId,
-          type: "budget_policy_breach",
-          occurredAt: new Date(),
-          amountCents: totalAfter,
-          tokenUsage: null,
-          agentId: policy.onExceed === "pause_agents" ? ev.agentId : null,
-          details: {
+        const [breachRow] = await db
+          .insert(limitBreachEvents)
+          .values({
+            companyId,
+            type: "budget_policy_breach",
+            occurredAt: new Date(),
+            amountCents: totalAfter,
+            tokenUsage: null,
+            agentId: policy.onExceed === "pause_agents" ? ev.agentId : null,
+            details: {
+              policyId: policy.id,
+              scopeType: policy.scopeType,
+              limitCents: limit,
+              spentCents: totalAfter,
+              costEventId: ev.id,
+              onExceed: policy.onExceed,
+            },
+          })
+          .returning();
+        if (breachRow) {
+          await notifyLimitBreach(db, companyId, {
+            id: breachRow.id,
+            type: breachRow.type,
+            details: (breachRow.details as Record<string, unknown> | null) ?? null,
+          });
+          const { automationRuleService } = await import("./automation-rules.js");
+          await automationRuleService(db).evaluateBudgetPolicyBreach({
+            companyId,
             policyId: policy.id,
-            scopeType: policy.scopeType,
-            limitCents: limit,
-            spentCents: totalAfter,
-            costEventId: ev.id,
-            onExceed: policy.onExceed,
-          },
-        });
+            breachEventId: breachRow.id,
+            agentId: ev.agentId,
+          });
+        }
 
         if (policy.onExceed === "pause_agents") {
           const agentRow = await db

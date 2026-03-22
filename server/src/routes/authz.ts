@@ -62,6 +62,9 @@ export async function assertCompanyAccess(
   if (req.actor.type === "agent" && req.actor.companyId !== companyId) {
     throw forbidden("Agent key cannot access another company");
   }
+  if (req.actor.type === "service" && req.actor.companyId !== companyId) {
+    throw forbidden("Integration token cannot access another company");
+  }
   if (req.actor.type === "board" && req.actor.source !== "local_implicit" && !hasCompanyViewAll(req)) {
     const allowedCompanies = req.actor.companyIds ?? [];
     if (!allowedCompanies.includes(companyId)) {
@@ -72,6 +75,9 @@ export async function assertCompanyAccess(
 
 export function getActorInfo(req: Request) {
   if (req.actor.type === "none" || req.actor.type === "banned") {
+    throw unauthorized();
+  }
+  if (req.actor.type === "service") {
     throw unauthorized();
   }
   if (req.actor.type === "agent") {

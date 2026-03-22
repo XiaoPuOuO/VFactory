@@ -4,6 +4,7 @@ import {
   createScheduleSchema,
   updateScheduleSchema,
   listSchedulesQuerySchema,
+  scheduleConflictsQuerySchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { scheduleService, heartbeatService, logActivity } from "../services/index.js";
@@ -13,6 +14,19 @@ export function scheduleRoutes(db: Db) {
   const router = Router();
   const heartbeat = heartbeatService(db as any);
   const svc = scheduleService(db as any, () => heartbeat);
+
+  router.get("/companies/:companyId/schedules/conflicts", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyAccess(req, companyId, db);
+    const parsed = scheduleConflictsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid query", details: parsed.error.flatten() });
+      return;
+    }
+    const { horizonDays, thresholdSec } = parsed.data;
+    const conflicts = await svc.listConflicts(companyId, horizonDays, thresholdSec);
+    res.json(conflicts);
+  });
 
   router.get("/companies/:companyId/schedules", async (req, res) => {
     const companyId = req.params.companyId as string;

@@ -1,8 +1,11 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, or } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { approvalComments, approvals } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
 import { redactCurrentUserText } from "../log-redaction.js";
+import type { ExportCsvCursor, ExportCsvDateRange } from "../lib/export-csv-params.js";
+import { csvEscapeCell, EXPORT_CSV_MAX_LIMIT } from "../lib/export-csv-params.js";
+import { redactEventPayload } from "../redaction.js";
 import { agentService } from "./agents.js";
 import { notifyHireApproved } from "./hire-hook.js";
 
@@ -11,6 +14,63 @@ function redactApprovalComment<T extends { body: string }>(comment: T): T {
     ...comment,
     body: redactCurrentUserText(comment.body),
   };
+}
+
+export interface ApprovalExportRow {
+  id: string;
+  type: string;
+  status: string;
+  requestedByAgentId: string | null;
+  requestedByUserId: string | null;
+  decidedByUserId: string | null;
+  decisionNote: string | null;
+  decisionSource: string;
+  policyId: string | null;
+  decidedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  payloadJson: string;
+}
+
+export function formatApprovalsCsv(rows: ApprovalExportRow[]): string {
+  const header = [
+    "id",
+    "type",
+    "status",
+    "requestedByAgentId",
+    "requestedByUserId",
+    "decidedByUserId",
+    "decisionNote",
+    "decisionSource",
+    "policyId",
+    "decidedAt",
+    "createdAt",
+    "updatedAt",
+    "payloadJson",
+  ];
+  const lines = [
+    header.join(","),
+    ...rows.map((r) =>
+      [
+        r.id,
+        r.type,
+        r.status,
+        r.requestedByAgentId ?? "",
+        r.requestedByUserId ?? "",
+        r.decidedByUserId ?? "",
+        r.decisionNote ?? "",
+        r.decisionSource,
+        r.policyId ?? "",
+        r.decidedAt ? r.decidedAt.toISOString() : "",
+        r.createdAt.toISOString(),
+        r.updatedAt.toISOString(),
+        r.payloadJson,
+      ]
+        .map(csvEscapeCell)
+        .join(","),
+    ),
+  ];
+  return `${lines.join("\n")}\n`;
 }
 
 export function approvalService(db: Db) {
@@ -234,6 +294,64 @@ export function approvalService(db: Db) {
         .where(eq(approvals.id, id))
         .returning()
         .then((rows) => rows[0]);
+    },
+
+    listApprovalsForExport: async (
+      companyId: string,
+      opts: { range: ExportCsvDateRange; limit: number; cursor?: ExportCsvCursor },
+    ): Promise<{
+      rows: ApprovalExportRow[];
+      nextCursor: ExportCsvCursor | null;
+    }> => {
+      const take = Math.min(Math.max(1, opts.limit), EXPORT_CSV_MAX_LIMIT);
+      const conditions = [eq(approvals.companyId, companyId)];
+
+      if (opts.range.from) conditions.push(gte(approvals.createdAt, opts.range.from));
+      if (opts.range.to) conditions.push(lte(approvals.createdAt, opts.range.to));
+
+      if (opts.cursor) {
+        const c = opts.cursor;
+        conditions.push(
+          or(
+            lt(approvals.createdAt, c.at),
+            and(eq(approvals.createdAt, c.at), lt(approvals.id, c.id)),
+          )!,
+        );
+      }
+
+      const rawRows = await db
+        .select()
+        .from(approvals)
+        .where(and(...conditions))
+        .orderBy(desc(approvals.createdAt), desc(approvals.id))
+        .limit(take + 1);
+
+      const hasMore = rawRows.length > take;
+      const slice = rawRows.slice(0, take);
+      const last = slice[slice.length - 1];
+      const nextCursor =
+        hasMore && last ? { at: last.createdAt, id: last.id } : null;
+
+      const rows: ApprovalExportRow[] = slice.map((row) => {
+        const redacted = redactEventPayload(row.payload as Record<string, unknown>);
+        return {
+          id: row.id,
+          type: row.type,
+          status: row.status,
+          requestedByAgentId: row.requestedByAgentId ?? null,
+          requestedByUserId: row.requestedByUserId ?? null,
+          decidedByUserId: row.decidedByUserId ?? null,
+          decisionNote: row.decisionNote ?? null,
+          decisionSource: row.decisionSource,
+          policyId: row.policyId ?? null,
+          decidedAt: row.decidedAt ?? null,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          payloadJson: redacted != null ? JSON.stringify(redacted) : "",
+        };
+      });
+
+      return { rows, nextCursor };
     },
 
     listComments: async (approvalId: string) => {

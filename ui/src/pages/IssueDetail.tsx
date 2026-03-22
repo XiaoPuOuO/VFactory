@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { issuesApi } from "../api/issues";
+import { mentionablesApi } from "../api/mentionables";
 import { activityApi } from "../api/activity";
 import { heartbeatsApi } from "../api/heartbeats";
 import { agentsApi } from "../api/agents";
@@ -44,6 +45,7 @@ import {
   MoreHorizontal,
   SlidersHorizontal,
   MessageCircle,
+  Bell,
 } from "lucide-react";
 import type { ActivityEvent } from "@paperclipai/shared";
 import type { Agent, IssueAttachment } from "@paperclipai/shared";
@@ -147,6 +149,7 @@ function ActorIdentity({ evt, agentMap }: { evt: ActivityEvent; agentMap: Map<st
 
 export function IssueDetail() {
   const { t } = useTranslation();
+  const { t: tIssues } = useTranslation("issues");
   const { issueId } = useParams<{ issueId: string }>();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const { openPanel, closePanel, panelVisible, setPanelVisible } = usePanel();
@@ -245,6 +248,32 @@ export function IssueDetail() {
     queryFn: () => projectsApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId,
   });
+
+  const { data: mentionables } = useQuery({
+    queryKey: queryKeys.companies.mentionables(selectedCompanyId!),
+    queryFn: () => mentionablesApi.list(selectedCompanyId!),
+    enabled: !!selectedCompanyId && isAuthSession(session),
+  });
+
+  const { data: subscription } = useQuery({
+    queryKey: queryKeys.issues.subscription(issueId!),
+    queryFn: () => issuesApi.getSubscription(issueId!),
+    enabled: !!issueId && isAuthSession(session),
+  });
+
+  const subscribeMutation = useMutation({
+    mutationFn: async () => {
+      if (subscription?.subscribed) {
+        await issuesApi.unsubscribe(issueId!);
+      } else {
+        await issuesApi.subscribe(issueId!);
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.issues.subscription(issueId!) });
+    },
+  });
+
   const currentUserId = isAuthSession(session) ? session.user?.id ?? session.session?.userId ?? null : null;
   const { orderedProjects } = useProjectOrder({
     projects: projects ?? [],
@@ -270,6 +299,13 @@ export function IssueDetail() {
         kind: "agent",
       });
     }
+    for (const u of mentionables?.users ?? []) {
+      options.push({
+        id: `user:${u.id}`,
+        name: u.name,
+        kind: "user",
+      });
+    }
     for (const project of orderedProjects) {
       options.push({
         id: `project:${project.id}`,
@@ -280,7 +316,7 @@ export function IssueDetail() {
       });
     }
     return options;
-  }, [agents, orderedProjects]);
+  }, [agents, orderedProjects, mentionables?.users]);
 
   const childIssues = useMemo(() => {
     if (!allIssues || !issue) return [];
@@ -572,6 +608,23 @@ export function IssueDetail() {
                 <span className="issue-detail-label-more">+{(issue.labels ?? []).length - 4}</span>
               )}
             </div>
+          )}
+
+          {isAuthSession(session) && (
+            <Button
+              variant={subscription?.subscribed ? "secondary" : "ghost"}
+              size="icon-xs"
+              className="issue-detail-subscribe-btn"
+              onClick={() => subscribeMutation.mutate()}
+              disabled={subscribeMutation.isPending}
+              title={
+                subscription?.subscribed
+                  ? tIssues("issueUnsubscribeNotifications")
+                  : tIssues("issueSubscribeNotifications")
+              }
+            >
+              <Bell className="issue-detail-toolbar-icon" />
+            </Button>
           )}
 
           <Button

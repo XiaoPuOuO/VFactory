@@ -1,0 +1,1 @@
+ALTER TABLE "companies" ADD COLUMN "compliance_data_retention_days" integer;

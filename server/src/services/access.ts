@@ -1,6 +1,7 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
+  agents,
   authAccounts,
   authSessions,
   authUsers,
@@ -232,7 +233,23 @@ export function accessService(db: Db) {
     permissionKey: PermissionKey,
   ): Promise<boolean> {
     const membership = await getMembership(companyId, principalType, principalId);
-    if (!membership || membership.status !== "active") return false;
+    if (membership?.status === "suspended") return false;
+
+    let eligible = membership?.status === "active";
+    if (principalType === "agent" && !eligible) {
+      // 歷史資料常見：agents 列存在但尚未寫入 company_memberships；grants 仍應生效。
+      const agentRow = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(
+          and(eq(agents.id, principalId), eq(agents.companyId, companyId), ne(agents.status, "terminated")),
+        )
+        .then((rows) => rows[0] ?? null);
+      eligible = Boolean(agentRow);
+    } else if (!eligible) {
+      return false;
+    }
+
     const grant = await db
       .select({ id: principalPermissionGrants.id })
       .from(principalPermissionGrants)
@@ -246,6 +263,34 @@ export function accessService(db: Db) {
       )
       .then((rows) => rows[0] ?? null);
     return Boolean(grant);
+  }
+
+  /** 列出某 principal 在公司內之所有 permission grants（供合併更新，避免覆寫未涉及之鍵）。 */
+  async function listPrincipalGrants(
+    companyId: string,
+    principalType: PrincipalType,
+    principalId: string,
+  ): Promise<GrantInput[]> {
+    const rows = await db
+      .select({
+        permissionKey: principalPermissionGrants.permissionKey,
+        scope: principalPermissionGrants.scope,
+      })
+      .from(principalPermissionGrants)
+      .where(
+        and(
+          eq(principalPermissionGrants.companyId, companyId),
+          eq(principalPermissionGrants.principalType, principalType),
+          eq(principalPermissionGrants.principalId, principalId),
+        ),
+      );
+    return rows.map((r) => ({
+      permissionKey: r.permissionKey as PermissionKey,
+      scope:
+        r.scope && typeof r.scope === "object" && !Array.isArray(r.scope)
+          ? (r.scope as Record<string, unknown>)
+          : null,
+    }));
   }
 
   async function canUser(
@@ -448,6 +493,7 @@ export function accessService(db: Db) {
     deleteUser,
     canUser,
     hasPermission,
+    listPrincipalGrants,
     getAllowedAdapterTypes,
     getMembership,
     ensureMembership,

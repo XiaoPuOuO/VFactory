@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { instanceSettings } from "@paperclipai/db";
-import { INSTANCE_SETTING_KEY_DEFAULT_COMPANY_PATH } from "@paperclipai/shared";
+import {
+  INSTANCE_SETTING_KEY_COMPLIANCE_DEFAULT_RETENTION_DAYS,
+  INSTANCE_SETTING_KEY_DEFAULT_COMPANY_PATH,
+} from "@paperclipai/shared";
 
 /**
  * 此站設定服務：預設公司路徑等鍵值。
@@ -43,8 +46,46 @@ export function instanceSettingsService(db: Db) {
     return normalized;
   }
 
+  async function getComplianceDefaultRetentionDays(): Promise<number | null> {
+    const row = await db
+      .select({ value: instanceSettings.value })
+      .from(instanceSettings)
+      .where(eq(instanceSettings.key, INSTANCE_SETTING_KEY_COMPLIANCE_DEFAULT_RETENTION_DAYS))
+      .then((rows) => rows[0] ?? null);
+    if (!row?.value?.trim()) return null;
+    const n = Number.parseInt(row.value.trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  /** 傳 null 清除實例預設留存天數。 */
+  async function setComplianceDefaultRetentionDays(value: number | null): Promise<number | null> {
+    const now = new Date();
+    if (value == null) {
+      await db
+        .delete(instanceSettings)
+        .where(eq(instanceSettings.key, INSTANCE_SETTING_KEY_COMPLIANCE_DEFAULT_RETENTION_DAYS));
+      return null;
+    }
+    const str = String(Math.trunc(value));
+    await db
+      .insert(instanceSettings)
+      .values({
+        key: INSTANCE_SETTING_KEY_COMPLIANCE_DEFAULT_RETENTION_DAYS,
+        value: str,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [instanceSettings.key],
+        set: { value: str, updatedAt: now },
+      });
+    return Math.trunc(value);
+  }
+
   return {
     getDefaultCompanyPath,
     setDefaultCompanyPath,
+    getComplianceDefaultRetentionDays,
+    setComplianceDefaultRetentionDays,
   };
 }

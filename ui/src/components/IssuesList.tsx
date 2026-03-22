@@ -3,8 +3,11 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
+import { useToast } from "../context/ToastContext";
 import { issuesApi } from "../api/issues";
+import { projectsApi } from "../api/projects";
 import { queryKeys } from "../lib/queryKeys";
+import { pruneSelectionToVisible, selectionSetsEqual } from "../lib/issues-list-selection";
 import { groupBy } from "../lib/groupBy";
 import { formatDate } from "../lib/utils";
 import { timeAgo } from "../lib/timeAgo";
@@ -13,6 +16,8 @@ import { PriorityIcon } from "./PriorityIcon";
 import { EmptyState } from "./EmptyState";
 import { Identity } from "./Identity";
 import { IssueRow } from "./IssueRow";
+import { IssuesBulkBar } from "./IssuesBulkBar";
+import { IssuesSavedViewsMenu } from "./IssuesSavedViewsMenu";
 import { PageSkeleton } from "./PageSkeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +27,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { CircleDot, Plus, Filter, ArrowUpDown, Layers, Check, X, ChevronRight, List, Columns3, User, Search } from "lucide-react";
 import { KanbanBoard } from "./KanbanBoard";
 import type { Issue } from "@paperclipai/shared";
+import { EMPTY_ISSUE_LIST } from "../lib/emptyCollections";
 
 import "../styles/issues-list.css";
 
@@ -172,7 +178,9 @@ interface IssuesListProps {
   initialAssignees?: string[];
   initialSearch?: string;
   onSearchChange?: (search: string) => void;
-  onUpdateIssue: (id: string, data: Record<string, unknown>) => void;
+  onUpdateIssue: (id: string, data: Record<string, unknown>) => void | Promise<unknown>;
+  /** 批次刪除；未提供時 bulk bar 不顯示刪除（仍可做狀態／指派等變更）。 */
+  onRemoveIssue?: (id: string) => void | Promise<unknown>;
 }
 
 export function IssuesList({
@@ -188,8 +196,10 @@ export function IssuesList({
   initialSearch,
   onSearchChange,
   onUpdateIssue,
+  onRemoveIssue,
 }: IssuesListProps) {
   const { t } = useTranslation();
+  const { pushToast } = useToast();
   const statusLabel = useStatusLabel();
   const priorityLabel = usePriorityLabel();
   const { selectedCompanyId } = useCompany();
@@ -206,6 +216,8 @@ export function IssuesList({
   });
   const [assigneePickerIssueId, setAssigneePickerIssueId] = useState<string | null>(null);
   const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [issueSearch, setIssueSearch] = useState(initialSearch ?? "");
   const [debouncedIssueSearch, setDebouncedIssueSearch] = useState(issueSearch);
   const normalizedIssueSearch = debouncedIssueSearch.trim();
@@ -240,22 +252,25 @@ export function IssuesList({
     });
   }, [scopedKey]);
 
-  const { data: searchedIssues = [] } = useQuery({
+  const { data: searchedIssuesRaw } = useQuery({
     queryKey: queryKeys.issues.search(selectedCompanyId!, normalizedIssueSearch, projectId),
     queryFn: () => issuesApi.list(selectedCompanyId!, { q: normalizedIssueSearch, projectId }),
     enabled: !!selectedCompanyId && normalizedIssueSearch.length > 0,
   });
+  const searchedIssues = searchedIssuesRaw ?? EMPTY_ISSUE_LIST;
 
   const agentName = useCallback((id: string | null) => {
     if (!id || !agents) return null;
     return agents.find((a) => a.id === id)?.name ?? null;
   }, [agents]);
 
+  const issuesResolved = issues ?? EMPTY_ISSUE_LIST;
+
   const filtered = useMemo(() => {
-    const sourceIssues = normalizedIssueSearch.length > 0 ? searchedIssues : issues;
+    const sourceIssues = normalizedIssueSearch.length > 0 ? searchedIssues : issuesResolved;
     const filteredByControls = applyFilters(sourceIssues, viewState);
     return sortIssues(filteredByControls, viewState);
-  }, [issues, searchedIssues, viewState, normalizedIssueSearch]);
+  }, [issuesResolved, searchedIssues, viewState, normalizedIssueSearch]);
 
   const { data: labels } = useQuery({
     queryKey: queryKeys.issues.labels(selectedCompanyId!),
@@ -264,6 +279,99 @@ export function IssuesList({
   });
 
   const activeFilterCount = countActiveFilters(viewState);
+
+  // 以 id 序列為依賴：即使 filtered 陣列參考變動，只要可見 id 集合不變就不重跑修剪 effect。
+  const filteredRef = useRef(filtered);
+  filteredRef.current = filtered;
+  const visibleIdsKey = useMemo(() => filtered.map((i) => i.id).join("\u0001"), [filtered]);
+
+  useEffect(() => {
+    const visibleIssueIds = filteredRef.current.map((i) => i.id);
+    setSelectedIds((prev) => {
+      const next = pruneSelectionToVisible(prev, visibleIssueIds);
+      // 修剪結果與先前相同時必須回傳 prev，否則每次 effect 都會因新 Set 參考而觸發重新渲染，造成 maximum update depth。
+      return selectionSetsEqual(prev, next) ? prev : next;
+    });
+  }, [visibleIdsKey]);
+
+  const { data: projects = [] } = useQuery({
+    queryKey: queryKeys.projects.list(selectedCompanyId!),
+    queryFn: () => projectsApi.list(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
+
+  const toggleSelectIssue = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearBulkSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const safeUpdate = useCallback(
+    async (id: string, data: Record<string, unknown>) => {
+      await Promise.resolve(onUpdateIssue(id, data));
+    },
+    [onUpdateIssue],
+  );
+
+  const runBulkPatch = useCallback(
+    async (data: Record<string, unknown>) => {
+      const ids = [...selectedIds];
+      if (ids.length === 0) return;
+      setBulkBusy(true);
+      let failed = 0;
+      try {
+        for (const id of ids) {
+          try {
+            await safeUpdate(id, data);
+          } catch {
+            failed++;
+          }
+        }
+      } finally {
+        setBulkBusy(false);
+      }
+      if (failed === 0) {
+        pushToast({ title: t("issuesList.bulkUpdateSuccess", { count: ids.length }), tone: "success" });
+        setSelectedIds(new Set());
+      } else {
+        pushToast({
+          title: t("issuesList.bulkUpdatePartial", { failed, total: ids.length }),
+          tone: "warn",
+        });
+      }
+    },
+    [selectedIds, safeUpdate, pushToast, t],
+  );
+
+  const handleBulkDelete = useCallback(async () => {
+    if (!onRemoveIssue) return;
+    if (!window.confirm(t("issuesList.bulkDeleteConfirm", { count: selectedIds.size }))) return;
+    const ids = [...selectedIds];
+    setBulkBusy(true);
+    let failed = 0;
+    try {
+      for (const id of ids) {
+        try {
+          await Promise.resolve(onRemoveIssue(id));
+        } catch {
+          failed++;
+        }
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+    if (failed === 0) {
+      pushToast({ title: t("issuesList.bulkDeleteSuccess", { count: ids.length }), tone: "success" });
+      setSelectedIds(new Set());
+    } else {
+      pushToast({ title: t("issuesList.bulkDeletePartial"), tone: "warn" });
+    }
+  }, [onRemoveIssue, selectedIds, pushToast, t]);
 
   const groupedContent = useMemo(() => {
     if (viewState.groupBy === "none") {
@@ -349,6 +457,18 @@ export function IssuesList({
               <Columns3 />
             </button>
           </div>
+
+          {selectedCompanyId ? (
+            <IssuesSavedViewsMenu
+              companyId={selectedCompanyId}
+              scopeKey={scopedKey}
+              viewState={viewState}
+              issueSearch={issueSearch}
+              updateView={updateView}
+              setIssueSearch={setIssueSearch}
+              setDebouncedIssueSearch={setDebouncedIssueSearch}
+            />
+          ) : null}
 
           <Popover>
             <PopoverTrigger asChild>
@@ -571,6 +691,7 @@ export function IssuesList({
           agents={agents}
           liveIssueIds={liveIssueIds}
           onUpdateIssue={onUpdateIssue}
+          selection={{ selectedIds, onToggle: toggleSelectIssue }}
         />
       ) : (
         groupedContent.map((group) => {
@@ -604,12 +725,34 @@ export function IssuesList({
               </div>
             )}
             <CollapsibleContent>
-              <div className="issues-list">
+              <div className={["issues-list", selectedIds.size > 0 && "issues-list-has-selection"].filter(Boolean).join(" ")}>
               {group.items.map((issue) => (
-                <IssueRow
+                <div
                   key={issue.id}
+                  role="group"
+                  aria-label={issue.title}
+                  className={[
+                    "issues-row-container",
+                    selectedIds.has(issue.id) && "issues-row-container--selected",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <div
+                    className="issues-row-select"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <Checkbox
+                      checked={selectedIds.has(issue.id)}
+                      onCheckedChange={() => toggleSelectIssue(issue.id)}
+                      aria-label={t("issuesList.selectRowAria", { title: issue.title })}
+                    />
+                  </div>
+                  <IssueRow
                   issue={issue}
                   issueLinkState={issueLinkState}
+                  className="issues-row--in-container"
                   desktopLeadingSpacer
                   mobileLeading={(
                     <span
@@ -758,6 +901,7 @@ export function IssuesList({
                   )}
                   trailingMeta={formatDate(issue.createdAt)}
                 />
+                </div>
               ))}
               </div>
             </CollapsibleContent>
@@ -766,6 +910,19 @@ export function IssuesList({
           );
         })
       )}
+
+      <IssuesBulkBar
+        selectedCount={selectedIds.size}
+        agents={agents}
+        projects={projects}
+        busy={bulkBusy}
+        onSetStatus={(s) => void runBulkPatch({ status: s })}
+        onSetPriority={(p) => void runBulkPatch({ priority: p })}
+        onSetAssignee={(id) => void runBulkPatch({ assigneeAgentId: id, assigneeUserId: null })}
+        onSetProject={(pid) => void runBulkPatch({ projectId: pid })}
+        onDelete={onRemoveIssue ? handleBulkDelete : undefined}
+        onClear={clearBulkSelection}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Archive, Building2, FolderOpen, Settings, Users, UserCog } from "lucide-react";
+import { Archive, Building2, FolderOpen, Settings, Shield, Users, UserCog } from "lucide-react";
 import { Link } from "@/lib/router";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,6 +45,18 @@ export function InstanceSettings() {
             <div className="instance-settings-card-label">{t("instance.defaultCompanyPath")}</div>
             <p className="instance-settings-card-desc">
               {t("instance.defaultCompanyPathDesc")}
+            </p>
+          </CardContent>
+        </Link>
+      </Card>
+
+      <Card className="instance-settings-card">
+        <Link to="/instance/compliance-retention" className="instance-settings-card-link">
+          <Shield />
+          <CardContent className="instance-settings-card-body">
+            <div className="instance-settings-card-label">{t("instance.complianceDefaultRetention")}</div>
+            <p className="instance-settings-card-desc">
+              {t("instance.complianceDefaultRetentionCardDesc")}
             </p>
           </CardContent>
         </Link>

@@ -127,6 +127,56 @@ export function computeNextRunAt(
   return null;
 }
 
+/**
+ * 預測未來 horizon 內最多 maxFires 次觸發（用於衝突檢測），不寫入 DB。
+ */
+export function predictScheduleFires(
+  schedule: AgentScheduleRow,
+  from: Date,
+  horizonEnd: Date,
+  maxFires: number,
+): Date[] {
+  const out: Date[] = [];
+  if (!schedule.enabled) return out;
+
+  if (schedule.scheduleKind === "once" && schedule.runAt) {
+    const t = new Date(schedule.runAt);
+    if (t.getTime() >= from.getTime() && t.getTime() <= horizonEnd.getTime()) out.push(t);
+    return out;
+  }
+
+  if (schedule.scheduleKind === "cron" && schedule.cronExpression) {
+    try {
+      const cron = new Cron(schedule.cronExpression, { timezone: schedule.timezone });
+      let t = from;
+      let guard = 0;
+      while (out.length < maxFires && guard++ < maxFires * 8) {
+        const next = cron.nextRun(t);
+        if (!next || next.getTime() > horizonEnd.getTime()) break;
+        if (next.getTime() >= from.getTime()) out.push(next);
+        t = new Date(next.getTime() + 1000);
+      }
+    } catch {
+      return out;
+    }
+    return out;
+  }
+
+  if (schedule.scheduleKind === "ranges" && schedule.windows?.length && schedule.timeOfDay) {
+    let synthetic: AgentScheduleRow = { ...schedule, lastTriggeredAt: null };
+    let after = from;
+    let guard = 0;
+    while (out.length < maxFires && guard++ < maxFires * 10) {
+      const next = computeNextRunAt(synthetic, after);
+      if (!next || next.getTime() > horizonEnd.getTime()) break;
+      if (next.getTime() >= from.getTime()) out.push(next);
+      synthetic = { ...schedule, lastTriggeredAt: next };
+      after = new Date(next.getTime() + 1000);
+    }
+  }
+  return out;
+}
+
 export function scheduleService(
   db: Db,
   getHeartbeat: () => { wakeup: WakeupFn },
@@ -377,5 +427,58 @@ export function scheduleService(
     return existing;
   }
 
-  return { tickSchedules, computeNextRunAt, list, getById, create, update, remove };
+  async function listConflicts(companyId: string, horizonDays: number, thresholdSec: number) {
+    const now = new Date();
+    const horizonEnd = addDays(now, horizonDays);
+    const rows = await list(companyId, { enabled: true });
+    const byAgent = new Map<string, AgentScheduleRow[]>();
+    for (const s of rows) {
+      const arr = byAgent.get(s.agentId) ?? [];
+      arr.push(s);
+      byAgent.set(s.agentId, arr);
+    }
+    const conflicts: Array<{
+      agentId: string;
+      scheduleIdA: string;
+      scheduleIdB: string;
+      nextFireAtA: string;
+      nextFireAtB: string;
+      deltaSec: number;
+    }> = [];
+    for (const [agentId, listRow] of byAgent) {
+      if (listRow.length < 2) continue;
+      for (let i = 0; i < listRow.length; i++) {
+        for (let j = i + 1; j < listRow.length; j++) {
+          const a = listRow[i]!;
+          const b = listRow[j]!;
+          const firesA = predictScheduleFires(a, now, horizonEnd, 32);
+          const firesB = predictScheduleFires(b, now, horizonEnd, 32);
+          let bestDelta = Infinity;
+          let bestPair: { ta: Date; tb: Date } | null = null;
+          for (const ta of firesA) {
+            for (const tb of firesB) {
+              const d = Math.abs(ta.getTime() - tb.getTime()) / 1000;
+              if (d < thresholdSec && d < bestDelta) {
+                bestDelta = d;
+                bestPair = { ta, tb };
+              }
+            }
+          }
+          if (bestPair && bestDelta < thresholdSec) {
+            conflicts.push({
+              agentId,
+              scheduleIdA: a.id,
+              scheduleIdB: b.id,
+              nextFireAtA: bestPair.ta.toISOString(),
+              nextFireAtB: bestPair.tb.toISOString(),
+              deltaSec: bestDelta,
+            });
+          }
+        }
+      }
+    }
+    return conflicts;
+  }
+
+  return { tickSchedules, computeNextRunAt, list, getById, create, update, remove, listConflicts };
 }

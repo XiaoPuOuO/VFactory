@@ -39,6 +39,18 @@ export const issueExecutionPolicySchema = z
 
 export type IssueExecutionPolicy = z.infer<typeof issueExecutionPolicySchema>;
 
+/** PR／branch／CI（手動連結）。 */
+export const issueVcsLinksSchema = z
+  .object({
+    prUrl: z.string().url().optional().nullable(),
+    branch: z.string().max(512).optional().nullable(),
+    ciStatus: z.string().max(128).optional().nullable(),
+    ciUrl: z.string().url().optional().nullable(),
+  })
+  .strict();
+
+export type IssueVcsLinks = z.infer<typeof issueVcsLinksSchema>;
+
 export const createIssueSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
   goalId: z.string().uuid().optional().nullable(),
@@ -57,6 +69,7 @@ export const createIssueSchema = z.object({
   executionWorkspaceSettings: issueExecutionWorkspaceSettingsSchema.optional().nullable(),
   executionPolicy: issueExecutionPolicySchema.optional().nullable(),
   executionLabel: z.string().min(1).max(64).optional().nullable(),
+  vcsLinks: issueVcsLinksSchema.optional().nullable(),
   labelIds: z.array(z.string().uuid()).optional(),
 });
 

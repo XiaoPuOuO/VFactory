@@ -1,6 +1,26 @@
 export interface CompanyPortabilityInclude {
   company: boolean;
   agents: boolean;
+  /** 核准政策（hire_agent 等） */
+  approvalPolicies: boolean;
+  /** 預算政策列 */
+  budgetPolicies: boolean;
+}
+
+export interface CompanyPortabilityApprovalPolicyEntry {
+  approvalType: string;
+  enabled: boolean;
+  maxBudgetMonthlyCents: number | null;
+}
+
+export interface CompanyPortabilityBudgetPolicyEntry {
+  scopeType: "project" | "billing_code" | "company";
+  projectName?: string | null;
+  billingCode?: string | null;
+  limitCents: number;
+  period: string;
+  onExceed: "record_only" | "block_new_runs_for_scope" | "pause_agents";
+  enabled: boolean;
 }
 
 export interface CompanyPortabilitySecretRequirement {
@@ -45,6 +65,8 @@ export interface CompanyPortabilityManifest {
   includes: CompanyPortabilityInclude;
   company: CompanyPortabilityCompanyManifestEntry | null;
   agents: CompanyPortabilityAgentManifestEntry[];
+  approvalPolicies?: CompanyPortabilityApprovalPolicyEntry[];
+  budgetPolicies?: CompanyPortabilityBudgetPolicyEntry[];
   requiredSecrets: CompanyPortabilitySecretRequirement[];
 }
 

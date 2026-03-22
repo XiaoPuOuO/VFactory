@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PROJECT_STATUSES } from "../constants.js";
+import { issueVcsLinksSchema } from "./issue.js";
 
 const executionWorkspaceStrategySchema = z
   .object({
@@ -71,6 +72,7 @@ const projectFields = {
   iconAssetId: z.string().uuid().optional().nullable(),
   executionWorkspacePolicy: projectExecutionWorkspacePolicySchema.optional().nullable(),
   archivedAt: z.string().datetime().optional().nullable(),
+  vcsLinks: issueVcsLinksSchema.optional().nullable(),
 };
 
 export const createProjectSchema = z.object({

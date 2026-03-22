@@ -15,6 +15,7 @@ import {
 import { isUuidLike, normalizeAgentUrlKey } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../errors.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
+import { accessService } from "./access.js";
 import { REDACTED_EVENT_VALUE, sanitizeRecord } from "../redaction.js";
 
 function hashToken(token: string) {
@@ -50,6 +51,7 @@ interface RevisionMetadata {
 
 interface UpdateAgentOptions {
   recordRevision?: RevisionMetadata;
+  suppressAutomationRules?: boolean;
 }
 
 interface AgentShortnameRow {
@@ -322,6 +324,20 @@ export function agentService(db: Db) {
       }
     }
 
+    if (
+      normalizedUpdated &&
+      !options?.suppressAutomationRules &&
+      existing.status !== normalizedUpdated.status
+    ) {
+      const { automationRuleService } = await import("./automation-rules.js");
+      await automationRuleService(db).evaluateAgentStatusChange({
+        companyId: existing.companyId,
+        agentId: id,
+        fromStatus: existing.status,
+        toStatus: normalizedUpdated.status,
+      });
+    }
+
     return normalizedUpdated;
   }
 
@@ -356,7 +372,9 @@ export function agentService(db: Db) {
         .returning()
         .then((rows) => rows[0]);
 
-      return normalizeAgentRow(created);
+      const row = normalizeAgentRow(created);
+      await accessService(db).ensureMembership(companyId, "agent", row.id, "member", "active");
+      return row;
     },
 
     update: updateAgent,
@@ -365,6 +383,7 @@ export function agentService(db: Db) {
       const existing = await getById(id);
       if (!existing) return null;
       if (existing.status === "terminated") throw conflict("Cannot pause terminated agent");
+      const beforeStatus = existing.status;
 
       const updated = await db
         .update(agents)
@@ -372,7 +391,17 @@ export function agentService(db: Db) {
         .where(eq(agents.id, id))
         .returning()
         .then((rows) => rows[0] ?? null);
-      return updated ? normalizeAgentRow(updated) : null;
+      const normalizedUpdated = updated ? normalizeAgentRow(updated) : null;
+      if (normalizedUpdated && beforeStatus !== normalizedUpdated.status) {
+        const { automationRuleService } = await import("./automation-rules.js");
+        await automationRuleService(db).evaluateAgentStatusChange({
+          companyId: existing.companyId,
+          agentId: id,
+          fromStatus: beforeStatus,
+          toStatus: normalizedUpdated.status,
+        });
+      }
+      return normalizedUpdated;
     },
 
     resume: async (id: string) => {
@@ -382,6 +411,7 @@ export function agentService(db: Db) {
       if (existing.status === "pending_approval") {
         throw conflict("Pending approval agents cannot be resumed");
       }
+      const beforeStatus = existing.status;
 
       const updated = await db
         .update(agents)
@@ -389,12 +419,23 @@ export function agentService(db: Db) {
         .where(eq(agents.id, id))
         .returning()
         .then((rows) => rows[0] ?? null);
-      return updated ? normalizeAgentRow(updated) : null;
+      const normalizedUpdated = updated ? normalizeAgentRow(updated) : null;
+      if (normalizedUpdated && beforeStatus !== normalizedUpdated.status) {
+        const { automationRuleService } = await import("./automation-rules.js");
+        await automationRuleService(db).evaluateAgentStatusChange({
+          companyId: existing.companyId,
+          agentId: id,
+          fromStatus: beforeStatus,
+          toStatus: normalizedUpdated.status,
+        });
+      }
+      return normalizedUpdated;
     },
 
     terminate: async (id: string) => {
       const existing = await getById(id);
       if (!existing) return null;
+      const beforeStatus = existing.status;
 
       await db
         .update(agents)
@@ -406,7 +447,17 @@ export function agentService(db: Db) {
         .set({ revokedAt: new Date() })
         .where(eq(agentApiKeys.agentId, id));
 
-      return getById(id);
+      const final = await getById(id);
+      if (final && beforeStatus !== final.status) {
+        const { automationRuleService } = await import("./automation-rules.js");
+        await automationRuleService(db).evaluateAgentStatusChange({
+          companyId: existing.companyId,
+          agentId: id,
+          fromStatus: beforeStatus,
+          toStatus: final.status,
+        });
+      }
+      return final;
     },
 
     remove: async (id: string) => {
@@ -435,6 +486,7 @@ export function agentService(db: Db) {
       const existing = await getById(id);
       if (!existing) return null;
       if (existing.status !== "pending_approval") return existing;
+      const beforeStatus = existing.status;
 
       const updated = await db
         .update(agents)
@@ -443,17 +495,33 @@ export function agentService(db: Db) {
         .returning()
         .then((rows) => rows[0] ?? null);
 
-      return updated ? normalizeAgentRow(updated) : null;
+      const normalizedUpdated = updated ? normalizeAgentRow(updated) : null;
+      if (normalizedUpdated && beforeStatus !== normalizedUpdated.status) {
+        const { automationRuleService } = await import("./automation-rules.js");
+        await automationRuleService(db).evaluateAgentStatusChange({
+          companyId: existing.companyId,
+          agentId: id,
+          fromStatus: beforeStatus,
+          toStatus: normalizedUpdated.status,
+        });
+      }
+      return normalizedUpdated;
     },
 
-    updatePermissions: async (id: string, permissions: { canCreateAgents: boolean }) => {
+    updatePermissions: async (id: string, patch: { canCreateAgents?: boolean }) => {
       const existing = await getById(id);
       if (!existing) return null;
+
+      const prev = normalizeAgentPermissions(existing.permissions, existing.role);
+      const merged = {
+        canCreateAgents:
+          typeof patch.canCreateAgents === "boolean" ? patch.canCreateAgents : prev.canCreateAgents,
+      };
 
       const updated = await db
         .update(agents)
         .set({
-          permissions: normalizeAgentPermissions(permissions, existing.role),
+          permissions: normalizeAgentPermissions(merged, existing.role),
           updatedAt: new Date(),
         })
         .where(eq(agents.id, id))

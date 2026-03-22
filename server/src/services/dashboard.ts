@@ -1,10 +1,11 @@
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
   approvals,
   companies,
   costEvents,
+  heartbeatRuns,
   issues,
   limitBreachEvents,
 } from "@paperclipai/db";
@@ -12,6 +13,19 @@ import { notFound } from "../errors.js";
 
 const DASHBOARD_BREACH_LOOKBACK_DAYS = 30;
 const DASHBOARD_BREACH_LIMIT = 8;
+const DASHBOARD_TRENDS_MAX_DAYS = 90;
+
+function utcDayLabels(numDays: number): { startUtc: Date; labels: string[] } {
+  const capped = Math.min(DASHBOARD_TRENDS_MAX_DAYS, Math.max(1, Math.floor(numDays)));
+  const now = new Date();
+  const labels: string[] = [];
+  for (let i = capped - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+    labels.push(d.toISOString().slice(0, 10));
+  }
+  const startUtc = new Date(`${labels[0]}T00:00:00.000Z`);
+  return { startUtc, labels };
+}
 
 export function dashboardService(db: Db) {
   return {
@@ -152,6 +166,100 @@ export function dashboardService(db: Db) {
           recentBreaches,
         },
         pendingApprovals,
+      };
+    },
+
+    trends: async (companyId: string, days: number) => {
+      const company = await db
+        .select({ id: companies.id })
+        .from(companies)
+        .where(eq(companies.id, companyId))
+        .then((rows) => rows[0] ?? null);
+      if (!company) throw notFound("Company not found");
+
+      const { startUtc, labels } = utcDayLabels(days);
+      const now = new Date();
+
+      const issueDay = sql<string>`to_char(${issues.updatedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
+      const issueCreatedDay = sql<string>`to_char(${issues.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
+      const runDay = sql<string>`to_char(${heartbeatRuns.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
+
+      const completedRows = await db
+        .select({
+          day: issueDay,
+          n: sql<number>`count(*)::int`,
+        })
+        .from(issues)
+        .where(
+          and(
+            eq(issues.companyId, companyId),
+            eq(issues.status, "done"),
+            gte(issues.updatedAt, startUtc),
+            lte(issues.updatedAt, now),
+          ),
+        )
+        .groupBy(issueDay);
+
+      const createdRows = await db
+        .select({
+          day: issueCreatedDay,
+          n: sql<number>`count(*)::int`,
+        })
+        .from(issues)
+        .where(and(eq(issues.companyId, companyId), gte(issues.createdAt, startUtc)))
+        .groupBy(issueCreatedDay);
+
+      const goalDoneRows = await db
+        .select({
+          day: issueDay,
+          n: sql<number>`count(*)::int`,
+        })
+        .from(issues)
+        .where(
+          and(
+            eq(issues.companyId, companyId),
+            eq(issues.status, "done"),
+            isNotNull(issues.goalId),
+            gte(issues.updatedAt, startUtc),
+            lte(issues.updatedAt, now),
+          ),
+        )
+        .groupBy(issueDay);
+
+      const agentRows = await db
+        .select({
+          day: runDay,
+          n: sql<number>`count(distinct ${heartbeatRuns.agentId})::int`,
+        })
+        .from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, companyId), gte(heartbeatRuns.createdAt, startUtc)))
+        .groupBy(runDay);
+
+      const mapFrom = (rows: { day: string; n: number }[]) => {
+        const m = new Map<string, number>();
+        for (const r of rows) {
+          m.set(r.day, Number(r.n));
+        }
+        return m;
+      };
+
+      const completedMap = mapFrom(completedRows as { day: string; n: number }[]);
+      const createdMap = mapFrom(createdRows as { day: string; n: number }[]);
+      const goalDoneMap = mapFrom(goalDoneRows as { day: string; n: number }[]);
+      const agentMap = mapFrom(agentRows as { day: string; n: number }[]);
+
+      const series = labels.map((date) => ({
+        date,
+        issuesCreated: createdMap.get(date) ?? 0,
+        issuesCompleted: completedMap.get(date) ?? 0,
+        activeAgents: agentMap.get(date) ?? 0,
+        goalLinkedIssuesCompleted: goalDoneMap.get(date) ?? 0,
+      }));
+
+      return {
+        companyId,
+        days: labels.length,
+        series,
       };
     },
   };

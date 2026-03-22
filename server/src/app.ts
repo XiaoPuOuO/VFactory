@@ -17,6 +17,10 @@ import { chatRoutes } from "./routes/chat.js";
 import { chatService, type ChatHeartbeat } from "./services/chat.js";
 import { heartbeatService } from "./services/heartbeat.js";
 import { companyRoutes } from "./routes/companies.js";
+import { issueSavedViewRoutes } from "./routes/issue-saved-views.js";
+import { companyWebhookRoutes } from "./routes/company-webhooks.js";
+import { companyNotificationDestinationRoutes } from "./routes/company-notification-destinations.js";
+import { mentionablesRoutes } from "./routes/mentionables.js";
 import { agentRoutes } from "./routes/agents.js";
 import { projectRoutes } from "./routes/projects.js";
 import { issueRoutes } from "./routes/issues.js";
@@ -37,6 +41,10 @@ import { instanceSettingsRoutes } from "./routes/instance-settings.js";
 import { applyUiBranding } from "./ui-branding.js";
 import { registerPluginRuntime } from "./plugins/runtime.js";
 import { pluginRoutes } from "./routes/plugins.js";
+import { integrationTokenRoutes } from "./routes/integration-tokens.js";
+import { scimRoutes } from "./routes/scim.js";
+import { scimProvisioningKeyRoutes } from "./routes/scim-provisioning-keys.js";
+import { scimBearerAuthMiddleware } from "./middleware/scim-auth.js";
 import type { BetterAuthSessionResult } from "./auth/better-auth.js";
 import type { GetBanStatusFn } from "./middleware/auth.js";
 
@@ -127,6 +135,7 @@ export async function createApp(
   }
 
   app.use(express.json());
+  app.use("/api/scim/v2", scimBearerAuthMiddleware(db), scimRoutes(db));
   app.use(llmRoutes(db));
 
   // Mount API routes
@@ -149,7 +158,12 @@ export async function createApp(
   const chat = chatService(db, heartbeat as ChatHeartbeat);
   api.use("/companies", chatRoutes(db, chat));
   api.use("/companies", pluginRoutes(db));
+  api.use("/companies", integrationTokenRoutes(db));
   api.use("/companies", companyRoutes(db));
+  api.use("/companies", issueSavedViewRoutes(db));
+  api.use("/companies", companyWebhookRoutes(db));
+  api.use("/companies", companyNotificationDestinationRoutes(db));
+  api.use("/companies", mentionablesRoutes(db));
   api.use(agentRoutes(db));
   api.use(assetRoutes(db, opts.storageService));
   api.use(projectRoutes(db));
@@ -173,6 +187,7 @@ export async function createApp(
   api.use("/instance/groups", instanceGroupsRoutes(db));
   api.use("/instance/users", instanceUsersRoutes(db));
   api.use("/instance/settings", instanceSettingsRoutes(db));
+  api.use("/instance/scim-provisioning-keys", scimProvisioningKeyRoutes(db));
   app.use("/api", api);
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "API route not found" });

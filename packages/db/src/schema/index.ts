@@ -1,4 +1,8 @@
 export { companies } from "./companies.js";
+export { companyWebhookEndpoints } from "./company_webhook_endpoints.js";
+export { companyNotificationDestinations } from "./company_notification_destinations.js";
+export { issueSubscriptions } from "./issue_subscriptions.js";
+export { userNotificationPreferences } from "./user_notification_preferences.js";
 export { companyPlugins } from "./company_plugins.js";
 export { tenants } from "./tenants.js";
 export { tenantMemberships } from "./tenant_memberships.js";
@@ -16,6 +20,8 @@ export { invites } from "./invites.js";
 export { joinRequests } from "./join_requests.js";
 export { agentConfigRevisions } from "./agent_config_revisions.js";
 export { agentApiKeys } from "./agent_api_keys.js";
+export { integrationApiKeys } from "./integration_api_keys.js";
+export { scimProvisioningKeys } from "./scim_provisioning_keys.js";
 export { agentRuntimeState } from "./agent_runtime_state.js";
 export { agentTaskSessions } from "./agent_task_sessions.js";
 export { agentWakeupRequests } from "./agent_wakeup_requests.js";
@@ -25,6 +31,7 @@ export { workspaceRuntimeServices } from "./workspace_runtime_services.js";
 export { projectGoals } from "./project_goals.js";
 export { goals } from "./goals.js";
 export { issues } from "./issues.js";
+export { issueSavedViews } from "./issue_saved_views.js";
 export { labels } from "./labels.js";
 export { issueLabels } from "./issue_labels.js";
 export { issueApprovals } from "./issue_approvals.js";
@@ -38,6 +45,10 @@ export { costEvents } from "./cost_events.js";
 export { budgetPolicies } from "./budget_policies.js";
 export { limitBreachEvents } from "./limit_breach_events.js";
 export { companyApprovalPolicies } from "./company_approval_policies.js";
+export {
+  companyAutomationRules,
+  companyAutomationRuleFires,
+} from "./company_automation_rules.js";
 export { approvals } from "./approvals.js";
 export { approvalComments } from "./approval_comments.js";
 export { activityLog } from "./activity_log.js";

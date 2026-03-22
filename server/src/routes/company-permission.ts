@@ -20,6 +20,9 @@ export async function assertCompanyPermission(
   permissionKey: PermissionKey,
 ): Promise<void> {
   await assertCompanyAccess(req, companyId, db);
+  if (req.actor.type === "service") {
+    throw forbidden("Integration token cannot use this action");
+  }
   const access = accessService(db);
   if (req.actor.type === "agent") {
     if (!req.actor.agentId) throw forbidden();

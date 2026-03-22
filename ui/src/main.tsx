@@ -2,7 +2,10 @@ import "./i18n";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "@/lib/router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+import { getQueryPersisterStorageKey, shouldPersistReadonlyIssueQuery } from "./lib/react-query-persist";
+import { queryClient } from "./lib/queryClient";
 import { App } from "./App";
 import { CompanyProvider } from "./context/CompanyContext";
 import { LiveUpdatesProvider } from "./context/LiveUpdatesProvider";
@@ -22,18 +25,23 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: true,
-    },
-  },
+const queryPersister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: getQueryPersisterStorageKey(),
 });
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister: queryPersister,
+        maxAge: 1000 * 60 * 60 * 24 * 7,
+        dehydrateOptions: {
+          shouldDehydrateQuery: shouldPersistReadonlyIssueQuery,
+        },
+      }}
+    >
       <ThemeProvider>
         <CompanyProvider>
           <ToastProvider>
@@ -55,6 +63,6 @@ createRoot(document.getElementById("root")!).render(
           </ToastProvider>
         </CompanyProvider>
       </ThemeProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   </StrictMode>
 );

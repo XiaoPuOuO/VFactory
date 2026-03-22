@@ -28,6 +28,7 @@ export const AUTO_PAUSE_REASONS = [
   "token_limit",
   "price_limit",
   "manual",
+  "automation_rule",
 ] as const;
 export type AutoPauseReason = (typeof AUTO_PAUSE_REASONS)[number];
 
@@ -303,6 +304,10 @@ export function isCompanyMembershipRole(value: string | null | undefined): value
 /** instance_settings 表鍵名：預設公司路徑；未設定 working_directory 的公司，其 Agent 設定目錄將放在此路徑下 (companyId) 子目錄。 */
 export const INSTANCE_SETTING_KEY_DEFAULT_COMPANY_PATH = "default_company_path";
 
+/** 實例預設合規留存天數（字串整數）；公司 compliance_data_retention_days 為 null 時語意上繼承此值。不自動 purge。 */
+export const INSTANCE_SETTING_KEY_COMPLIANCE_DEFAULT_RETENTION_DAYS =
+  "compliance_default_retention_days";
+
 export const INSTANCE_USER_ROLES = ["instance_admin"] as const;
 export type InstanceUserRole = (typeof INSTANCE_USER_ROLES)[number];
 
@@ -345,6 +350,8 @@ export const PERMISSION_KEYS = [
   "governance:policies:manage",
   "budgets:manage",
   "company:manage",
+  /** Agent 建立／更新／刪除專案與工作區；預設不授予，需由 Board／CEO 於 principal grants 明確開啟。 */
+  "projects:manage",
   ...MODEL_PERMISSION_KEYS,
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -366,6 +373,39 @@ export const ADAPTER_TYPE_TO_MODEL_PERMISSION: Record<string, ModelPermissionKey
 /** 公司建立者（owner）預設擁有的權限，用於 ensureMembership 後呼叫 setPrincipalGrants。 */
 export const DEFAULT_OWNER_GRANTS: ReadonlyArray<{ permissionKey: PermissionKey }> =
   PERMISSION_KEYS.map((permissionKey) => ({ permissionKey }));
+
+/**
+ * 整合 API token（非 agent）可授予之唯讀／有限範圍，與 board 的 PermissionKey 分離。
+ * 路由層以 assertCompanyIntegrationScope 檢查。
+ */
+export const INTEGRATION_TOKEN_SCOPES = [
+  "costs:read",
+  "issues:read",
+  "activity:read",
+  "goals:read",
+  "projects:read",
+  "agents:read",
+  "approvals:read",
+] as const;
+export type IntegrationTokenScope = (typeof INTEGRATION_TOKEN_SCOPES)[number];
+
+export function isIntegrationTokenScope(value: string): value is IntegrationTokenScope {
+  return (INTEGRATION_TOKEN_SCOPES as readonly string[]).includes(value);
+}
+
+/** 公司出站 Webhook 可訂閱之事件型別。 */
+export const COMPANY_WEBHOOK_EVENT_TYPES = [
+  "issue.created",
+  "issue.updated",
+  "issue.comment_created",
+  "approval.created",
+  "budget.limit_breached",
+] as const;
+export type CompanyWebhookEventType = (typeof COMPANY_WEBHOOK_EVENT_TYPES)[number];
+
+/** 公司通知目的地通道（Email SMTP、Slack/Discord Incoming Webhook）。 */
+export const NOTIFICATION_CHANNEL_TYPES = ["email", "slack", "discord"] as const;
+export type NotificationChannelType = (typeof NOTIFICATION_CHANNEL_TYPES)[number];
 
 /** Instance 身分組可設定的權限鍵（由 instance-permissions 註冊表導出）。* 表示全部權限。 */
 export {

@@ -5,6 +5,9 @@ import type {
   CompanyPortabilityImportResult,
   CompanyPortabilityPreviewRequest,
   CompanyPortabilityPreviewResult,
+  CreateAutomationRule,
+  ImportPoliciesFromCompany,
+  UpdateAutomationRule,
   UpsertCompanyHireApprovalPolicy,
 } from "@paperclipai/shared";
 import { api } from "./client";
@@ -18,6 +21,18 @@ export type CompanyHireApprovalPolicy = {
   approvalType?: string;
   enabled: boolean;
   maxBudgetMonthlyCents: number | null;
+};
+
+export type AutomationRuleRow = {
+  id: string;
+  companyId: string;
+  name: string;
+  enabled: boolean;
+  sortOrder: number;
+  trigger: Record<string, unknown>;
+  actions: unknown[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export const companiesApi = {
@@ -34,15 +49,35 @@ export const companiesApi = {
     data: Partial<
       Pick<
         Company,
-        "name" | "description" | "status" | "budgetMonthlyCents" | "requireBoardApprovalForNewAgents" | "brandColor" | "iconAssetId" | "workingDirectory"
+        | "name"
+        | "description"
+        | "status"
+        | "budgetMonthlyCents"
+        | "requireBoardApprovalForNewAgents"
+        | "brandColor"
+        | "iconAssetId"
+        | "workingDirectory"
+        | "wakeupsPausedUntil"
+        | "wakeupsPausedReason"
+        | "maintenanceWindows"
+        | "complianceDataRetentionDays"
       >
     > & { moveWorkingDirectory?: boolean },
   ) => api.patch<Company>(`/companies/${companyId}`, data),
   archive: (companyId: string) => api.post<Company>(`/companies/${companyId}/archive`, {}),
   remove: (companyId: string) => api.delete<{ ok: true }>(`/companies/${companyId}`),
   cleanupOrphans: () => api.post<{ ok: true }>("/companies/cleanup-orphans", {}),
-  exportBundle: (companyId: string, data: { include?: { company?: boolean; agents?: boolean } }) =>
-    api.post<CompanyPortabilityExportResult>(`/companies/${companyId}/export`, data),
+  exportBundle: (
+    companyId: string,
+    data: {
+      include?: {
+        company?: boolean;
+        agents?: boolean;
+        approvalPolicies?: boolean;
+        budgetPolicies?: boolean;
+      };
+    },
+  ) => api.post<CompanyPortabilityExportResult>(`/companies/${companyId}/export`, data),
   importPreview: (data: CompanyPortabilityPreviewRequest) =>
     api.post<CompanyPortabilityPreviewResult>("/companies/import/preview", data),
   importBundle: (data: CompanyPortabilityImportRequest) =>
@@ -51,4 +86,17 @@ export const companiesApi = {
     api.get<CompanyHireApprovalPolicy>(`/companies/${companyId}/approval-policies/hire`),
   updateHireApprovalPolicy: (companyId: string, body: UpsertCompanyHireApprovalPolicy) =>
     api.put<CompanyHireApprovalPolicy>(`/companies/${companyId}/approval-policies/hire`, body),
+  listAutomationRules: (companyId: string) =>
+    api.get<{ rules: AutomationRuleRow[] }>(`/companies/${companyId}/automation-rules`),
+  createAutomationRule: (companyId: string, body: CreateAutomationRule) =>
+    api.post<AutomationRuleRow>(`/companies/${companyId}/automation-rules`, body),
+  updateAutomationRule: (companyId: string, ruleId: string, body: UpdateAutomationRule) =>
+    api.patch<AutomationRuleRow>(`/companies/${companyId}/automation-rules/${ruleId}`, body),
+  deleteAutomationRule: (companyId: string, ruleId: string) =>
+    api.delete<{ ok: boolean }>(`/companies/${companyId}/automation-rules/${ruleId}`),
+  importPoliciesFromCompany: (companyId: string, body: ImportPoliciesFromCompany) =>
+    api.post<{ ok: boolean; warnings: string[] }>(
+      `/companies/${companyId}/policies/import-from`,
+      body,
+    ),
 };

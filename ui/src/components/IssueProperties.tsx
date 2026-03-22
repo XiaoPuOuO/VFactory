@@ -18,7 +18,8 @@ import { formatDate, projectUrl } from "../lib/utils";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { User, Hexagon, ArrowUpRight, Tag, Plus, Trash2 } from "lucide-react";
+import { User, Hexagon, ArrowUpRight, Tag, Plus, Trash2, ExternalLink } from "lucide-react";
+import type { IssueVcsLinks } from "@paperclipai/shared";
 import { AgentIcon } from "./AgentIconPicker";
 import { SHOW_EXPERIMENTAL_ISSUE_WORKTREE_UI } from "@/lib/featureFlags";
 
@@ -94,6 +95,15 @@ function PropertyPicker({
       {extra}
     </PropertyRow>
   );
+}
+
+function normalizeVcsLinks(v: IssueVcsLinks | null | undefined): IssueVcsLinks {
+  return {
+    prUrl: v?.prUrl ?? null,
+    branch: v?.branch ?? null,
+    ciStatus: v?.ciStatus ?? null,
+    ciUrl: v?.ciUrl ?? null,
+  };
 }
 
 export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProps) {
@@ -612,6 +622,95 @@ export function IssueProperties({ issue, onUpdate, inline }: IssuePropertiesProp
             <option value="phased">{t("properties.phased")}</option>
           </select>
           <span className="ui-issue-props-muted-sm ui-issue-props-ml-1">{t("properties.parallelForChildTasks")}</span>
+        </PropertyRow>
+
+        <PropertyRow label={t("properties.vcsPrUrl")}>
+          <div className="ui-issue-props-inline-input-link">
+            <input
+              type="url"
+              className="ui-issue-props-add-input ui-issue-props-add-input-full"
+              placeholder="https://..."
+              value={normalizeVcsLinks(issue.vcsLinks).prUrl ?? ""}
+              onChange={(e) => {
+                const prUrl = e.target.value.trim() || null;
+                const base = normalizeVcsLinks(issue.vcsLinks);
+                const next = { ...base, prUrl };
+                const empty = !next.prUrl && !next.branch && !next.ciStatus && !next.ciUrl;
+                onUpdate({ vcsLinks: empty ? null : next });
+              }}
+            />
+            {normalizeVcsLinks(issue.vcsLinks).prUrl ? (
+              <a
+                href={normalizeVcsLinks(issue.vcsLinks).prUrl!}
+                target="_blank"
+                rel="noreferrer"
+                className="ui-issue-props-link-icon"
+                aria-label={t("properties.vcsOpenPr")}
+              >
+                <ExternalLink className="ui-issue-props-icon-xs" />
+              </a>
+            ) : null}
+          </div>
+        </PropertyRow>
+        <PropertyRow label={t("properties.vcsBranch")}>
+          <input
+            type="text"
+            className="ui-issue-props-add-input ui-issue-props-add-input-full"
+            placeholder={t("properties.vcsBranchPlaceholder")}
+            maxLength={512}
+            value={normalizeVcsLinks(issue.vcsLinks).branch ?? ""}
+            onChange={(e) => {
+              const branch = e.target.value.trim() || null;
+              const base = normalizeVcsLinks(issue.vcsLinks);
+              const next = { ...base, branch };
+              const empty = !next.prUrl && !next.branch && !next.ciStatus && !next.ciUrl;
+              onUpdate({ vcsLinks: empty ? null : next });
+            }}
+          />
+        </PropertyRow>
+        <PropertyRow label={t("properties.vcsCiStatus")}>
+          <input
+            type="text"
+            className="ui-issue-props-add-input ui-issue-props-add-input-full"
+            placeholder={t("properties.vcsCiStatusPlaceholder")}
+            maxLength={128}
+            value={normalizeVcsLinks(issue.vcsLinks).ciStatus ?? ""}
+            onChange={(e) => {
+              const ciStatus = e.target.value.trim() || null;
+              const base = normalizeVcsLinks(issue.vcsLinks);
+              const next = { ...base, ciStatus };
+              const empty = !next.prUrl && !next.branch && !next.ciStatus && !next.ciUrl;
+              onUpdate({ vcsLinks: empty ? null : next });
+            }}
+          />
+        </PropertyRow>
+        <PropertyRow label={t("properties.vcsCiUrl")}>
+          <div className="ui-issue-props-inline-input-link">
+            <input
+              type="url"
+              className="ui-issue-props-add-input ui-issue-props-add-input-full"
+              placeholder="https://..."
+              value={normalizeVcsLinks(issue.vcsLinks).ciUrl ?? ""}
+              onChange={(e) => {
+                const ciUrl = e.target.value.trim() || null;
+                const base = normalizeVcsLinks(issue.vcsLinks);
+                const next = { ...base, ciUrl };
+                const empty = !next.prUrl && !next.branch && !next.ciStatus && !next.ciUrl;
+                onUpdate({ vcsLinks: empty ? null : next });
+              }}
+            />
+            {normalizeVcsLinks(issue.vcsLinks).ciUrl ? (
+              <a
+                href={normalizeVcsLinks(issue.vcsLinks).ciUrl!}
+                target="_blank"
+                rel="noreferrer"
+                className="ui-issue-props-link-icon"
+                aria-label={t("properties.vcsOpenCi")}
+              >
+                <ExternalLink className="ui-issue-props-icon-xs" />
+              </a>
+            ) : null}
+          </div>
         </PropertyRow>
 
         {issue.parentId && (

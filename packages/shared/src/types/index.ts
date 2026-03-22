@@ -1,6 +1,11 @@
 export type { Tenant, TenantSummary, TenantStatus, TenantMembershipRole } from "./tenant.js";
 export type { Company } from "./company.js";
 export type {
+  CompanyWebhookEndpoint,
+  CompanyWebhookEndpointCreated,
+} from "./company-webhook.js";
+export type { CompanyNotificationDestination } from "./company-notification-destination.js";
+export type {
   Agent,
   AgentPermissions,
   AgentKeyCreated,
@@ -30,6 +35,7 @@ export type {
   IssueAttachment,
   IssueLabel,
 } from "./issue.js";
+export type { IssueSavedView } from "./issue-saved-view.js";
 export type { Goal } from "./goal.js";
 export type {
   GoalProgress,
@@ -61,6 +67,7 @@ export type {
 export type {
   BudgetPolicy,
   CostEvent,
+  CostForecast,
   CostSummary,
   CostByAgent,
   CostByBillingCode,
@@ -75,9 +82,16 @@ export type {
   AgentTaskSession,
   AgentWakeupRequest,
 } from "./heartbeat.js";
+export type {
+  HeartbeatRunsListResponse,
+  HeartbeatRunQualitySummary,
+  HeartbeatRunQualityCompanyTotals,
+  HeartbeatRunQualityAgentRow,
+  HeartbeatRunErrorCluster,
+} from "./heartbeat-quality.js";
 export type { LiveEvent } from "./live.js";
 export type { CompanyPluginState, CompanyPluginDescriptor } from "./plugin.js";
-export type { DashboardSummary } from "./dashboard.js";
+export type { DashboardSummary, DashboardTrends, DashboardTrendsDay } from "./dashboard.js";
 export type { ActivityEvent } from "./activity.js";
 export type { SidebarBadges } from "./sidebar-badges.js";
 export type {
@@ -92,6 +106,8 @@ export type {
   CompanyPortabilitySecretRequirement,
   CompanyPortabilityCompanyManifestEntry,
   CompanyPortabilityAgentManifestEntry,
+  CompanyPortabilityApprovalPolicyEntry,
+  CompanyPortabilityBudgetPolicyEntry,
   CompanyPortabilityManifest,
   CompanyPortabilityExportResult,
   CompanyPortabilitySource,
@@ -105,4 +121,4 @@ export type {
   CompanyPortabilityImportResult,
   CompanyPortabilityExportRequest,
 } from "./company-portability.js";
-export type { AgentSchedule, ScheduleKind, ScheduleWindow } from "./schedule.js";
+export type { AgentSchedule, ScheduleConflictRow, ScheduleKind, ScheduleWindow } from "./schedule.js";

@@ -49,6 +49,24 @@ export interface BudgetPolicy {
   updatedAt: string;
 }
 
+/** 依當月 UTC 累計與近兩週窗口的簡易預測／異常提示（與查詢區間的 spendCents 無關）。 */
+export interface CostForecast {
+  /** 當月迄今花費（UTC 月）。 */
+  monthToDateSpendCents: number;
+  /** 以日均推估的月底總花費（分）。 */
+  monthProjectedSpendCents: number;
+  /** 有設定月預算時，推估月底使用率（%）。 */
+  monthProjectedUtilizationPercent: number;
+  /** 推估月底會達或超過公司月預算（需 budgetCents > 0）。 */
+  likelyMonthBudgetBreach: boolean;
+  /** 最近 7 天（含）花費（分）。 */
+  last7DaysSpendCents: number;
+  /** 前 7 天（不含最近 7 天）花費（分）。 */
+  previous7DaysSpendCents: number;
+  /** 最近 7 天花費 > 2× 前 7 天（且前 7 天 > 0）。 */
+  spendSpikeVsPreviousWeek: boolean;
+}
+
 export interface CostSummary {
   companyId: string;
   spendCents: number;
@@ -62,6 +80,8 @@ export interface CostSummary {
   priceLimitCents?: number | null;
   /** 過去 N 天內的預算／Token／Price 觸發紀錄。 */
   breachEvents?: LimitBreachEvent[];
+  /** 簡易月預測與週對週異常（UTC）。 */
+  forecast?: CostForecast;
 }
 
 export interface CostByAgent {

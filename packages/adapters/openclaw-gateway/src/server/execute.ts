@@ -438,7 +438,8 @@ function buildWakeText(payload: WakePayload, paperclipEnv: Record<string, string
     "   - Pick in_progress first, then todo, then blocked, then execute step 3.",
     "5) If PAPERCLIP_CHAT_ROOM_ID is set (wake_reason=chat_message or chat_message_mentioned):",
     "   - This run was triggered by a chat message. GET /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages to read the conversation.",
-    "   - If PAPERCLIP_CHAT_PROJECT_ID is set, the user is discussing that specific project (name in PAPERCLIP_CHAT_PROJECT_NAME); prefer creating issues in that project when relevant.",
+    "   - If the structured wake payload includes paperclip.companyProjects, treat it as the authoritative list of this company's active projects (id + name); do not infer the company's products only from a local filesystem path.",
+    "   - If PAPERCLIP_CHAT_PROJECT_ID is set, the Board selected 針對專案 in the composer for this message—treat the turn as scoped to that project (name in PAPERCLIP_CHAT_PROJECT_NAME); prefer creating issues in that project when relevant.",
     "   - If PAPERCLIP_CHAT_ROOM_TYPE=group: decide whether the triggering message is relevant to YOU based on your Role and Agent description (e.g. you were @mentioned, or the message clearly refers to you or your responsibilities). If NOT relevant to you, do NOT reply—complete the run without POSTing. Only POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\":\"your reply\"} when the message is directed at you or relevant to your role.",
     "   - If PAPERCLIP_CHAT_ROOM_TYPE=direct: this is a 1:1 chat with a user; reply in this run (do not apply group-chat relevance filtering).",
     "   - If the conversation calls for it, create goals or issues in the same run: GET /api/companies/$PAPERCLIP_COMPANY_ID/goals, POST /api/companies/$PAPERCLIP_COMPANY_ID/goals with {\"title\":\"...\", \"description\":\"...\" (optional), \"level\":\"company\"|\"task\" (optional), \"parentId\":\"...\" (optional), \"recurrence\":\"one_time\"|\"daily\"|\"weekly\"|\"monthly\"|\"custom\" (optional, default one_time); if recurrence is \"custom\" also send recurrenceIntervalDays, recurrenceIntervalHours, recurrenceIntervalMinutes, recurrenceIntervalSeconds (at least one > 0)}, or POST /api/companies/$PAPERCLIP_COMPANY_ID/issues (include projectId when PAPERCLIP_CHAT_PROJECT_ID is set).",
@@ -501,6 +502,10 @@ function buildStandardPaperclipPayload(
   if (wakePayload.chatProjectName) chat.projectName = wakePayload.chatProjectName;
   if (Object.keys(chat).length > 0) {
     standardPaperclip.chat = chat;
+  }
+
+  if (Array.isArray(ctx.context.paperclipCompanyProjects)) {
+    standardPaperclip.companyProjects = ctx.context.paperclipCompanyProjects;
   }
 
   if (workspace) {

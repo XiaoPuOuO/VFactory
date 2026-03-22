@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { authUsers, companies, companyMemberships } from "@paperclipai/db";
-import { updateMeDeveloperModeSchema } from "@paperclipai/shared";
+import { authUsers, companies, companyMemberships, userNotificationPreferences } from "@paperclipai/db";
+import { updateMeDeveloperModeSchema, updateMeNotificationPreferencesSchema } from "@paperclipai/shared";
 import { unauthorized } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import { hasCompanyViewAll } from "./authz.js";
@@ -132,6 +132,34 @@ export function meRoutes(db: Db) {
     }
 
     res.json({ id: updated.id, developerMode: updated.developerMode });
+  });
+
+  router.get("/notification-preferences", async (req, res) => {
+    if (req.actor.type !== "board" || !req.actor.userId) {
+      throw unauthorized();
+    }
+    const row = await db
+      .select()
+      .from(userNotificationPreferences)
+      .where(eq(userNotificationPreferences.userId, req.actor.userId))
+      .then((rows) => rows[0] ?? null);
+    res.json({ emailEnabled: row?.emailEnabled ?? true });
+  });
+
+  router.patch("/notification-preferences", validate(updateMeNotificationPreferencesSchema), async (req, res) => {
+    if (req.actor.type !== "board" || !req.actor.userId) {
+      throw unauthorized();
+    }
+    const userId = req.actor.userId;
+    const emailEnabled = req.body.emailEnabled === true;
+    await db
+      .insert(userNotificationPreferences)
+      .values({ userId, emailEnabled, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: userNotificationPreferences.userId,
+        set: { emailEnabled, updatedAt: new Date() },
+      });
+    res.json({ emailEnabled });
   });
 
   return router;

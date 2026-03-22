@@ -10,6 +10,8 @@ import {
   asStringArray,
   parseObject,
   buildPaperclipEnv,
+  mergePaperclipContextIntoEnv,
+  renderChatProjectScopeNote,
   redactEnvForLogs,
   ensureAbsoluteDirectory,
   ensureCommandResolvable,
@@ -423,6 +425,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   if (workspaceHints.length > 0) {
     env.PAPERCLIP_WORKSPACES_JSON = JSON.stringify(workspaceHints);
   }
+  mergePaperclipContextIntoEnv(env, context);
   for (const [k, v] of Object.entries(envConfig)) {
     if (typeof v === "string") env[k] = v;
   }
@@ -530,6 +533,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       ? [
           // English system framing for generic models
           "You are currently responding inside a live VFactory chat room, not an issue comment.",
+          "If PAPERCLIP_COMPANY_PROJECTS_JSON is set, parse it: it lists every active project in this company (id, name, optional description). Use it when the user asks what the company builds or names a project; do not infer the company's product list only from the local workspace directory (PAPERCLIP_WORKSPACE_CWD may be agent home or one checkout).",
           "Treat this heartbeat as a single conversational turn directed at you.",
           "Your job in this mode is to read the latest chat messages and reply naturally to the user in the same language they used (for this company that is usually Traditional Chinese).",
           "You MUST send your reply by calling POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\": \"your reply text\"} (and include header X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID). The reply will only appear in the chat when you POST it; do not only output reply text in your response without calling this API.",
@@ -560,7 +564,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     ? `Here is the recent chat transcript for this room (oldest first, newest last). Read it carefully and respond to the latest user message.\n\n${chatTranscript}\n\n`
     : "";
   const paperclipEnvNote = renderPaperclipEnvNote(env);
-  const prompt = `${instructionsPrefix}${paperclipEnvNote}${chatModePrefix}${crossChatBlock}${roomEarlierBlock}${chatHistoryBlock}${renderedPrompt}`;
+  const prompt = `${instructionsPrefix}${paperclipEnvNote}${chatModePrefix}${renderChatProjectScopeNote(env)}${crossChatBlock}${roomEarlierBlock}${chatHistoryBlock}${renderedPrompt}`;
 
   const buildArgs = (resumeSessionId: string | null) => {
     const args = ["-p", "--output-format", "stream-json", "--workspace", cwd];

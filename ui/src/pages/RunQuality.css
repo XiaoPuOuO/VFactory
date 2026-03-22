@@ -1,0 +1,175 @@
+.run-quality-page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.run-quality-header {
+  margin-bottom: 1.5rem;
+}
+
+.run-quality-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.35rem;
+  color: var(--foreground);
+}
+
+.run-quality-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted-foreground);
+}
+
+.run-quality-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1.25rem;
+  align-items: flex-end;
+}
+
+.run-quality-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--foreground);
+}
+
+.run-quality-field input,
+.run-quality-field select {
+  min-width: 12rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--input);
+  color: var(--foreground);
+  background: transparent;
+  box-shadow: 0 1px 2px 0 color-mix(in oklab, var(--foreground) 0.04, transparent);
+  outline: none;
+  transition: color 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+
+.dark .run-quality-field input,
+.dark .run-quality-field select {
+  background: color-mix(in oklab, var(--input) 30%, transparent);
+}
+
+.run-quality-field input:focus-visible,
+.run-quality-field select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+.run-quality-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.run-quality-card {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 0.75rem 0.9rem;
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.run-quality-card-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+  margin-bottom: 0.35rem;
+}
+
+.run-quality-card-value {
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--card-foreground);
+}
+
+.run-quality-section {
+  margin-bottom: 2rem;
+}
+
+.run-quality-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.65rem;
+  color: var(--foreground);
+}
+
+.run-quality-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.run-quality-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.run-quality-table th,
+.run-quality-table td {
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  color: var(--card-foreground);
+}
+
+.run-quality-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+
+.run-quality-muted {
+  font-size: 0.9rem;
+  color: var(--muted-foreground);
+}
+
+.run-quality-link {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.run-quality-link:hover {
+  text-decoration: underline;
+}
+
+.run-quality-cluster-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.run-quality-hint {
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  color: var(--muted-foreground);
+}
+
+.run-quality-linkish {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}

@@ -2,7 +2,7 @@ import type { IssuePriority, IssueStatus } from "../constants.js";
 import type { Goal } from "./goal.js";
 import type { Project, ProjectWorkspace } from "./project.js";
 import type { IssueExecutionWorkspaceSettings } from "./workspace-runtime.js";
-import type { IssueExecutionPolicy } from "../validators/issue.js";
+import type { IssueExecutionPolicy, IssueVcsLinks } from "../validators/issue.js";
 
 export interface IssueAncestorProject {
   id: string;
@@ -84,6 +84,8 @@ export interface Issue {
   executionPolicy: IssueExecutionPolicy | null;
   /** Issue: 顯示用標籤（如 Frontend-A），供 run context / UI。 */
   executionLabel: string | null;
+  /** PR／branch／CI（手動）。 */
+  vcsLinks?: IssueVcsLinks | null;
   startedAt: Date | null;
   completedAt: Date | null;
   cancelledAt: Date | null;

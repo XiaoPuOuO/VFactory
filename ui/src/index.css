@@ -742,6 +742,77 @@ a.paperclip-project-mention-chip {
   margin-top: 1rem;
 }
 
+.app-gate-session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8125rem;
+}
+
+.app-gate-session-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  border-radius: 0.25rem;
+}
+
+.app-gate-session-link:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+.app-gate-session-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.app-gate-session-signout {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: var(--muted-foreground);
+  border-radius: 0.25rem;
+}
+
+.app-gate-session-signout:hover:not(:disabled) {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+.app-gate-session-signout:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.app-gate-session-signout:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.app-gate-session-sep {
+  color: var(--muted-foreground);
+  opacity: 0.5;
+  user-select: none;
+}
+
+.app-gate-session-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+
 .app-gate-message {
   font-size: 0.875rem;
   color: var(--muted-foreground);

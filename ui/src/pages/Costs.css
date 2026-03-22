@@ -61,11 +61,59 @@
   letter-spacing: -0.01em;
 }
 
+.costs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.costs-toolbar .costs-filters {
+  flex: 1;
+  min-width: 0;
+}
+
+.costs-export-csv {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
 .costs-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+}
+
+.costs-forecast {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
+.costs-forecast p {
+  margin: 0 0 0.35rem;
+}
+
+.costs-forecast-week {
+  opacity: 0.95;
+}
+
+.costs-forecast-alert {
+  color: var(--destructive);
+  font-weight: 500;
+}
+
+.costs-attribution-hint {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  margin: 0 0 1rem;
+  max-width: 48rem;
+  line-height: 1.5;
 }
 
 .costs-custom-range {

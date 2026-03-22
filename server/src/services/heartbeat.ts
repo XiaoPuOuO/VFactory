@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { and, asc, desc, eq, gt, inArray, isNull, lte, not, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, not, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -37,7 +37,14 @@ import {
 } from "./workspace-runtime.js";
 import { agentMemoriesService } from "./agent-memories.js";
 import { issueService } from "./issues.js";
-import type { IssueExecutionWorkspaceSettings } from "@paperclipai/shared";
+import {
+  encodeHeartbeatRunCursor,
+  isWithinMaintenanceWindows,
+  isWakeupsPausedUntilActive,
+  type HeartbeatRun,
+  type HeartbeatRunsListResponse,
+  type IssueExecutionWorkspaceSettings,
+} from "@paperclipai/shared";
 import {
   buildExecutionWorkspaceAdapterConfig,
   orderProjectWorkspaceRowsForIssue,
@@ -1405,6 +1412,22 @@ export function heartbeatService(db: Db) {
           issuePrefix: companyRow.issuePrefix,
         }
       : { id: agent.companyId, name: "", description: null, issuePrefix: "PAP" };
+
+    const companyProjectRows = await db
+      .select({
+        id: projects.id,
+        name: projects.name,
+        description: projects.description,
+      })
+      .from(projects)
+      .where(and(eq(projects.companyId, agent.companyId), isNull(projects.archivedAt)))
+      .orderBy(asc(projects.name), asc(projects.id));
+
+    context.paperclipCompanyProjects = companyProjectRows.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description ?? null,
+    }));
     const runtimeSessionFallback = taskKey || resetTaskSession ? null : runtime.sessionId;
     const previousSessionDisplayId = truncateDisplayId(
       taskSessionForRun?.sessionDisplayId ??
@@ -2146,6 +2169,42 @@ export function heartbeatService(db: Db) {
       throw conflict("Agent is not invokable in its current state", { status: agent.status });
     }
 
+    const policyNow = new Date();
+    const maintenanceRow = await db
+      .select({
+        wakeupsPausedUntil: companies.wakeupsPausedUntil,
+        maintenanceWindows: companies.maintenanceWindows,
+      })
+      .from(companies)
+      .where(eq(companies.id, agent.companyId))
+      .then((rows) => rows[0] ?? null);
+    const inMaintenance =
+      maintenanceRow != null &&
+      (isWakeupsPausedUntilActive(maintenanceRow.wakeupsPausedUntil, policyNow) ||
+        isWithinMaintenanceWindows(policyNow, maintenanceRow.maintenanceWindows ?? undefined));
+    if (inMaintenance) {
+      await db.insert(agentWakeupRequests).values({
+        companyId: agent.companyId,
+        agentId,
+        source,
+        triggerDetail,
+        reason: "company.maintenance_window",
+        payload,
+        status: "skipped",
+        requestedByActorType: opts.requestedByActorType ?? null,
+        requestedByActorId: opts.requestedByActorId ?? null,
+        idempotencyKey: opts.idempotencyKey ?? null,
+        finishedAt: new Date(),
+      });
+      const silentMaintenance = source === "timer" || source === "automation";
+      if (silentMaintenance) {
+        return null;
+      }
+      throw conflict("Company is in maintenance; new wakeups are blocked", {
+        code: "maintenance_window_active",
+      });
+    }
+
     const limitExceeded = await costService(db).isCompanyLimitExceeded(agent.companyId);
     if (limitExceeded.reason) {
       const skipReason = `company.${limitExceeded.reason}_reached`;
@@ -2173,7 +2232,6 @@ export function heartbeatService(db: Db) {
     }
 
     const budgetPolicies = budgetPolicyService(db);
-    const policyNow = new Date();
     const skipBudgetPolicy = async (skipReason: string): Promise<null> => {
       await db.insert(agentWakeupRequests).values({
         companyId: agent.companyId,
@@ -2714,22 +2772,58 @@ export function heartbeatService(db: Db) {
   }
 
   return {
-    list: async (companyId: string, agentId?: string, limit?: number) => {
-      const query = db
+    list: async (
+      companyId: string,
+      filters?: {
+        agentId?: string;
+        limit?: number;
+        startedAfter?: Date;
+        endedBefore?: Date;
+        statuses?: string[];
+        invocationSources?: string[];
+        cursorCreatedAt?: Date;
+        cursorId?: string;
+      },
+    ): Promise<HeartbeatRunsListResponse> => {
+      const conditions = [eq(heartbeatRuns.companyId, companyId)];
+      if (filters?.agentId) conditions.push(eq(heartbeatRuns.agentId, filters.agentId));
+      if (filters?.startedAfter) conditions.push(gte(heartbeatRuns.createdAt, filters.startedAfter));
+      if (filters?.endedBefore) conditions.push(lte(heartbeatRuns.createdAt, filters.endedBefore));
+      if (filters?.statuses?.length) {
+        conditions.push(inArray(heartbeatRuns.status, filters.statuses as [string, ...string[]]));
+      }
+      if (filters?.invocationSources?.length) {
+        conditions.push(
+          inArray(heartbeatRuns.invocationSource, filters.invocationSources as [string, ...string[]]),
+        );
+      }
+      if (filters?.cursorCreatedAt && filters?.cursorId) {
+        conditions.push(
+          or(
+            lt(heartbeatRuns.createdAt, filters.cursorCreatedAt),
+            and(eq(heartbeatRuns.createdAt, filters.cursorCreatedAt), lt(heartbeatRuns.id, filters.cursorId)),
+          )!,
+        );
+      }
+
+      const lim = Math.min(1000, Math.max(1, filters?.limit ?? 200));
+      const rows = await db
         .select(heartbeatRunListColumns)
         .from(heartbeatRuns)
-        .where(
-          agentId
-            ? and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId))
-            : eq(heartbeatRuns.companyId, companyId),
-        )
-        .orderBy(desc(heartbeatRuns.createdAt));
+        .where(and(...conditions))
+        .orderBy(desc(heartbeatRuns.createdAt), desc(heartbeatRuns.id))
+        .limit(lim + 1);
 
-      const rows = limit ? await query.limit(limit) : await query;
-      return rows.map((row) => ({
+      const hasMore = rows.length > lim;
+      const slice = hasMore ? rows.slice(0, lim) : rows;
+      const mapped: HeartbeatRun[] = slice.map((row) => ({
         ...row,
         resultJson: summarizeHeartbeatRunResultJson(row.resultJson),
-      }));
+      })) as HeartbeatRun[];
+      const last = slice[slice.length - 1];
+      const nextCursor =
+        hasMore && last ? encodeHeartbeatRunCursor(last.createdAt, last.id) : null;
+      return { runs: mapped, nextCursor };
     },
 
     getRun,
@@ -2845,6 +2939,26 @@ export function heartbeatService(db: Db) {
       }),
 
     wakeup: enqueueWakeup,
+
+    retryWakeFromRun: async (runId: string) => {
+      const run = await getRun(runId);
+      if (!run) throw notFound("Heartbeat run not found");
+      const ctx = {
+        ...(run.contextSnapshot && typeof run.contextSnapshot === "object"
+          ? (run.contextSnapshot as Record<string, unknown>)
+          : {}),
+        replayFromRunId: run.id,
+      };
+      return enqueueWakeup(run.agentId, {
+        source: "on_demand",
+        triggerDetail: "manual",
+        reason: "replay_from_run",
+        payload: { replayFromRunId: run.id },
+        contextSnapshot: ctx,
+        requestedByActorType: "user",
+        requestedByActorId: null,
+      });
+    },
 
     reapOrphanedRuns,
 

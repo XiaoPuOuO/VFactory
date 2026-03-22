@@ -1,4 +1,14 @@
-import { bigint, pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  pgTable,
+  uuid,
+  text,
+  integer,
+  timestamp,
+  boolean,
+  uniqueIndex,
+  jsonb,
+} from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 
 export const companies = pgTable(
@@ -23,7 +33,17 @@ export const companies = pgTable(
     brandColor: text("brand_color"),
     /** 公司圖示 asset id（FK 於 migration 設定）；若設定則外觀區塊顯示上傳圖，否則顯示品牌色 pattern。 */
     iconAssetId: uuid("icon_asset_id"),
+    /**
+     * 合規資料留存目標天數（activity／approval／cost 等）；null 表示繼承實例預設。
+     * 目前僅作政策記錄與 UI 顯示，不自動刪除資料庫列。
+     */
+    complianceDataRetentionDays: integer("compliance_data_retention_days"),
     workingDirectory: text("working_directory"),
+    /** 全域暫停新喚醒／排程觸發直到此時間（UTC）；null 表示未處於急停。 */
+    wakeupsPausedUntil: timestamp("wakeups_paused_until", { withTimezone: true }),
+    wakeupsPausedReason: text("wakeups_paused_reason"),
+    /** 預排維護區間：元素為 UTC ISO8601 的 start／end，含端點。 */
+    maintenanceWindows: jsonb("maintenance_windows").$type<Array<{ start: string; end: string }> | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

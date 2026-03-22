@@ -239,6 +239,48 @@
       "when": 1774077976260,
       "tag": "0033_hard_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1774079100885,
+      "tag": "0034_harsh_dark_beast",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1774079215607,
+      "tag": "0035_sloppy_jane_foster",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1774079489849,
+      "tag": "0036_outstanding_trauma",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1774079563692,
+      "tag": "0037_sad_changeling",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1774080045246,
+      "tag": "0038_concerned_rage",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1774080143953,
+      "tag": "0039_quick_lizard",
+      "breakpoints": true
     }
   ]
 }
