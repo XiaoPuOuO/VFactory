@@ -429,6 +429,10 @@
     "workspaceToggleHint": "切換此議題是否在專屬執行工作區中執行。",
     "deleteLabel": "刪除 {{name}}"
   },
+  "issuesDetail": {
+    "assignPermissionDeniedTitle": "無法指派 Agent",
+    "assignPermissionDeniedBody": "你的帳號目前沒有 `tasks:assign` 權限，因此無法變更此議題的指派 Agent。請改用 Board 帳號，或向管理員申請 `tasks:assign` 權限。"
+  },
   "issuesList": {
     "newIssue": "新增議題",
     "searchIssues": "搜尋議題…",
@@ -1588,7 +1592,20 @@
     "templateEngineeringName": "工程組織",
     "templateEngineeringDesc": "CEO 與工程師",
     "templateAgencyName": "代理商",
-    "templateAgencyDesc": "CEO、客戶與創意"
+    "templateAgencyDesc": "CEO、客戶與創意",
+    "claudeRemoteAgent": "雲端 Claude API（需 API 金鑰）",
+    "codexRemoteAgent": "雲端 Codex API（需 API 金鑰）",
+    "geminiRemoteAgent": "雲端 Gemini API（需 API 金鑰）",
+    "newAgentDialog": {
+      "title": "新增 AI 員工",
+      "ceoRecommendation": "建議讓你的 CEO 處理 AI 員工設定，因為他們熟悉組織架構，並能設定回報、權限與適配器。",
+      "askCeoButton": "請 CEO 建立新的 AI 員工",
+      "advancedLink": "我想自行進階設定",
+      "back": "返回",
+      "chooseAdapterType": "為進階設定選擇你的適配器類型。",
+      "ceoIssueTitle": "建立新的 AI 員工",
+      "ceoIssueDescription": "（在這裡輸入你想要的 AI 員工類型）"
+    }
   },
   "pathInstructions": {
     "title": "如何取得完整路徑",

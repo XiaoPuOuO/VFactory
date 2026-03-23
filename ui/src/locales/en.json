@@ -429,6 +429,10 @@
     "workspaceToggleHint": "Toggle whether this issue runs in its own execution workspace.",
     "deleteLabel": "Delete {{name}}"
   },
+  "issuesDetail": {
+    "assignPermissionDeniedTitle": "Cannot Assign Agent",
+    "assignPermissionDeniedBody": "Your account currently lacks the `tasks:assign` permission, so you cannot change the assigned Agent for this issue. Please sign in with a Board account, or ask an admin to grant `tasks:assign`."
+  },
   "issuesList": {
     "newIssue": "New Issue",
     "searchIssues": "Search issues...",
@@ -1589,7 +1593,20 @@
     "templateEngineeringName": "Engineering org",
     "templateEngineeringDesc": "CEO and engineer",
     "templateAgencyName": "Agency",
-    "templateAgencyDesc": "CEO, account, and creative"
+    "templateAgencyDesc": "CEO, account, and creative",
+    "claudeRemoteAgent": "Cloud Claude API (API Key required)",
+    "codexRemoteAgent": "Cloud Codex API (API Key required)",
+    "geminiRemoteAgent": "Cloud Gemini API (API Key required)",
+    "newAgentDialog": {
+      "title": "Add a new agent",
+      "ceoRecommendation": "We recommend letting your CEO handle agent setup — they know the org structure and can configure reporting, permissions, and adapters.",
+      "askCeoButton": "Ask the CEO to create a new agent",
+      "advancedLink": "I want advanced configuration myself",
+      "back": "Back",
+      "chooseAdapterType": "Choose your adapter type for advanced setup.",
+      "ceoIssueTitle": "Create a new agent",
+      "ceoIssueDescription": "(type in what kind of agent you want here)"
+    }
   },
   "pathInstructions": {
     "title": "How to get a full path",

@@ -1,0 +1,16 @@
+.new-agent-dialog-content {
+  /* 讓對話框在視窗高度不足時仍可滾動，而不是把內容切出螢幕 */
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+}
+
+.new-agent-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0; /* 確保 flex 子元素可啟用 overflow */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+

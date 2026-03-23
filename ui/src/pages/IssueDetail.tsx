@@ -9,9 +9,11 @@ import { heartbeatsApi } from "../api/heartbeats";
 import { agentsApi } from "../api/agents";
 import { authApi, isAuthSession } from "../api/auth";
 import { projectsApi } from "../api/projects";
+import { ApiError } from "../api/client";
 import { useCompany } from "../context/CompanyContext";
 import { usePanel } from "../context/PanelContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
+import { useToast } from "../context/ToastContext";
 import { queryKeys } from "../lib/queryKeys";
 import { readIssueDetailBreadcrumb } from "../lib/issueDetailBreadcrumb";
 import { useProjectOrder } from "../hooks/useProjectOrder";
@@ -154,6 +156,7 @@ export function IssueDetail() {
   const { selectedCompanyId, selectedCompany } = useCompany();
   const { openPanel, closePanel, panelVisible, setPanelVisible } = usePanel();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const { pushToast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
@@ -440,6 +443,22 @@ export function IssueDetail() {
     mutationFn: (data: Record<string, unknown>) => issuesApi.update(issueId!, data),
     onSuccess: () => {
       invalidateIssue();
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === 403 && typeof err.message === "string" && err.message.includes("tasks:assign")) {
+        pushToast({
+          title: t("issuesDetail.assignPermissionDeniedTitle"),
+          body: t("issuesDetail.assignPermissionDeniedBody"),
+          tone: "error",
+        });
+        return;
+      }
+
+      if (err instanceof Error) {
+        pushToast({ title: t("error"), body: err.message, tone: "error" });
+      } else {
+        pushToast({ title: t("error"), body: String(err), tone: "error" });
+      }
     },
   });
 

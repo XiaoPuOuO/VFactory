@@ -13,6 +13,8 @@ import { formatDate, agentUrl } from "../lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { InlineEditor } from "./InlineEditor";
+import { MarkdownBody } from "./MarkdownBody";
 
 interface GoalPropertiesProps {
   goal: Goal;
@@ -132,6 +134,23 @@ export function GoalProperties({ goal, onUpdate }: GoalPropertiesProps) {
             </PickerButton>
           ) : (
             <span className="ui-properties-text capitalize">{goal.level}</span>
+          )}
+        </PropertyRow>
+
+        <PropertyRow label="Description">
+          {onUpdate ? (
+            <InlineEditor
+              value={goal.description ?? ""}
+              onSave={(description) => onUpdate({ description })}
+              as="p"
+              placeholder={t("goals.addDescriptionPlaceholder")}
+              multiline
+              className="ui-properties-inline-editor-description"
+            />
+          ) : goal.description ? (
+            <MarkdownBody>{goal.description}</MarkdownBody>
+          ) : (
+            <span className="ui-properties-muted">{t("project.noDescription")}</span>
           )}
         </PropertyRow>
 
