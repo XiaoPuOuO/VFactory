@@ -1,0 +1,24 @@
+# 變更紀錄：2026-03-25 14:45
+
+## [已修改] 共 1 個
+- .gitignore
+
+### `.gitignore` 說明
+- 新增忽略規則：`/.env`、`/.env.*`、`/.npmrc`
+- 並同時忽略所有子目錄中的對應檔案：`**/.env`、`**/.env.*`、`**/.npmrc`
+
+## [已刪除] 共 12 個
+- .env.example
+- .npmrc
+- documents/changeLog/2026-03-23-02-11_ChangeLog-unified.diff
+- scripts/docker-onboard-smoke.sh
+- server/src/types/express.d.ts
+- ui/public/templates/agency/agents/account-manager/AGENTS.md
+- ui/public/templates/agency/agents/ceo/AGENTS.md
+- ui/public/templates/agency/agents/creative-director/AGENTS.md
+- ui/public/templates/engineering-org/agents/ceo/AGENTS.md
+- ui/public/templates/engineering-org/agents/engineer/AGENTS.md
+- ui/src/components/GoalProperties.tsx
+- ui/vite.config.ts
+
+## [新增/未追蹤] 共 0 個
