@@ -444,7 +444,7 @@ export async function startServer(): Promise<StartedServer> {
       logger.error({ err }, "startup reconciliation of persisted runtime services failed");
     });
   
-  const heartbeat = heartbeatService(db as any);
+  const heartbeat = heartbeatService(db as any, storageService);
 
   if (config.heartbeatSchedulerEnabled) {
     // Reap orphaned runs at startup (no threshold -- runningProcesses is empty)

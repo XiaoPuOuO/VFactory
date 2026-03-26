@@ -11,6 +11,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from browser_use.mcp.server import BrowserUseServer
+import redis.asyncio as redis
 
 
 class Envelope(BaseModel):
@@ -24,6 +25,39 @@ class Envelope(BaseModel):
 app = FastAPI(title="paperclip-browser-use-service")
 server = BrowserUseServer(session_timeout_minutes=10)
 
+_NONCE_TTL_MS = 6 * 60 * 1000
+_redis_client: redis.Redis | None = None
+
+
+def _resolve_nonce_redis_url() -> str | None:
+    # Prefer a dedicated setting; fall back to the shared server redis URL.
+    url = os.getenv("PAPERCLIP_BROWSER_USE_NONCE_REDIS_URL", "").strip()
+    if url:
+        return url
+    url = os.getenv("PAPERCLIP_REDIS_URL", "").strip()
+    return url or None
+
+
+def _get_redis_client() -> redis.Redis | None:
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+    url = _resolve_nonce_redis_url()
+    if not url:
+        raise HTTPException(status_code=500, detail="nonce redis url not configured")
+    _redis_client = redis.from_url(url, decode_responses=True)
+    return _redis_client
+
+
+async def _check_and_store_nonce(nonce: str, now_ms: int) -> None:
+    """防止 nonce 重放：強制使用 Redis（跨多實例一致）。"""
+    _ = now_ms
+    client = _get_redis_client()
+    key = f"paperclip:browser-use:nonce:{nonce}"
+    ok = await client.set(key, "1", nx=True, px=_NONCE_TTL_MS)
+    if not ok:
+        raise HTTPException(status_code=401, detail="nonce already used")
+
 
 def _resolve_headless(tool_input: dict[str, Any]) -> bool:
     """與 Paperclip gateway 的 PAPERCLIP_BROWSER_USE_DEBUG 一致：debug 開啟時顯示瀏覽器（headless=False）。"""
@@ -34,7 +68,7 @@ def _resolve_headless(tool_input: dict[str, Any]) -> bool:
     return not debug
 
 
-def _verify_signature(
+async def _verify_signature(
     body: bytes,
     signature: str | None,
     timestamp: str | None,
@@ -62,6 +96,7 @@ def _verify_signature(
     digest = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(digest, signature):
         raise HTTPException(status_code=401, detail="signature mismatch")
+    await _check_and_store_nonce(nonce, int(time.time() * 1000))
 
 
 async def _handle(tool_name: str, env: Envelope) -> dict[str, Any]:
@@ -91,7 +126,7 @@ async def sessions_start(
     x_tool_nonce: str | None = Header(default=None),
     x_tool_token: str | None = Header(default=None),
 ):
-    _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
+    await _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
     await server._init_browser_session(
         allowed_domains=env.toolInput.get("allowedDomains"),
         headless=_resolve_headless(env.toolInput),
@@ -101,41 +136,41 @@ async def sessions_start(
 
 @app.post("/v1/navigate")
 async def navigate(env: Envelope, request: Request, x_tool_signature: str | None = Header(default=None), x_tool_timestamp: str | None = Header(default=None), x_tool_nonce: str | None = Header(default=None), x_tool_token: str | None = Header(default=None)):
-    _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
+    await _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
     return await _handle("browser_navigate", env)
 
 
 @app.post("/v1/state")
 async def state(env: Envelope, request: Request, x_tool_signature: str | None = Header(default=None), x_tool_timestamp: str | None = Header(default=None), x_tool_nonce: str | None = Header(default=None), x_tool_token: str | None = Header(default=None)):
-    _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
+    await _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
     return await _handle("browser_get_state", env)
 
 
 @app.post("/v1/click")
 async def click(env: Envelope, request: Request, x_tool_signature: str | None = Header(default=None), x_tool_timestamp: str | None = Header(default=None), x_tool_nonce: str | None = Header(default=None), x_tool_token: str | None = Header(default=None)):
-    _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
+    await _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
     return await _handle("browser_click", env)
 
 
 @app.post("/v1/type")
 async def type_text(env: Envelope, request: Request, x_tool_signature: str | None = Header(default=None), x_tool_timestamp: str | None = Header(default=None), x_tool_nonce: str | None = Header(default=None), x_tool_token: str | None = Header(default=None)):
-    _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
+    await _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
     return await _handle("browser_type", env)
 
 
 @app.post("/v1/extract")
 async def extract(env: Envelope, request: Request, x_tool_signature: str | None = Header(default=None), x_tool_timestamp: str | None = Header(default=None), x_tool_nonce: str | None = Header(default=None), x_tool_token: str | None = Header(default=None)):
-    _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
+    await _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
     return await _handle("browser_extract_content", env)
 
 
 @app.post("/v1/screenshot")
 async def screenshot(env: Envelope, request: Request, x_tool_signature: str | None = Header(default=None), x_tool_timestamp: str | None = Header(default=None), x_tool_nonce: str | None = Header(default=None), x_tool_token: str | None = Header(default=None)):
-    _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
+    await _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
     return await _handle("browser_screenshot", env)
 
 
 @app.post("/v1/sessions/close")
 async def sessions_close(env: Envelope, request: Request, x_tool_signature: str | None = Header(default=None), x_tool_timestamp: str | None = Header(default=None), x_tool_nonce: str | None = Header(default=None), x_tool_token: str | None = Header(default=None)):
-    _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
+    await _verify_signature(await request.body(), x_tool_signature, x_tool_timestamp, x_tool_nonce, x_tool_token)
     return await _handle("browser_close_session", env)

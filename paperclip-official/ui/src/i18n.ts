@@ -28,6 +28,7 @@ const PAGE_NAMESPACES = [
   "approvals",
   "chat",
   "company",
+    "companySkills",
   "costs",
   "goalMap",
   "goals",

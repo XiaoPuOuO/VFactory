@@ -9,11 +9,12 @@ import { conflict } from "../errors.js";
 import { getGoalProgress, goalService, issueService, heartbeatService, logActivity } from "../services/index.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
 import { assertCompanyIntegrationScope } from "./integration-scope.js";
+import type { StorageService } from "../storage/types.js";
 
-export function goalRoutes(db: Db) {
+export function goalRoutes(db: Db, storage: StorageService) {
   const router = Router();
   const svc = goalService(db);
-  const heartbeat = heartbeatService(db);
+  const heartbeat = heartbeatService(db, storage);
   const issuesSvc = issueService(db);
 
   router.get("/companies/:companyId/goals", async (req, res) => {

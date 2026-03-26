@@ -59,7 +59,9 @@ import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
 import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
 import { ensureOpenCodeModelConfiguredAndAvailable } from "@paperclipai/adapter-opencode-local/server";
 
-export function agentRoutes(db: Db) {
+import type { StorageService } from "../storage/types.js";
+
+export function agentRoutes(db: Db, storage: StorageService) {
   const DEFAULT_INSTRUCTIONS_PATH_KEYS: Record<string, string> = {
     claude_local: "instructionsFilePath",
     claude_remote: "instructionsFilePath",
@@ -79,7 +81,7 @@ export function agentRoutes(db: Db) {
   const memoriesSvc = agentMemoriesService(db);
   const approvalsSvc = approvalService(db);
   const hireApprovalPolicies = companyApprovalPolicyService(db);
-  const heartbeat = heartbeatService(db);
+  const heartbeat = heartbeatService(db, storage);
   const issueApprovalsSvc = issueApprovalService(db);
   const secretsSvc = secretService(db);
   const strictSecretsMode = process.env.PAPERCLIP_SECRETS_STRICT_MODE === "true";
@@ -1096,7 +1098,7 @@ export function agentRoutes(db: Db) {
           },
         );
         if (resolved.applied) {
-          await runApprovalApprovedFollowUp(db, resolved.approval, { userId: null, label: "policy" });
+          await runApprovalApprovedFollowUp(db, resolved.approval, { userId: null, label: "policy" }, storage);
           approval = resolved.approval;
         }
       }

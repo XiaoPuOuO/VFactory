@@ -121,4 +121,13 @@ export type {
   CompanyPortabilityImportResult,
   CompanyPortabilityExportRequest,
 } from "./company-portability.js";
-export type { AgentSchedule, ScheduleConflictRow, ScheduleKind, ScheduleWindow } from "./schedule.js";
+export type { AgentSchedule, ScheduleConflictRow, ScheduleKind, ScheduleWindow, SkillInvocationPayload, SchedulePayload } from "./schedule.js";
+
+export type {
+  SkillMode,
+  SkillMetadata,
+  SkillArgumentType,
+  SkillArgumentDefinition,
+  SkillFlowStep,
+  SkillFrontmatter,
+} from "./skill.js";

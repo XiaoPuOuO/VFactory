@@ -19,8 +19,27 @@
 
 ---
 
+## API 文件（OpenAPI / Swagger）
+
+提供給外部整合使用的 API 文件：
+- OpenAPI 規格：`/api/openapi.json`
+- Swagger UI：`/api/docs`
+
+### 驗證方式
+
+多數需要授權的 API 主要使用 `Authorization: Bearer <token>`：
+- `Integration Token`（公司層級 API key）
+- `Agent Key`（Agent 授權 token / JWT）
+
+若使用 `session(cookie)` 身份呼叫：所有 unsafe 方法（`POST` / `PUT` / `PATCH` / `DELETE`）會進行 CSRF 檢查，要求 `Origin` / `Referer` 與請求來源一致。
+
+### 範例（curl）
+
+```bash
+curl -sS -H "Authorization: Bearer $PAPERCLIP_API_KEY" "$PAPERCLIP_API_URL/api/me"
+```
+
 ## 來源說明
 
 - **上游專案：** [paperclipai/paperclip](https://github.com/paperclipai/paperclip)
 - **授權：** MIT © 2026 Paperclip
-- 本 fork 僅供自用與學習，功能與文件以官方倉庫為準。

@@ -13,6 +13,8 @@ import {
 import { notFound, unprocessable } from "../errors.js";
 import { budgetPolicyService } from "./budget-policies.js";
 import { notifyLimitBreach } from "./limit-breach-notify.js";
+import { del as redisDel, getJson as redisGetJson, setJson as redisSetJson } from "./redis.js";
+import { logger } from "../middleware/logger.js";
 
 export interface CostDateRange {
   from?: Date;
@@ -35,6 +37,25 @@ function pastDaysRange(days: number): { from: Date; to: Date } {
   const from = new Date(to);
   from.setDate(from.getDate() - days);
   return { from, to };
+}
+
+function formatYearMonthUtc(date: Date): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${y}${m}`;
+}
+
+function companyUsageCacheKey(companyId: string, yyyyMM: string): string {
+  return `paperclip:cost:usage:${companyId}:${yyyyMM}`;
+}
+
+function companyLimitExceededCacheKey(companyId: string, yyyyMM: string): string {
+  return `paperclip:cost:limitExceeded:${companyId}:${yyyyMM}`;
+}
+
+function isCostCacheDebugEnabled(): boolean {
+  const v = process.env.PAPERCLIP_COST_CACHE_DEBUG?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
 }
 
 const COST_EXPORT_MAX_LIMIT = 5000;
@@ -126,24 +147,43 @@ export function costService(db: Db) {
         throw unprocessable("Agent does not belong to company");
       }
 
-      const event = await db
-        .insert(costEvents)
-        .values({ ...data, companyId })
-        .returning()
-        .then((rows) => rows[0]);
+      const insertBase = db.insert(costEvents).values({ ...data, companyId });
+      const hasIdempotencyKey = Boolean(data.idempotencyKey && data.idempotencyKey.trim().length > 0);
+
+      const inserted = hasIdempotencyKey
+        ? await insertBase
+            .onConflictDoNothing({ target: costEvents.idempotencyKey })
+            .returning()
+            .then((rows) => rows[0] ?? null)
+        : await insertBase
+            .returning()
+            .then((rows) => rows[0] ?? null);
+
+      if (!inserted) {
+        const existing = await db
+          .select()
+          .from(costEvents)
+          .where(eq(costEvents.idempotencyKey, data.idempotencyKey ?? ""))
+          .limit(1)
+          .then((rows) => rows[0] ?? null);
+        if (!existing) {
+          throw new Error("Cost event conflict but existing row not found");
+        }
+        return { event: existing, alreadyExisted: true as const };
+      }
 
       await db
         .update(agents)
         .set({
-          spentMonthlyCents: sql`${agents.spentMonthlyCents} + ${event.costCents}`,
+          spentMonthlyCents: sql`${agents.spentMonthlyCents} + ${inserted.costCents}`,
           updatedAt: new Date(),
         })
-        .where(eq(agents.id, event.agentId));
+        .where(eq(agents.id, inserted.agentId));
 
       await db
         .update(companies)
         .set({
-          spentMonthlyCents: sql`${companies.spentMonthlyCents} + ${event.costCents}`,
+          spentMonthlyCents: sql`${companies.spentMonthlyCents} + ${inserted.costCents}`,
           updatedAt: new Date(),
         })
         .where(eq(companies.id, companyId));
@@ -151,7 +191,7 @@ export function costService(db: Db) {
       const updatedAgent = await db
         .select()
         .from(agents)
-        .where(eq(agents.id, event.agentId))
+        .where(eq(agents.id, inserted.agentId))
         .then((rows) => rows[0] ?? null);
 
       if (
@@ -281,21 +321,42 @@ export function costService(db: Db) {
       await budgetPolicies.evaluateAfterCostEvent({
         companyId,
         costEvent: {
-          id: event.id,
-          agentId: event.agentId,
-          projectId: event.projectId ?? null,
-          billingCode: event.billingCode ?? null,
-          costCents: event.costCents,
-          occurredAt: event.occurredAt,
+          id: inserted.id,
+          agentId: inserted.agentId,
+          projectId: inserted.projectId ?? null,
+          billingCode: inserted.billingCode ?? null,
+          costCents: inserted.costCents,
+          occurredAt: inserted.occurredAt,
         },
       });
 
-      return event;
+      // Invalidate monthly usage caches (multi-instance safe).
+      const { from: monthStartForCache } = currentMonthRange();
+      const yyyyMM = formatYearMonthUtc(monthStartForCache);
+      await redisDel([
+        companyUsageCacheKey(companyId, yyyyMM),
+        companyLimitExceededCacheKey(companyId, yyyyMM),
+      ]);
+
+      return { event: inserted, alreadyExisted: false as const };
     },
 
     /** 取得公司當月使用量（用於 Limit 檢查與 dashboard）。 */
     getCompanyUsageForMonth: async (companyId: string) => {
       const { from } = currentMonthRange();
+      const yyyyMM = formatYearMonthUtc(from);
+      const cacheKey = companyUsageCacheKey(companyId, yyyyMM);
+      const cached = await redisGetJson<{ spendCents: number; tokenUsage: number }>(cacheKey);
+      if (cached) {
+        if (isCostCacheDebugEnabled()) {
+          logger.debug({ companyId, yyyyMM, cacheKey }, "cost cache hit: company usage");
+        }
+        return cached;
+      }
+      if (isCostCacheDebugEnabled()) {
+        logger.debug({ companyId, yyyyMM, cacheKey }, "cost cache miss: company usage");
+      }
+
       const [row] = await db
         .select({
           spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
@@ -305,16 +366,34 @@ export function costService(db: Db) {
         .where(
           and(eq(costEvents.companyId, companyId), gte(costEvents.occurredAt, from)),
         );
-      return {
+      const computed = {
         spendCents: Number(row?.spendCents ?? 0),
         tokenUsage: Number(row?.tokenUsage ?? 0),
       };
+      await redisSetJson(cacheKey, computed, 20);
+      return computed;
     },
 
     /** 公司是否已達 Token 或 Price 上限（任一達即 true）。用於阻擋新 run 與 UI badge。 */
     isCompanyLimitExceeded: async (
       companyId: string,
     ): Promise<{ token: boolean; price: boolean; reason: "token_limit" | "price_limit" | null }> => {
+      const { from } = currentMonthRange();
+      const yyyyMM = formatYearMonthUtc(from);
+      const cacheKey = companyLimitExceededCacheKey(companyId, yyyyMM);
+      const cached = await redisGetJson<{ token: boolean; price: boolean; reason: "token_limit" | "price_limit" | null }>(
+        cacheKey,
+      );
+      if (cached) {
+        if (isCostCacheDebugEnabled()) {
+          logger.debug({ companyId, yyyyMM, cacheKey }, "cost cache hit: company limit exceeded");
+        }
+        return cached;
+      }
+      if (isCostCacheDebugEnabled()) {
+        logger.debug({ companyId, yyyyMM, cacheKey }, "cost cache miss: company limit exceeded");
+      }
+
       const company = await db
         .select({
           tokenLimit: companies.tokenLimit,
@@ -324,7 +403,6 @@ export function costService(db: Db) {
         .where(eq(companies.id, companyId))
         .then((rows) => rows[0] ?? null);
       if (!company) return { token: false, price: false, reason: null };
-      const { from } = currentMonthRange();
       const [usage] = await db
         .select({
           spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
@@ -342,11 +420,13 @@ export function costService(db: Db) {
       const priceExceeded = priceLimitCents != null && spendCents >= priceLimitCents;
       const reason =
         tokenExceeded ? "token_limit" : priceExceeded ? "price_limit" : null;
-      return {
+      const computed: { token: boolean; price: boolean; reason: "token_limit" | "price_limit" | null } = {
         token: tokenExceeded,
         price: priceExceeded,
         reason,
       };
+      await redisSetJson(cacheKey, computed, 20);
+      return computed;
     },
 
     summary: async (

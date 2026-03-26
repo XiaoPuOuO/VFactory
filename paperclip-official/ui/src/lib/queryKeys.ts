@@ -66,6 +66,10 @@ export const queryKeys = {
     conflicts: (companyId: string, horizonDays: number, thresholdSec: number) =>
       ["schedules", companyId, "conflicts", horizonDays, thresholdSec] as const,
   },
+  companySkills: {
+    list: (companyId: string) => ["company-skills", companyId] as const,
+    exportLatest: (companyId: string) => ["company-skills", companyId, "export-latest"] as const,
+  },
   runQuality: {
     summary: (companyId: string, from: string, to: string) =>
       ["run-quality", "summary", companyId, from, to] as const,

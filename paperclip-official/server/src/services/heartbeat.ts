@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, not, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import type { StorageService } from "../storage/types.js";
 import {
   agents,
   agentRuntimeState,
@@ -35,6 +36,8 @@ import {
   realizeExecutionWorkspace,
   releaseRuntimeServicesForRun,
 } from "./workspace-runtime.js";
+import { buildSkillInjectionPrompt } from "./skill-injection.js";
+import { loadCompanySkillsForInjection } from "./company-skill-bundle.js";
 import { agentMemoriesService } from "./agent-memories.js";
 import { issueService } from "./issues.js";
 import {
@@ -53,6 +56,7 @@ import {
   resolveExecutionWorkspaceMode,
 } from "./execution-workspace-policy.js";
 import { redactCurrentUserText, redactCurrentUserValue } from "../log-redaction.js";
+import { notifyAgentExecutionFailureEmail } from "./agent-execution-failure-email.js";
 
 const MAX_LIVE_LOG_CHUNK_BYTES = 8 * 1024;
 const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 10;
@@ -160,19 +164,27 @@ function readNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function withProjectGovernancePromptTemplate(existingTemplate: unknown): string {
+function withProjectGovernancePromptTemplate(
+  existingTemplate: unknown,
+  options?: { chatLight?: boolean },
+): string {
   const baseTemplate =
     typeof existingTemplate === "string" && existingTemplate.trim().length > 0
       ? existingTemplate
       : "You are agent {{agent.id}} ({{agent.name}}). Continue your VFactory work.";
-  const governancePrefix = [
-    "Project governance policy (mandatory):",
-    "- AGENTS.md is the baseline instruction contract for heartbeat runs.",
-    "- If this agent has no dedicated instructions file configured, load and follow workspace AGENTS.md.",
-    `- Use project governance assets under ${AGENT_SETTING_DIR}/ (rules, skills, AGENTS.md).`,
-    `- For rules under ${AGENT_SETTING_DIR}/rules and skills under ${AGENT_SETTING_DIR}/skills, decide which items are relevant to the task and follow only the relevant ones.`,
-    "",
-  ].join("\n");
+  const governancePrefix = options?.chatLight
+    ? [
+        "Project governance (chat, brief): For substantive implementation work, follow AGENTS.md and relevant rules/skills under the workspace AgentSetting directory.",
+        "",
+      ].join("\n")
+    : [
+        "Project governance policy (mandatory):",
+        "- AGENTS.md is the baseline instruction contract for heartbeat runs.",
+        "- If this agent has no dedicated instructions file configured, load and follow workspace AGENTS.md.",
+        `- Use project governance assets under ${AGENT_SETTING_DIR}/ (rules, skills, AGENTS.md).`,
+        `- For rules under ${AGENT_SETTING_DIR}/rules and skills under ${AGENT_SETTING_DIR}/skills, decide which items are relevant to the task and follow only the relevant ones.`,
+        "",
+      ].join("\n");
   return `${governancePrefix}${baseTemplate}`;
 }
 
@@ -577,7 +589,7 @@ function resolveNextSessionState(input: {
   };
 }
 
-export function heartbeatService(db: Db) {
+export function heartbeatService(db: Db, storage?: StorageService) {
   const runLogStore = getRunLogStore();
   const secretsSvc = secretService(db);
   const issuesSvc = issueService(db);
@@ -945,6 +957,29 @@ export function heartbeatService(db: Db) {
           ...(taskKey ? { taskKey } : {}),
         },
       });
+
+      // Scheduled automation runs are the primary "batch" channel; failures are actionable and should notify owners automatically.
+      if (
+        (updated.status === "failed" || updated.status === "timed_out") &&
+        updated.invocationSource === "automation" &&
+        updated.triggerDetail === "scheduled"
+      ) {
+        void notifyAgentExecutionFailureEmail(db, {
+          id: updated.id,
+          companyId: updated.companyId,
+          agentId: updated.agentId,
+          invocationSource: updated.invocationSource ?? null,
+          triggerDetail: updated.triggerDetail ?? null,
+          status: updated.status,
+          errorCode: updated.errorCode ?? null,
+          finishedAt: updated.finishedAt ?? null,
+        }).catch((err) => {
+          logger.warn(
+            { err, runId: updated.id, companyId: updated.companyId, agentId: updated.agentId },
+            "agent execution failure email notification failed",
+          );
+        });
+      }
     }
 
     return updated;
@@ -1400,7 +1435,36 @@ export function heartbeatService(db: Db) {
       },
     });
     await applyHeartbeatInstructionFallback(resolvedConfig, executionWorkspace.cwd);
-    resolvedConfig.promptTemplate = withProjectGovernancePromptTemplate(resolvedConfig.promptTemplate);
+    resolvedConfig.promptTemplate = withProjectGovernancePromptTemplate(resolvedConfig.promptTemplate, {
+      chatLight: isChatLightMode,
+    });
+
+    // Skill injection (active/passive):
+    // - passive skills are injected on every heartbeat
+    // - active skills are injected only when the wake context contains `/skillname ...` invocations
+    const companySkills = storage
+      ? await loadCompanySkillsForInjection({
+          db,
+          storage,
+          companyId: agent.companyId,
+        }).then((rows) => rows.map((r) => r.frontmatter))
+      : null;
+
+    const skillInjection = await buildSkillInjectionPrompt({
+      workspaceCwd: executionWorkspace.cwd,
+      context,
+      agentId: agent.id,
+      companyId: agent.companyId,
+      companySkills,
+      chatLightMode: isChatLightMode,
+    }).catch((err) => {
+      logger.warn({ err, agentId: agent.id }, "skill injection failed");
+      return null;
+    });
+    if (skillInjection && skillInjection.trim().length > 0) {
+      resolvedConfig.promptTemplate = `${skillInjection}\n\n${resolvedConfig.promptTemplate}`;
+    }
+
     const runtimeSessionResolution = resolveRuntimeSessionParamsForWorkspace({
       agentId: agent.id,
       previousSessionParams,

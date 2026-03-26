@@ -31,12 +31,13 @@ import { assertCompanyIntegrationScope } from "./integration-scope.js";
 import { shouldWakeAssigneeOnCheckout } from "./issues-checkout-wakeup.js";
 import { isAllowedContentType, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
 import type { ChatServiceInstance } from "./chat.js";
+import { parseSkillInvocations } from "../services/skill-invocation-parser.js";
 
 export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServiceInstance) {
   const router = Router();
   const svc = issueService(db);
   const access = accessService(db);
-  const heartbeat = heartbeatService(db);
+  const heartbeat = heartbeatService(db, storage);
   const agentsSvc = agentService(db);
   const projectsSvc = projectService(db);
   const goalsSvc = goalService(db);
@@ -870,6 +871,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
           logger.warn({ err, issueId: id }, "failed to resolve @-mentions");
         }
 
+        const skillInvocations = parseSkillInvocations(commentBody);
         for (const mentionedId of mentionedIds) {
           if (wakeups.has(mentionedId)) continue;
           if (actor.actorType === "agent" && actor.actorId === mentionedId) continue;
@@ -877,7 +879,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
             source: "automation",
             triggerDetail: "system",
             reason: "issue_comment_mentioned",
-            payload: { issueId: id, commentId: comment.id },
+            payload: { issueId: id, commentId: comment.id, ...(skillInvocations.length > 0 ? { skillInvocations } : {}) },
             requestedByActorType: actor.actorType,
             requestedByActorId: actor.actorId,
             contextSnapshot: {
@@ -887,6 +889,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
               wakeCommentId: comment.id,
               wakeReason: "issue_comment_mentioned",
               source: "comment.mention",
+              ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
             },
           });
         }

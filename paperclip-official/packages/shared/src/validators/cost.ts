@@ -6,6 +6,7 @@ export const createCostEventSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
   goalId: z.string().uuid().optional().nullable(),
   billingCode: z.string().optional().nullable(),
+  idempotencyKey: z.string().min(1).max(256).optional().nullable(),
   provider: z.string().min(1),
   model: z.string().min(1),
   inputTokens: z.number().int().nonnegative().optional().default(0),

@@ -6,6 +6,7 @@ import { notFound, forbidden, unprocessable } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { issueService } from "./issues.js";
 import { publishLiveEvent } from "./live-events.js";
+import { parseSkillInvocations } from "./skill-invocation-parser.js";
 
 export type ChatActor =
   | { type: "board"; userId: string }
@@ -454,6 +455,7 @@ export function chatService(
         // ignore parse errors
       }
 
+      const skillInvocations = parseSkillInvocations(body);
       const wakeups = new Map<
         string,
         {
@@ -462,7 +464,11 @@ export function chatService(
           reason: string;
         }
       >();
-      const basePayload = { roomId, messageId: msg.id };
+      const basePayload = {
+        roomId,
+        messageId: msg.id,
+        ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
+      };
       const baseContext: Record<string, unknown> = {
         roomId,
         chatRoomType: room.type,
@@ -484,16 +490,16 @@ export function chatService(
             threshold: 0.5,
           },
         },
+        ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
       };
 
       /**
-       * 供 agent 辨識：此次 heartbeat 因聊天被喚醒。
-       * 群組聊天中才需要先判斷是否與自己職責相關；1:1 直接聊天應直接回覆。
-       * 回覆時若對話需要，可在此 run 內建立 Goal（POST .../goals）或 Issue（POST .../issues）。
+       * 喚醒語意標籤（短字串，供 prompt / 環境變數辨識）。
+       * 完整操作說明已內建於各 adapter 的 chatModePrefix；此處避免重複長文以節省 input token。
        */
-      const chatWakeLabel = room.type === "group"
-        ? "You were woken because someone sent a message in a GROUP chat room. Fetch the conversation with GET /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages. Then decide whether the triggering message is relevant to YOU based on your Role and Agent description (e.g. you were @mentioned, or the message clearly refers to you or your responsibilities). If it is NOT directed at you or not relevant to your role, do NOT reply (do not POST). Only reply with POST .../messages if you determine the message is relevant to you. If the conversation calls for it, you may also create goals (GET /api/companies/$PAPERCLIP_COMPANY_ID/goals, POST .../goals with { title, description?, level?, parentId?, recurrence?: \"one_time\"|\"daily\"|\"weekly\"|\"monthly\"|\"custom\" (default one_time); if recurrence is \"custom\" also send recurrenceIntervalDays, recurrenceIntervalHours, recurrenceIntervalMinutes, recurrenceIntervalSeconds with at least one > 0 }) or issues (POST /api/companies/$PAPERCLIP_COMPANY_ID/issues) in the same run."
-        : "You were woken because someone sent a message in a DIRECT 1:1 chat room. Fetch the conversation with GET /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages and reply to the user in this run with POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages. Do not apply group-chat relevance filtering for direct chats. If the conversation calls for it, you may also create goals (GET /api/companies/$PAPERCLIP_COMPANY_ID/goals, POST .../goals with { title, description?, level?, parentId?, recurrence?: \"one_time\"|\"daily\"|\"weekly\"|\"monthly\"|\"custom\" (default one_time); if recurrence is \"custom\" also send recurrenceIntervalDays, recurrenceIntervalHours, recurrenceIntervalMinutes, recurrenceIntervalSeconds with at least one > 0 }) or issues (POST /api/companies/$PAPERCLIP_COMPANY_ID/issues) in the same run.";
+      const wakeLabelGroupMention = "chat.group.mention";
+      const wakeLabelGroupBroadcast = "chat.group.broadcast";
+      const wakeLabelDirect = "chat.direct";
 
       for (const agentId of mentionedIds) {
         if (!memberAgentIds.includes(agentId)) continue;
@@ -503,7 +509,7 @@ export function chatService(
             contextSnapshot: {
               ...baseContext,
               wakeReason: "chat_message_mentioned",
-              wakeReasonLabel: chatWakeLabel,
+              wakeReasonLabel: room.type === "group" ? wakeLabelGroupMention : wakeLabelDirect,
               source: "chat.mention",
             },
           reason: "chat_message_mentioned",
@@ -518,7 +524,7 @@ export function chatService(
             contextSnapshot: {
               ...baseContext,
               wakeReason: "chat_message",
-              wakeReasonLabel: chatWakeLabel,
+              wakeReasonLabel: room.type === "group" ? wakeLabelGroupBroadcast : wakeLabelDirect,
               source: "chat.message",
             },
             reason: "chat_message",

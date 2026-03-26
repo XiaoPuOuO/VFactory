@@ -31,6 +31,7 @@ import { ChatEmpty } from "./pages/ChatEmpty";
 import { ChatRoom } from "./pages/ChatRoom";
 import { CompanySettings } from "./pages/CompanySettings";
 import { CompanyAutomation } from "./pages/CompanyAutomation";
+import { CompanySkills } from "./pages/CompanySkills";
 import { Account } from "./pages/Account";
 import { DesignGuide } from "./pages/DesignGuide";
 import { InstanceSettings } from "./pages/InstanceSettings";
@@ -236,6 +237,7 @@ function boardRoutes() {
       <Route path="goals" element={<Goals />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />
       <Route path="schedules" element={<Schedules />} />
+      <Route path="company/skills" element={<CompanySkills />} />
       <Route path="runs" element={<RunQuality />} />
       <Route path="approvals" element={<Navigate to="/approvals/pending" replace />} />
       <Route path="approvals/pending" element={<Approvals />} />

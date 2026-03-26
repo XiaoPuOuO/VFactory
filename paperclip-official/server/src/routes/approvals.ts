@@ -8,6 +8,7 @@ import {
   resubmitApprovalSchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
+import type { StorageService } from "../storage/types.js";
 import {
   approvalService,
   issueApprovalService,
@@ -30,7 +31,7 @@ function redactApprovalPayload<T extends { payload: Record<string, unknown> }>(a
   };
 }
 
-export function approvalRoutes(db: Db) {
+export function approvalRoutes(db: Db, storage: StorageService) {
   const router = Router();
   const svc = approvalService(db);
   const issueApprovalsSvc = issueApprovalService(db);
@@ -217,7 +218,7 @@ export function approvalRoutes(db: Db) {
       await runApprovalApprovedFollowUp(db, approval, {
         userId: req.actor.userId ?? null,
         label: "user",
-      });
+      }, storage);
     }
 
     res.json(redactApprovalPayload(approval));

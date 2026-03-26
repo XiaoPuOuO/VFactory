@@ -3,7 +3,11 @@ import type { Dirent } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AdapterExecutionContext, AdapterExecutionResult } from "@paperclipai/adapter-utils";
+import {
+  buildChatTranscriptForPrompt,
+  type AdapterExecutionContext,
+  type AdapterExecutionResult,
+} from "@paperclipai/adapter-utils";
 import {
   asString,
   asNumber,
@@ -131,95 +135,6 @@ async function postChatReplyIfNeeded(opts: {
         err instanceof Error ? err.message : String(err)
       }\n`,
     );
-  }
-}
-
-function shortId(value: string): string {
-  return value.slice(0, 8);
-}
-
-async function buildChatTranscript(opts: {
-  env: Record<string, string>;
-  onLog: AdapterExecutionContext["onLog"];
-  limit?: number;
-}): Promise<string | null> {
-  const { env, onLog, limit = 20 } = opts;
-  const roomId = env.PAPERCLIP_CHAT_ROOM_ID;
-  const companyId = env.PAPERCLIP_COMPANY_ID;
-  const apiUrl = env.PAPERCLIP_API_URL || process.env.PAPERCLIP_API_URL;
-  const apiKey = env.PAPERCLIP_API_KEY || process.env.PAPERCLIP_API_KEY;
-  if (!roomId || !companyId || !apiUrl || !apiKey) return null;
-
-  const url = `${apiUrl.replace(/\/+$/, "")}/api/companies/${companyId}/chat/rooms/${roomId}/messages?limit=${encodeURIComponent(
-    String(limit),
-  )}`;
-
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        Accept: "application/json",
-      },
-    });
-    if (!res.ok) {
-      await onLog(
-        "stderr",
-        `[paperclip] Failed to fetch chat transcript (${res.status} ${res.statusText}) from ${url}\n`,
-      );
-      return null;
-    }
-    const json = (await res.json()) as unknown;
-    if (!Array.isArray(json)) return null;
-
-    type ChatMessageLike = {
-      id: string;
-      body: string;
-      createdAt: string;
-      authorAgentId: string | null;
-      authorUserId: string | null;
-      authorAgentName?: string | null;
-    };
-
-    const messages = json.filter((m): m is ChatMessageLike => typeof m === "object" && m !== null) as ChatMessageLike[];
-    if (messages.length === 0) return null;
-
-    // API 回傳為最新在前；為便於模型閱讀，改成時間由舊到新。
-    const ordered = [...messages].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
-
-    const agentId = env.PAPERCLIP_AGENT_ID;
-    const lines: string[] = [];
-    for (const msg of ordered) {
-      const when = new Date(msg.createdAt);
-      const hh = when.getHours().toString().padStart(2, "0");
-      const mm = when.getMinutes().toString().padStart(2, "0");
-      let speaker = "User";
-      if (msg.authorAgentId) {
-        if (agentId && msg.authorAgentId === agentId) {
-          speaker = "You (CEO agent)";
-        } else {
-          const name = msg.authorAgentName && msg.authorAgentName.trim().length > 0
-            ? msg.authorAgentName
-            : `Agent ${shortId(msg.authorAgentId)}`;
-          speaker = name;
-        }
-      } else if (msg.authorUserId) {
-        speaker = "Board";
-      }
-      lines.push(`[${hh}:${mm}] ${speaker}: ${msg.body}`);
-    }
-
-    return lines.join("\n");
-  } catch (err) {
-    await onLog(
-      "stderr",
-      `[paperclip] Error while fetching chat transcript from ${url}: ${
-        err instanceof Error ? err.message : String(err)
-      }\n`,
-    );
-    return null;
   }
 }
 
@@ -515,7 +430,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     return notes;
   })();
 
-  const chatTranscript = await buildChatTranscript({ env, onLog, limit: 20 }).catch(() => null);
+  const chatTranscript = await buildChatTranscriptForPrompt({ env, onLog }).catch(() => null);
   const crossChatSummary =
     context && typeof context === "object" && typeof (context as Record<string, unknown>).crossChatMemorySummary === "string"
       ? ((context as Record<string, unknown>).crossChatMemorySummary as string).trim()

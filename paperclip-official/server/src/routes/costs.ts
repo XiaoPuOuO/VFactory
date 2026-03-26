@@ -43,24 +43,26 @@ export function costRoutes(db: Db) {
       return;
     }
 
-    const event = await costs.createEvent(companyId, {
+    const { event, alreadyExisted } = await costs.createEvent(companyId, {
       ...req.body,
       occurredAt: new Date(req.body.occurredAt),
     });
 
-    const actor = getActorInfo(req);
-    await logActivity(db, {
-      companyId,
-      actorType: actor.actorType,
-      actorId: actor.actorId,
-      agentId: actor.agentId,
-      action: "cost.reported",
-      entityType: "cost_event",
-      entityId: event.id,
-      details: { costCents: event.costCents, model: event.model },
-    });
+    if (!alreadyExisted) {
+      const actor = getActorInfo(req);
+      await logActivity(db, {
+        companyId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        agentId: actor.agentId,
+        action: "cost.reported",
+        entityType: "cost_event",
+        entityId: event.id,
+        details: { costCents: event.costCents, model: event.model },
+      });
+    }
 
-    res.status(201).json(event);
+    res.status(alreadyExisted ? 200 : 201).json(event);
   });
 
   function parseDateRange(query: Record<string, unknown>) {

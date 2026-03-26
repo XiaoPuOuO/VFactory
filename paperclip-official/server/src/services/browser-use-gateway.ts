@@ -77,6 +77,17 @@ function buildGatewayHeaders(body: string) {
 export function browserUseGatewayService() {
   const baseUrl = getRequiredEnv("PAPERCLIP_BROWSER_USE_SERVICE_URL").replace(/\/+$/, "");
 
+  const TIMEOUT_MS: Record<BrowserUseAction, number> = {
+    "sessions/start": 60_000,
+    navigate: 30_000,
+    state: 30_000,
+    click: 30_000,
+    type: 30_000,
+    extract: 30_000,
+    screenshot: 30_000,
+    "sessions/close": 30_000,
+  };
+
   async function invoke(action: BrowserUseAction, payload: BrowserUseGatewayRequest): Promise<GatewayEnvelope> {
     const targetUrl = `${baseUrl}/v1/${action}`;
     const outgoing =
@@ -86,11 +97,34 @@ export function browserUseGatewayService() {
     const body = JSON.stringify(outgoing);
     const headers = buildGatewayHeaders(body);
 
-    const res = await fetch(targetUrl, {
-      method: "POST",
-      headers,
-      body,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS[action]);
+
+    let res: Response;
+    try {
+      res = await fetch(targetUrl, {
+        method: "POST",
+        headers,
+        body,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return {
+          ok: false,
+          data: null,
+          error: {
+            code: "BROWSER_GATEWAY_TIMEOUT",
+            message: `browser-use gateway timed out after ${TIMEOUT_MS[action]}ms`,
+            retryable: true,
+          },
+          traceId: payload.traceId,
+        };
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     let parsed: unknown = null;
     try {

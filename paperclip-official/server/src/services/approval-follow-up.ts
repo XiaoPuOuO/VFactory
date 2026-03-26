@@ -4,6 +4,7 @@ import { logger } from "../middleware/logger.js";
 import { logActivity } from "./activity-log.js";
 import { heartbeatService } from "./heartbeat.js";
 import { issueApprovalService } from "./issue-approvals.js";
+import type { StorageService } from "../storage/types.js";
 
 type ApprovalRow = typeof approvals.$inferSelect;
 
@@ -14,8 +15,9 @@ export async function runApprovalApprovedFollowUp(
   db: Db,
   approval: ApprovalRow,
   actor: { userId: string | null; label: "user" | "policy" },
+  storage?: StorageService,
 ): Promise<void> {
-  const heartbeat = heartbeatService(db);
+  const heartbeat = heartbeatService(db, storage);
   const issueApprovalsSvc = issueApprovalService(db);
 
   const linkedIssues = await issueApprovalsSvc.listIssuesForApproval(approval.id);

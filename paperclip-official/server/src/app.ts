@@ -6,6 +6,7 @@ import type { Db } from "@paperclipai/db";
 import type { DeploymentExposure, DeploymentMode } from "@paperclipai/shared";
 import type { StorageService } from "./storage/types.js";
 import { httpLogger, errorHandler } from "./middleware/index.js";
+import { csrfSessionGuard } from "./middleware/csrf-session-guard.js";
 import { tenantResolutionMiddleware } from "./middleware/tenant-resolution.js";
 import { actorMiddleware } from "./middleware/auth.js";
 import { boardMutationGuard } from "./middleware/board-mutation-guard.js";
@@ -26,6 +27,7 @@ import { projectRoutes } from "./routes/projects.js";
 import { issueRoutes } from "./routes/issues.js";
 import { goalRoutes } from "./routes/goals.js";
 import { scheduleRoutes } from "./routes/schedules.js";
+import { companySkillRoutes } from "./routes/company-skills.js";
 import { approvalRoutes } from "./routes/approvals.js";
 import { secretRoutes } from "./routes/secrets.js";
 import { costRoutes } from "./routes/costs.js";
@@ -46,6 +48,8 @@ import { integrationTokenRoutes } from "./routes/integration-tokens.js";
 import { scimRoutes } from "./routes/scim.js";
 import { scimProvisioningKeyRoutes } from "./routes/scim-provisioning-keys.js";
 import { scimBearerAuthMiddleware } from "./middleware/scim-auth.js";
+import { createOpenApiDocument, registerOpenApiEndpoints } from "./openapi/index.js";
+import { requireOpenApiAdminGroup } from "./middleware/openapi-admin-guard.js";
 import type { BetterAuthSessionResult } from "./auth/better-auth.js";
 import type { GetBanStatusFn } from "./middleware/auth.js";
 
@@ -141,56 +145,156 @@ export async function createApp(
 
   // Mount API routes
   const api = Router();
+  const openApiTargets: Array<{ mountPath: string; router: Router }> = [];
   api.use(boardMutationGuard());
-  api.use("/tenant", tenantCurrentRoutes(db));
-  api.use("/tenants/me", tenantsMeRoutes(db));
-  api.use("/me", meRoutes(db));
-  api.use(
-    "/health",
-    healthRoutes(db, {
-      deploymentMode: opts.deploymentMode,
-      deploymentExposure: opts.deploymentExposure,
-      authReady: opts.authReady,
-      companyDeletionEnabled: opts.companyDeletionEnabled,
-    }),
-  );
+  api.use(csrfSessionGuard());
+  const tenantRouter = tenantCurrentRoutes(db);
+  openApiTargets.push({ mountPath: "/tenant", router: tenantRouter });
+  api.use("/tenant", tenantRouter);
+
+  const tenantsMeRouter = tenantsMeRoutes(db);
+  openApiTargets.push({ mountPath: "/tenants/me", router: tenantsMeRouter });
+  api.use("/tenants/me", tenantsMeRouter);
+
+  const meRouter = meRoutes(db);
+  openApiTargets.push({ mountPath: "/me", router: meRouter });
+  api.use("/me", meRouter);
+
+  const healthRouter = healthRoutes(db, {
+    deploymentMode: opts.deploymentMode,
+    deploymentExposure: opts.deploymentExposure,
+    authReady: opts.authReady,
+    companyDeletionEnabled: opts.companyDeletionEnabled,
+  });
+  openApiTargets.push({ mountPath: "/health", router: healthRouter });
+  api.use("/health", healthRouter);
+
   registerPluginRuntime(db);
-  const heartbeat = heartbeatService(db);
+  const heartbeat = heartbeatService(db, opts.storageService);
   const chat = chatService(db, heartbeat as ChatHeartbeat);
-  api.use("/companies", chatRoutes(db, chat));
-  api.use("/companies", pluginRoutes(db));
-  api.use("/companies", integrationTokenRoutes(db));
-  api.use("/companies", companyRoutes(db));
-  api.use("/companies", issueSavedViewRoutes(db));
-  api.use("/companies", companyWebhookRoutes(db));
-  api.use("/companies", companyNotificationDestinationRoutes(db));
-  api.use("/companies", mentionablesRoutes(db));
-  api.use(agentRoutes(db));
-  api.use(browserUseToolRoutes(db));
-  api.use(assetRoutes(db, opts.storageService));
-  api.use(projectRoutes(db));
-  api.use(issueRoutes(db, opts.storageService, chat));
-  api.use(goalRoutes(db));
-  api.use(scheduleRoutes(db));
-  api.use(approvalRoutes(db));
-  api.use(secretRoutes(db));
-  api.use(costRoutes(db));
-  api.use(activityRoutes(db));
-  api.use(dashboardRoutes(db));
-  api.use(sidebarBadgeRoutes(db));
-  api.use(
-    accessRoutes(db, {
-      deploymentMode: opts.deploymentMode,
-      deploymentExposure: opts.deploymentExposure,
-      bindHost: opts.bindHost,
-      allowedHostnames: opts.allowedHostnames,
-    }),
-  );
-  api.use("/instance/groups", instanceGroupsRoutes(db));
-  api.use("/instance/users", instanceUsersRoutes(db));
-  api.use("/instance/settings", instanceSettingsRoutes(db));
-  api.use("/instance/scim-provisioning-keys", scimProvisioningKeyRoutes(db));
+
+  const companiesChatRouter = chatRoutes(db, chat);
+  openApiTargets.push({ mountPath: "/companies", router: companiesChatRouter });
+  api.use("/companies", companiesChatRouter);
+
+  const companiesPluginRouter = pluginRoutes(db);
+  openApiTargets.push({ mountPath: "/companies", router: companiesPluginRouter });
+  api.use("/companies", companiesPluginRouter);
+
+  const companiesIntegrationTokenRouter = integrationTokenRoutes(db);
+  openApiTargets.push({ mountPath: "/companies", router: companiesIntegrationTokenRouter });
+  api.use("/companies", companiesIntegrationTokenRouter);
+
+  const companiesCompanyRouter = companyRoutes(db);
+  openApiTargets.push({ mountPath: "/companies", router: companiesCompanyRouter });
+  api.use("/companies", companiesCompanyRouter);
+
+  const companiesIssueSavedViewRouter = issueSavedViewRoutes(db);
+  openApiTargets.push({ mountPath: "/companies", router: companiesIssueSavedViewRouter });
+  api.use("/companies", companiesIssueSavedViewRouter);
+
+  const companiesWebhookRouter = companyWebhookRoutes(db);
+  openApiTargets.push({ mountPath: "/companies", router: companiesWebhookRouter });
+  api.use("/companies", companiesWebhookRouter);
+
+  const companiesNotificationDestinationRouter = companyNotificationDestinationRoutes(db);
+  openApiTargets.push({ mountPath: "/companies", router: companiesNotificationDestinationRouter });
+  api.use("/companies", companiesNotificationDestinationRouter);
+
+  const companiesMentionablesRouter = mentionablesRoutes(db);
+  openApiTargets.push({ mountPath: "/companies", router: companiesMentionablesRouter });
+  api.use("/companies", companiesMentionablesRouter);
+
+  const agentRouter = agentRoutes(db, opts.storageService);
+  openApiTargets.push({ mountPath: "", router: agentRouter });
+  api.use(agentRouter);
+
+  const browserUseToolRouter = browserUseToolRoutes(db);
+  openApiTargets.push({ mountPath: "", router: browserUseToolRouter });
+  api.use(browserUseToolRouter);
+
+  const assetRouter = assetRoutes(db, opts.storageService);
+  openApiTargets.push({ mountPath: "", router: assetRouter });
+  api.use(assetRouter);
+
+  const projectRouter = projectRoutes(db);
+  openApiTargets.push({ mountPath: "", router: projectRouter });
+  api.use(projectRouter);
+
+  const issueRouter = issueRoutes(db, opts.storageService, chat);
+  openApiTargets.push({ mountPath: "", router: issueRouter });
+  api.use(issueRouter);
+
+  const goalRouter = goalRoutes(db, opts.storageService);
+  openApiTargets.push({ mountPath: "", router: goalRouter });
+  api.use(goalRouter);
+
+  const scheduleRouter = scheduleRoutes(db, opts.storageService);
+  openApiTargets.push({ mountPath: "", router: scheduleRouter });
+  api.use(scheduleRouter);
+
+  const companySkillRouter = companySkillRoutes(db, opts.storageService);
+  openApiTargets.push({ mountPath: "", router: companySkillRouter });
+  api.use(companySkillRouter);
+
+  const approvalRouter = approvalRoutes(db, opts.storageService);
+  openApiTargets.push({ mountPath: "", router: approvalRouter });
+  api.use(approvalRouter);
+
+  const secretRouter = secretRoutes(db);
+  openApiTargets.push({ mountPath: "", router: secretRouter });
+  api.use(secretRouter);
+
+  const costRouter = costRoutes(db);
+  openApiTargets.push({ mountPath: "", router: costRouter });
+  api.use(costRouter);
+
+  const activityRouter = activityRoutes(db);
+  openApiTargets.push({ mountPath: "", router: activityRouter });
+  api.use(activityRouter);
+
+  const dashboardRouter = dashboardRoutes(db);
+  openApiTargets.push({ mountPath: "", router: dashboardRouter });
+  api.use(dashboardRouter);
+
+  const sidebarBadgeRouter = sidebarBadgeRoutes(db);
+  openApiTargets.push({ mountPath: "", router: sidebarBadgeRouter });
+  api.use(sidebarBadgeRouter);
+
+  const accessRouter = accessRoutes(db, {
+    deploymentMode: opts.deploymentMode,
+    deploymentExposure: opts.deploymentExposure,
+    bindHost: opts.bindHost,
+    allowedHostnames: opts.allowedHostnames,
+  });
+  openApiTargets.push({ mountPath: "", router: accessRouter });
+  api.use(accessRouter);
+
+  const instanceGroupsRouter = instanceGroupsRoutes(db);
+  openApiTargets.push({ mountPath: "/instance/groups", router: instanceGroupsRouter });
+  api.use("/instance/groups", instanceGroupsRouter);
+
+  const instanceUsersRouter = instanceUsersRoutes(db);
+  openApiTargets.push({ mountPath: "/instance/users", router: instanceUsersRouter });
+  api.use("/instance/users", instanceUsersRouter);
+
+  const instanceSettingsRouter = instanceSettingsRoutes(db);
+  openApiTargets.push({ mountPath: "/instance/settings", router: instanceSettingsRouter });
+  api.use("/instance/settings", instanceSettingsRouter);
+
+  const scimProvisioningKeyRouter = scimProvisioningKeyRoutes(db);
+  openApiTargets.push({ mountPath: "/instance/scim-provisioning-keys", router: scimProvisioningKeyRouter });
+  api.use("/instance/scim-provisioning-keys", scimProvisioningKeyRouter);
+
   app.use("/api", api);
+
+  // 由目前 Express route stack 自動產生 OpenAPI 規格，提供外部整合使用。
+  // 這裡在註冊 `/api/openapi.json` 與 `/api/docs` 之前產生，避免文件遞迴。
+  const openApiDoc = createOpenApiDocument(openApiTargets, { apiPrefix: "/api" });
+  const openApiAdminRouter = Router();
+  openApiAdminRouter.use(requireOpenApiAdminGroup(db));
+  registerOpenApiEndpoints(openApiAdminRouter, openApiDoc);
+  api.use(openApiAdminRouter);
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "API route not found" });
   });

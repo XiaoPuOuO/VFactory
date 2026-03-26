@@ -42,6 +42,11 @@ describe("resolveDatabaseTarget", () => {
   });
 
   it("uses DATABASE_URL from repo-local .paperclip/.env", () => {
+    // 確保測試不受執行環境既有的 DATABASE_URL 影響。
+    // 某些執行環境中 `delete process.env.*` 可能無法完全移除環境變數代理屬性，
+    // 因此改用覆寫空字串確保 resolveDatabaseTarget() 的 trim 後為空值。
+    process.env.DATABASE_URL = "";
+
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-db-runtime-"));
     const projectDir = path.join(tempDir, "repo");
     fs.mkdirSync(projectDir, { recursive: true });
@@ -65,6 +70,10 @@ describe("resolveDatabaseTarget", () => {
   });
 
   it("uses config postgres connection string when configured", () => {
+    // 確保測試不受執行環境既有的 DATABASE_URL 影響。
+    // 同上：用空字串確保不命中 DATABASE_URL 優先路徑。
+    process.env.DATABASE_URL = "";
+
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-db-runtime-"));
     const configPath = path.join(tempDir, "instance", "config.json");
     process.env.PAPERCLIP_CONFIG = configPath;
@@ -85,6 +94,10 @@ describe("resolveDatabaseTarget", () => {
   });
 
   it("falls back to embedded postgres settings from config", () => {
+    // 確保測試不受執行環境既有的 DATABASE_URL 影響。
+    // 同上：用空字串確保不命中 DATABASE_URL 優先路徑。
+    process.env.DATABASE_URL = "";
+
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-db-runtime-"));
     const configPath = path.join(tempDir, "instance", "config.json");
     process.env.PAPERCLIP_CONFIG = configPath;

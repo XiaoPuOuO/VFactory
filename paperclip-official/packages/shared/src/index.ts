@@ -483,3 +483,21 @@ export {
   isWakeupsPausedUntilActive,
   type CompanyMaintenanceWindow,
 } from "./maintenance.js";
+
+export type {
+  SkillMode,
+  SkillMetadata,
+  SkillArgumentType,
+  SkillArgumentDefinition,
+  SkillFlowStep,
+  SkillFrontmatter,
+} from "./types/skill.js";
+
+export {
+  skillFrontmatterSchema,
+  skillArgumentDefinitionSchema,
+  skillFlowStepSchema,
+  extractSkillFrontmatterYaml,
+  safeParseSkillFrontmatterFromMarkdown,
+  parseSkillFrontmatterFromMarkdown,
+} from "./validators/skill.js";

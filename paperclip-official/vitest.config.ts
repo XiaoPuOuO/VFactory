@@ -2,6 +2,24 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    projects: ["packages/db", "packages/adapters/opencode-local", "server", "ui", "cli"],
+    projects: [
+      "packages/adapter-utils",
+      "packages/shared",
+      "packages/db",
+      "packages/adapters/opencode-local",
+      "server",
+      "ui",
+      "cli",
+    ],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "text-summary", "html"],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
+      },
+    },
   },
 });

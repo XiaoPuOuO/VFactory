@@ -9,10 +9,11 @@ import {
 import { validate } from "../middleware/validate.js";
 import { scheduleService, heartbeatService, logActivity } from "../services/index.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
+import type { StorageService } from "../storage/types.js";
 
-export function scheduleRoutes(db: Db) {
+export function scheduleRoutes(db: Db, storage: StorageService) {
   const router = Router();
-  const heartbeat = heartbeatService(db as any);
+  const heartbeat = heartbeatService(db as any, storage);
   const svc = scheduleService(db as any, () => heartbeat);
 
   router.get("/companies/:companyId/schedules/conflicts", async (req, res) => {

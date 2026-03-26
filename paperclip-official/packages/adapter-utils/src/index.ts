@@ -28,3 +28,13 @@ export {
   redactHomePathUserSegmentsInValue,
   redactTranscriptEntryPaths,
 } from "./log-redaction.js";
+export {
+  buildChatTranscriptForPrompt,
+  formatChatTranscriptForPrompt,
+  truncateChatMessageBody,
+  DEFAULT_CHAT_TRANSCRIPT_LIMIT,
+  DEFAULT_CHAT_TRANSCRIPT_MAX_MESSAGE_CHARS,
+  DEFAULT_CHAT_TRANSCRIPT_MAX_TOTAL_CHARS,
+  type BuildChatTranscriptForPromptOptions,
+  type ChatTranscriptMessage,
+} from "./chat-transcript.js";

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, lt, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { approvalComments, approvals } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
@@ -103,46 +103,62 @@ export function approvalService(db: Db) {
     decisionNote: string | null | undefined,
     meta?: ResolutionMeta,
   ): Promise<ResolutionResult> {
-    const existing = await getExistingApproval(id);
-    if (!canResolveStatuses.has(existing.status)) {
-      if (existing.status === targetStatus) {
-        return { approval: existing, applied: false };
+    return db.transaction(async (tx) => {
+      // Serialize concurrent decisions to avoid duplicated side-effects (hire/notify).
+      await tx.execute(sql`select id from approvals where id = ${id} for update`);
+
+      const existing = await tx
+        .select()
+        .from(approvals)
+        .where(eq(approvals.id, id))
+        .then((rows) => rows[0] ?? null);
+      if (!existing) throw notFound("Approval not found");
+
+      if (!canResolveStatuses.has(existing.status)) {
+        if (existing.status === targetStatus) {
+          return { approval: existing, applied: false };
+        }
+        throw unprocessable(
+          `Only pending or revision requested approvals can be ${targetStatus === "approved" ? "approved" : "rejected"}`,
+        );
       }
+
+      const decisionSource = meta?.decisionSource ?? "human";
+      const now = new Date();
+      const updated = await tx
+        .update(approvals)
+        .set({
+          status: targetStatus,
+          decidedByUserId,
+          decisionNote: decisionNote ?? null,
+          decisionSource: targetStatus === "rejected" ? "human" : decisionSource,
+          policyId: targetStatus === "approved" ? (meta?.policyId ?? null) : null,
+          policySnapshot: targetStatus === "approved" ? (meta?.policySnapshot ?? null) : null,
+          decidedAt: now,
+          updatedAt: now,
+        })
+        .where(and(eq(approvals.id, id), inArray(approvals.status, resolvableStatuses)))
+        .returning()
+        .then((rows) => rows[0] ?? null);
+
+      if (updated) {
+        return { approval: updated, applied: true };
+      }
+
+      const latest = await tx
+        .select()
+        .from(approvals)
+        .where(eq(approvals.id, id))
+        .then((rows) => rows[0] ?? null);
+      if (!latest) throw notFound("Approval not found");
+      if (latest.status === targetStatus) {
+        return { approval: latest, applied: false };
+      }
+
       throw unprocessable(
         `Only pending or revision requested approvals can be ${targetStatus === "approved" ? "approved" : "rejected"}`,
       );
-    }
-
-    const decisionSource = meta?.decisionSource ?? "human";
-    const now = new Date();
-    const updated = await db
-      .update(approvals)
-      .set({
-        status: targetStatus,
-        decidedByUserId,
-        decisionNote: decisionNote ?? null,
-        decisionSource: targetStatus === "rejected" ? "human" : decisionSource,
-        policyId: targetStatus === "approved" ? (meta?.policyId ?? null) : null,
-        policySnapshot: targetStatus === "approved" ? (meta?.policySnapshot ?? null) : null,
-        decidedAt: now,
-        updatedAt: now,
-      })
-      .where(and(eq(approvals.id, id), inArray(approvals.status, resolvableStatuses)))
-      .returning()
-      .then((rows) => rows[0] ?? null);
-
-    if (updated) {
-      return { approval: updated, applied: true };
-    }
-
-    const latest = await getExistingApproval(id);
-    if (latest.status === targetStatus) {
-      return { approval: latest, applied: false };
-    }
-
-    throw unprocessable(
-      `Only pending or revision requested approvals can be ${targetStatus === "approved" ? "approved" : "rejected"}`,
-    );
+    });
   }
 
   return {

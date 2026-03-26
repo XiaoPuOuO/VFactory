@@ -281,6 +281,20 @@
       "when": 1774080143953,
       "tag": "0039_quick_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1775000000000,
+      "tag": "0050_cost_events_idempotency",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1775000001000,
+      "tag": "0051_agent_chat_memories_room_idx",
+      "breakpoints": true
     }
   ]
 }

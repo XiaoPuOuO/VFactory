@@ -41,7 +41,21 @@ const cronExpressionSchema = z
     "cron_expression must be 5 fields: minute hour day month weekday",
   );
 
-const payloadSchema = z.record(z.unknown()).optional().nullable();
+const skillInvocationPayloadSchema = z
+  .object({
+    name: z.string().min(1).max(64),
+    args: z.array(z.string()).max(64).optional().default([]),
+  })
+  .strict();
+
+// v0: open payload record, but validate the standardized `skillInvocations` shape when present.
+const payloadSchema = z
+  .object({
+    skillInvocations: z.array(skillInvocationPayloadSchema).optional(),
+  })
+  .passthrough()
+  .optional()
+  .nullable();
 
 export const createScheduleSchema = z
   .object({

@@ -295,3 +295,13 @@ export {
   type HeartbeatRunsQualityQuery,
   type ScheduleConflictsQuery,
 } from "./heartbeat-runs.js";
+
+export {
+  skillFrontmatterSchema,
+  skillArgumentDefinitionSchema,
+  skillFlowStepSchema,
+  extractSkillFrontmatterYaml,
+  safeParseSkillFrontmatterFromMarkdown,
+  parseSkillFrontmatterFromMarkdown,
+  type SkillFrontmatterSchema,
+} from "./skill.js";

@@ -4,9 +4,12 @@ AGENTS.md
 
 # Environment / registry configuration (敏感資訊；避免提交至版本庫)
 /.env
-/.env.*
 /.npmrc
 
 **/.env
-**/.env.*
 **/.npmrc
+
+# Python compiled artifacts (避免提交編譯/快取檔)
+**/__pycache__/
+**/*.pyc
+**/*.pyo

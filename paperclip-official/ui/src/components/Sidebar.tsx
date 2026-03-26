@@ -16,6 +16,7 @@ import {
   MessageCircle,
   Calendar,
   Zap,
+  BookText,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarSection } from "./SidebarSection";
@@ -94,6 +95,7 @@ export function Sidebar() {
           <SidebarNavItem to="/issues" label={t("nav.issues")} icon={CircleDot} />
           <SidebarNavItem to="/goals" label={t("nav.goals")} icon={Target} />
           <SidebarNavItem to="/schedules" label={t("nav.schedules")} icon={Calendar} />
+          <SidebarNavItem to="/company/skills" label={t("nav.skills")} icon={BookText} />
           <SidebarNavItem to="/runs" label={t("nav.runQuality")} icon={Activity} />
         </SidebarSection>
 

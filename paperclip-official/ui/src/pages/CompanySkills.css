@@ -1,0 +1,302 @@
+/**
+ * Company Skills 頁面 — 原生 CSS（無 Tailwind）
+ */
+.company-skills-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.company-skills-empty-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.company-skills-empty-import-action {
+  display: flex;
+  justify-content: center;
+}
+
+.company-skills-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.company-skills-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.company-skills-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.company-skills-new-skill-icon {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+.company-skills-table-wrap {
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.company-skills-table {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.company-skills-table thead {
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
+}
+
+.company-skills-table th {
+  text-align: left;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+}
+
+.company-skills-desc-col {
+  width: 48%;
+}
+
+.company-skills-actions-col {
+  width: 10rem;
+}
+
+.company-skills-actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+.company-skills-action-icon {
+  width: 1rem;
+  height: 1rem;
+  vertical-align: middle;
+  margin-right: 0.25rem;
+}
+
+.company-skills-table tbody tr {
+  border-top: 1px solid var(--border);
+}
+
+.company-skills-table td {
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+}
+
+.company-skills-name {
+  font-weight: 500;
+}
+
+.company-skills-desc {
+  color: var(--muted-foreground);
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* Import dialog */
+.company-skills-import-dialog {
+  max-width: 42rem;
+}
+
+.company-skills-import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.company-skills-field-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  margin-bottom: 0.25rem;
+}
+
+.company-skills-import-mode-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.company-skills-select {
+  width: 100%;
+}
+
+.company-skills-textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  line-height: 1.4;
+}
+
+.company-skills-import-error {
+  color: var(--destructive);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  white-space: pre-wrap;
+}
+
+.company-skills-delete-text {
+  font-size: 0.875rem;
+  color: var(--foreground);
+  white-space: pre-wrap;
+}
+
+.company-skills-editor-dialog {
+  max-width: 62rem;
+}
+
+.company-skills-editor-scroll {
+  max-height: min(70vh, 40rem);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.company-skills-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.company-skills-form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 36rem) {
+  .company-skills-form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.company-skills-form-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+@media (max-width: 42rem) {
+  .company-skills-form-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.company-skills-field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.company-skills-field-block [data-slot="label"] {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.company-skills-field-hint {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin: 0;
+  line-height: 1.35;
+}
+
+.company-skills-input {
+  width: 100%;
+}
+
+.company-skills-textarea-tall {
+  min-height: 16rem;
+}
+
+.company-skills-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.company-skills-checkbox-label {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.company-skills-advanced-banner {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.375rem;
+  background: color-mix(in oklab, var(--muted) 35%, transparent);
+  border: 1px solid var(--border);
+}
+
+.company-skills-advanced-actions {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 0.25rem;
+}
+
+.company-skills-args-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.company-skills-args-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.company-skills-args-empty {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+
+.company-skills-arg-card {
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: color-mix(in oklab, var(--muted) 18%, transparent);
+}
+
+.company-skills-arg-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.company-skills-arg-remove {
+  flex-shrink: 0;
+}
+
+.company-skills-arg-add-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+}
+
