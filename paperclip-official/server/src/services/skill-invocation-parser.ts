@@ -28,6 +28,16 @@ function normalizeSkillName(input: string): string | null {
   return normalized;
 }
 
+/**
+ * 前端 Markdown 序列化有時把行尾空白變成 `&#x20;` / `&nbsp;`，整行不再符合 INVOCATION_LINE_RE（`&` 非空白）。
+ */
+function normalizeInvocationSourceText(text: string): string {
+  return text
+    .replace(/&#x20;/gi, " ")
+    .replace(/&#32;/gi, " ")
+    .replace(/&nbsp;/gi, " ");
+}
+
 function unquoteToken(token: string): string {
   if (token.length < 2) return token;
   const first = token[0]!;
@@ -47,7 +57,7 @@ export function parseSkillInvocations(text: string): SkillInvocation[] {
 
   if (!text || typeof text !== "string") return [];
 
-  const lines = text.split(/\r?\n/);
+  const lines = normalizeInvocationSourceText(text).split(/\r?\n/);
   const out: SkillInvocation[] = [];
 
   for (const line of lines) {

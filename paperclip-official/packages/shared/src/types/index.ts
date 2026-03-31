@@ -131,3 +131,8 @@ export type {
   SkillFlowStep,
   SkillFrontmatter,
 } from "./skill.js";
+export type {
+  WorkflowStepWorkerResult,
+  WorkflowStepWorkerResultV1,
+  WorkflowStepWorkerResultSchemaVersion,
+} from "./workflow-worker.js";

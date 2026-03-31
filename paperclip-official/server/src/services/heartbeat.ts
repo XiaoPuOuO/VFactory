@@ -37,6 +37,12 @@ import {
   releaseRuntimeServicesForRun,
 } from "./workspace-runtime.js";
 import { buildSkillInjectionPrompt } from "./skill-injection.js";
+import {
+  attachWorkflowPendingWorkerContext,
+  buildWorkflowWorkerContinuationPromptBlock,
+  pollUntilWorkflowWorkerStepAdvances,
+  type PaperclipWorkflowPendingWorkerContext,
+} from "./workflow-heartbeat-bridge.js";
 import { loadCompanySkillsForInjection } from "./company-skill-bundle.js";
 import { agentMemoriesService } from "./agent-memories.js";
 import { issueService } from "./issues.js";
@@ -162,6 +168,14 @@ function readNonEmptyString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * Issue／任務流程使用 `projectId`；聊天 composer 選專案則寫入 `chatProjectId`（見 chat.ts baseContext）。
+ * 工作區解析必須兩者併用，否則會落到 agent 預設目錄而忽略使用者指定之 repo。
+ */
+export function readContextProjectId(context: Record<string, unknown>): string | null {
+  return readNonEmptyString(context.projectId) ?? readNonEmptyString(context.chatProjectId);
 }
 
 function withProjectGovernancePromptTemplate(
@@ -674,7 +688,6 @@ export function heartbeatService(db: Db, storage?: StorageService) {
     },
   ): Promise<ResolvedWorkspaceForRun> {
     const issueId = readNonEmptyString(context.issueId);
-    const contextProjectId = readNonEmptyString(context.projectId);
     const issueProjectId = issueId
       ? await db
           .select({ projectId: issues.projectId })
@@ -682,7 +695,7 @@ export function heartbeatService(db: Db, storage?: StorageService) {
           .where(and(eq(issues.id, issueId), eq(issues.companyId, agent.companyId)))
           .then((rows) => rows[0]?.projectId ?? null)
       : null;
-    const resolvedProjectId = issueProjectId ?? contextProjectId;
+    const resolvedProjectId = issueProjectId ?? readContextProjectId(context);
     const useProjectWorkspace = opts?.useProjectWorkspace !== false;
     const workspaceProjectId = useProjectWorkspace ? resolvedProjectId : null;
 
@@ -1320,10 +1333,11 @@ export function heartbeatService(db: Db, storage?: StorageService) {
     const taskKey = deriveTaskKey(context, null);
     const sessionCodec = getAdapterSessionCodec(agent.adapterType);
     const issueId = readNonEmptyString(context.issueId);
+    const contextProjectForLight = readContextProjectId(context);
     const isChatLightMode =
       readNonEmptyString(context.chatMode) === "light" &&
       !readNonEmptyString(context.issueId) &&
-      !readNonEmptyString(context.projectId);
+      !contextProjectForLight;
     const issueAssigneeConfig = issueId
       ? await db
           .select({
@@ -1345,7 +1359,7 @@ export function heartbeatService(db: Db, storage?: StorageService) {
     const issueExecutionWorkspaceSettings = parseIssueExecutionWorkspaceSettings(
       issueAssigneeConfig?.executionWorkspaceSettings,
     );
-    const contextProjectId = readNonEmptyString(context.projectId);
+    const contextProjectId = readContextProjectId(context);
     const executionProjectId = issueAssigneeConfig?.projectId ?? contextProjectId;
     const projectExecutionWorkspacePolicy = executionProjectId
       ? await db
@@ -1465,6 +1479,8 @@ export function heartbeatService(db: Db, storage?: StorageService) {
       resolvedConfig.promptTemplate = `${skillInjection}\n\n${resolvedConfig.promptTemplate}`;
     }
 
+    const basePromptTemplate = resolvedConfig.promptTemplate;
+
     const runtimeSessionResolution = resolveRuntimeSessionParamsForWorkspace({
       agentId: agent.id,
       previousSessionParams,
@@ -1514,7 +1530,7 @@ export function heartbeatService(db: Db, storage?: StorageService) {
     } else {
       delete context.paperclipRuntimeServiceIntents;
     }
-    if (executionWorkspace.projectId && !readNonEmptyString(context.projectId)) {
+    if (executionWorkspace.projectId && !readContextProjectId(context)) {
       context.projectId = executionWorkspace.projectId;
     }
     const companyRow = await db
@@ -1558,7 +1574,7 @@ export function heartbeatService(db: Db, storage?: StorageService) {
         readNonEmptyString(runtimeSessionParams?.sessionId) ??
         runtimeSessionFallback,
     );
-    const runtimeForAdapter = {
+    let runtimeForAdapter = {
       sessionId: readNonEmptyString(runtimeSessionParams?.sessionId) ?? runtimeSessionFallback,
       sessionParams: runtimeSessionParams,
       sessionDisplayId: previousSessionDisplayId,
@@ -1758,16 +1774,72 @@ export function heartbeatService(db: Db, storage?: StorageService) {
           "local agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY",
         );
       }
-      const adapterResult = await adapter.execute({
-        runId: run.id,
-        agent,
-        runtime: runtimeForAdapter,
-        config: resolvedConfig,
-        context,
-        onLog,
-        onMeta: onAdapterMeta,
-        authToken: authToken ?? undefined,
-      });
+      const MAX_WORKFLOW_CHAIN_STEPS_PER_HEARTBEAT = 20;
+      let adapterResult: AdapterExecutionResult | null = null;
+      let lastWorkflowPendingKey: string | null = null;
+
+      for (let chainIndex = 0; chainIndex < MAX_WORKFLOW_CHAIN_STEPS_PER_HEARTBEAT; chainIndex += 1) {
+        await attachWorkflowPendingWorkerContext(db, agent.id, context);
+        const wfPending = context.paperclipWorkflowPendingWorker as PaperclipWorkflowPendingWorkerContext | undefined;
+        const wfKey = wfPending
+          ? `${wfPending.runId}:${wfPending.pendingWorker.stepId}:${wfPending.pendingWorker.createdAt}`
+          : null;
+
+        if (chainIndex > 0 && !wfPending) break;
+        if (wfKey && wfKey === lastWorkflowPendingKey) break;
+        lastWorkflowPendingKey = wfKey;
+        const keyBeforeExecute = wfKey;
+
+        resolvedConfig.promptTemplate = wfPending
+          ? `${basePromptTemplate}${buildWorkflowWorkerContinuationPromptBlock(wfPending)}`
+          : basePromptTemplate;
+
+        adapterResult = await adapter.execute({
+          runId: run.id,
+          agent,
+          runtime: runtimeForAdapter,
+          config: resolvedConfig,
+          context,
+          onLog,
+          onMeta: onAdapterMeta,
+          authToken: authToken ?? undefined,
+        });
+
+        const chainedSessionState = resolveNextSessionState({
+          codec: sessionCodec,
+          adapterResult,
+          previousParams: runtimeForAdapter.sessionParams,
+          previousDisplayId: runtimeForAdapter.sessionDisplayId,
+          previousLegacySessionId: runtimeForAdapter.sessionId,
+        });
+        runtimeForAdapter = {
+          ...runtimeForAdapter,
+          sessionParams: chainedSessionState.params,
+          sessionDisplayId: chainedSessionState.displayId,
+          sessionId: chainedSessionState.legacySessionId,
+        };
+
+        // 若本次執行已失敗/超時/清 session，停止嘗試鏈式推進，交由外層照既有邏輯結算 outcome。
+        if (adapterResult.timedOut || (adapterResult.exitCode ?? 0) !== 0 || adapterResult.errorMessage || adapterResult.clearSession) {
+          break;
+        }
+        // worker-step-result 可能稍晚於 adapter 回傳；短暫輪詢 DB 再進入下一輪，避免誤判同一步而提前結束鏈。
+        await pollUntilWorkflowWorkerStepAdvances(db, agent.id, keyBeforeExecute);
+      }
+
+      if (!adapterResult) {
+        // 理論上 chainIndex=0 一定會執行一次；此保險避免 TypeScript 窄化問題
+        adapterResult = await adapter.execute({
+          runId: run.id,
+          agent,
+          runtime: runtimeForAdapter,
+          config: resolvedConfig,
+          context,
+          onLog,
+          onMeta: onAdapterMeta,
+          authToken: authToken ?? undefined,
+        });
+      }
       const adapterManagedRuntimeServices = adapterResult.runtimeServices
         ? await persistAdapterManagedRuntimeServices({
             db,
@@ -2290,6 +2362,27 @@ export function heartbeatService(db: Db, storage?: StorageService) {
       agent.status === "pending_approval"
     ) {
       throw conflict("Agent is not invokable in its current state", { status: agent.status });
+    }
+
+    const idempotencyKey = readNonEmptyString(opts.idempotencyKey);
+    if (idempotencyKey) {
+      const cutoff = new Date(Date.now() - 5 * 60 * 1000);
+      const [existingWake] = await db
+        .select({ runId: agentWakeupRequests.runId })
+        .from(agentWakeupRequests)
+        .where(
+          and(
+            eq(agentWakeupRequests.agentId, agentId),
+            eq(agentWakeupRequests.idempotencyKey, idempotencyKey),
+            gt(agentWakeupRequests.requestedAt, cutoff),
+          ),
+        )
+        .orderBy(desc(agentWakeupRequests.requestedAt))
+        .limit(1);
+      if (existingWake?.runId) {
+        const existingRun = await getRun(existingWake.runId);
+        if (existingRun) return existingRun;
+      }
     }
 
     const policyNow = new Date();

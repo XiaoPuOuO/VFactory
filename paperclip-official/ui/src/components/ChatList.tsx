@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@/lib/router";
+import { Link, useParams } from "@/lib/router";
+import { cn } from "@/lib/utils";
 import { useCompany } from "../context/CompanyContext";
 import type { ChatRoomWithMeta, ChatRoomMember } from "@paperclipai/shared";
 import type { Agent } from "@paperclipai/shared";
@@ -70,8 +71,8 @@ export interface ChatListProps {
   isLoadingRooms: boolean;
   /** 取得或建立預設一對一房（不帶名稱） */
   onCreateDirect: (agentId: string) => void;
-  /** 建立新的具名 session（與同一 agent 的另一個對話） */
-  onCreateDirectWithName?: (agentId: string, name: string) => void;
+  /** 建立新的 direct session（預設名稱，後端於第一則訊息後自動產生標題） */
+  onCreateNewDirectSession?: (agentId: string) => void;
   createDirectPending: boolean;
   /** 多選 Agent 建立群組 */
   onCreateGroup?: (agentIds: string[], name?: string | null) => void;
@@ -94,7 +95,7 @@ export function ChatList({
   agents,
   isLoadingRooms,
   onCreateDirect,
-  onCreateDirectWithName,
+  onCreateNewDirectSession,
   createDirectPending,
   onCreateGroup,
   createGroupPending = false,
@@ -104,6 +105,13 @@ export function ChatList({
   const queryClient = useQueryClient();
   const { selectedCompany, selectedCompanyId } = useCompany();
   const prefix = selectedCompany?.issuePrefix ?? "";
+  const { roomId: activeRoomId } = useParams<{ roomId?: string }>();
+
+  const roomRowLinkClass = useCallback(
+    (roomId: string, ...extra: (string | false | undefined)[]) =>
+      cn("chat-list-row-link", ...extra, activeRoomId === roomId && "chat-list-row-link--active"),
+    [activeRoomId],
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const [editingNoteKey, setEditingNoteKey] = useState<string | null>(null);
@@ -113,9 +121,6 @@ export function ChatList({
   const [groupSectionCollapsed, setGroupSectionCollapsed] = useState(false);
   /** 摺疊的 agent（key = agentId）；僅多房時有效 */
   const [collapsedAgentIds, setCollapsedAgentIds] = useState<Record<string, boolean>>({});
-  /** 新增具名 session 對話框：agentId 非空時顯示，送出後清空 */
-  const [newSessionAgentId, setNewSessionAgentId] = useState<string | null>(null);
-  const [newSessionName, setNewSessionName] = useState("");
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [newGroupSelectedIds, setNewGroupSelectedIds] = useState<string[]>([]);
   const [newGroupName, setNewGroupName] = useState("");
@@ -373,7 +378,7 @@ export function ChatList({
 
                     /** 新增對話按鈕：置頂右邊、更多左邊 */
                     const newSessionBtn =
-                      onCreateDirectWithName ? (
+                      onCreateNewDirectSession ? (
                         <Button
                           variant="ghost"
                           size="icon-xs"
@@ -381,10 +386,7 @@ export function ChatList({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (!createDirectPending) {
-                              setNewSessionAgentId(agent.id);
-                              setNewSessionName("");
-                            }
+                            if (!createDirectPending) onCreateNewDirectSession(agent.id);
                           }}
                           aria-label={t("chat.newSession")}
                           title={t("chat.newSession")}
@@ -403,7 +405,8 @@ export function ChatList({
                         <li key={agent.id}>
                           <Link
                             to={prefix ? `/${prefix}/chat/${room.id}` : `chat/${room.id}`}
-                            className="chat-list-row-link"
+                            className={roomRowLinkClass(room.id)}
+                            aria-current={activeRoomId === room.id ? "page" : undefined}
                           >
                             <div className="chat-list-row-body">
                               <p className="chat-list-row-title">{title}</p>
@@ -618,7 +621,8 @@ export function ChatList({
                                 <li key={room.id}>
                                   <Link
                                     to={prefix ? `/${prefix}/chat/${room.id}` : `chat/${room.id}`}
-                                    className="chat-list-row-link chat-list-row-indent"
+                                    className={roomRowLinkClass(room.id, "chat-list-row-indent")}
+                                    aria-current={activeRoomId === room.id ? "page" : undefined}
                                   >
                                     {rowContent}
                                   </Link>
@@ -758,7 +762,8 @@ export function ChatList({
                       <li key={entry.id}>
                         <Link
                           to={prefix ? `/${prefix}/chat/${entry.room.id}` : `chat/${entry.room.id}`}
-                          className="chat-list-row-link"
+                          className={roomRowLinkClass(entry.room.id)}
+                          aria-current={activeRoomId === entry.room.id ? "page" : undefined}
                         >
                           {rowContent}
                         </Link>
@@ -819,61 +824,6 @@ export function ChatList({
               disabled={deleteGroupMutation.isPending}
             >
               {deleteGroupMutation.isPending ? t("common.loading") : t("chat.deleteRoomAction")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={newSessionAgentId !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setNewSessionAgentId(null);
-            setNewSessionName("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("chat.newSession")}</DialogTitle>
-          </DialogHeader>
-          <Input
-            value={newSessionName}
-            onChange={(e) => setNewSessionName(e.target.value)}
-            placeholder={t("chat.sessionNamePlaceholder")}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                if (newSessionAgentId && onCreateDirectWithName) {
-                  const name = newSessionName.trim() || t("chat.newSessionDefaultName");
-                  onCreateDirectWithName(newSessionAgentId, name);
-                  setNewSessionAgentId(null);
-                  setNewSessionName("");
-                }
-              }
-            }}
-          />
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setNewSessionAgentId(null);
-                setNewSessionName("");
-              }}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              disabled={createDirectPending}
-              onClick={() => {
-                if (!newSessionAgentId || !onCreateDirectWithName) return;
-                const name = newSessionName.trim() || t("chat.newSessionDefaultName");
-                onCreateDirectWithName(newSessionAgentId, name);
-                setNewSessionAgentId(null);
-                setNewSessionName("");
-              }}
-            >
-              {createDirectPending ? t("common.loading") : t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>

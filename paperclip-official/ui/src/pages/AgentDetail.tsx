@@ -1089,6 +1089,10 @@ function ConfigurationTab({
       queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(agent.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(agent.urlKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.agents.configRevisions(agent.id) });
+      if (companyId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(companyId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(companyId) });
+      }
     },
     onError: () => {
       setAwaitingRefreshAfterSave(false);

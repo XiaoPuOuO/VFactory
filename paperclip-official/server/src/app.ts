@@ -28,6 +28,7 @@ import { issueRoutes } from "./routes/issues.js";
 import { goalRoutes } from "./routes/goals.js";
 import { scheduleRoutes } from "./routes/schedules.js";
 import { companySkillRoutes } from "./routes/company-skills.js";
+import { workflowRunRoutes } from "./routes/workflow-runs.js";
 import { approvalRoutes } from "./routes/approvals.js";
 import { secretRoutes } from "./routes/secrets.js";
 import { costRoutes } from "./routes/costs.js";
@@ -171,7 +172,7 @@ export async function createApp(
 
   registerPluginRuntime(db);
   const heartbeat = heartbeatService(db, opts.storageService);
-  const chat = chatService(db, heartbeat as ChatHeartbeat);
+  const chat = chatService(db, heartbeat as ChatHeartbeat, opts.storageService);
 
   const companiesChatRouter = chatRoutes(db, chat);
   openApiTargets.push({ mountPath: "/companies", router: companiesChatRouter });
@@ -236,6 +237,10 @@ export async function createApp(
   const companySkillRouter = companySkillRoutes(db, opts.storageService);
   openApiTargets.push({ mountPath: "", router: companySkillRouter });
   api.use(companySkillRouter);
+
+  const workflowRunRouter = workflowRunRoutes(db, opts.storageService, heartbeat as ChatHeartbeat);
+  openApiTargets.push({ mountPath: "", router: workflowRunRouter });
+  api.use(workflowRunRouter);
 
   const approvalRouter = approvalRoutes(db, opts.storageService);
   openApiTargets.push({ mountPath: "", router: approvalRouter });

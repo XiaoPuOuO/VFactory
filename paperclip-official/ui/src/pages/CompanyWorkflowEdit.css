@@ -1,0 +1,356 @@
+.company-workflow-edit-page {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem 3rem;
+}
+
+.company-workflow-edit-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+}
+
+.company-workflow-edit-header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.company-workflow-edit-back {
+  align-self: flex-start;
+  gap: 0.35rem;
+}
+
+.company-workflow-edit-back-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.company-workflow-edit-title {
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.company-workflow-edit-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--muted-foreground, rgba(0, 0, 0, 0.55));
+}
+
+.company-workflow-edit-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.company-workflow-edit-form-wide {
+  max-width: none;
+}
+
+/* 表單區：macOS panel 式分段（僅 workflow 編輯頁） */
+.company-workflow-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.company-workflow-form-panel {
+  margin: 0;
+  padding: 0.875rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.1));
+  background: color-mix(in oklab, var(--card, var(--background)) 94%, transparent);
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--foreground) 0.05, transparent);
+}
+
+.dark .company-workflow-form-panel {
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  border-color: var(--border);
+}
+
+.company-workflow-form-panel-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.company-workflow-form-field-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: var(--foreground);
+}
+
+.company-workflow-form-panel .company-skills-field-block:last-child {
+  margin-bottom: 0;
+}
+
+.company-workflow-form-panel .company-skills-checkbox-row {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+}
+
+/* 執行方式／隱藏流程：toggle 列 */
+.company-workflow-toggle-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.company-workflow-toggle-field--inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.85rem;
+}
+
+.company-workflow-toggle-field--inline .company-workflow-toggle-field-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.company-workflow-toggle-field--inline .company-workflow-mode-switch-wrap {
+  flex-shrink: 0;
+}
+
+.company-workflow-toggle-field-text {
+  min-width: 0;
+}
+
+.company-workflow-toggle-hint {
+  margin: 0.35rem 0 0;
+  max-width: 40rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+
+.company-workflow-toggle-inline-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--foreground);
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.company-workflow-mode-switch-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.company-workflow-mode-pill {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+  padding: 0.2rem 0.35rem;
+  border-radius: 0.35rem;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.company-workflow-mode-pill.is-selected {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+}
+
+/* Apple 風格 switch */
+.company-workflow-switch {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 51px;
+  height: 31px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.company-workflow-switch:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring, var(--primary)) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.company-workflow-switch-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--muted-foreground) 28%, var(--muted));
+  transition: background 0.2s ease;
+}
+
+.company-workflow-switch[aria-checked="true"] .company-workflow-switch-track {
+  background: color-mix(in oklab, var(--primary) 92%, var(--foreground));
+}
+
+.company-workflow-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 1px 3px color-mix(in oklab, var(--foreground) 18%, transparent),
+    0 0 0 0.5px color-mix(in oklab, var(--foreground) 8%, transparent);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .company-workflow-switch-thumb {
+  background: color-mix(in oklab, var(--card) 96%, var(--background));
+}
+
+.company-workflow-switch[aria-checked="true"] .company-workflow-switch-thumb {
+  transform: translateX(20px);
+}
+
+/* 流程編輯器模式：基本資訊下方、畫布上方的「指令參數」區 */
+.company-workflow-edit-advanced-args {
+  margin-bottom: 1rem;
+}
+
+.company-workflow-edit-advanced-args .company-workflow-args-hint {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.company-workflow-edit-flow-wrap {
+  min-height: 420px;
+  margin-top: 0;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.company-workflow-simple-multistep {
+  margin: 0 0 1.25rem;
+  padding: 0.875rem 1rem;
+  border-radius: 10px;
+  background: var(--muted, rgba(0, 0, 0, 0.04));
+}
+
+.company-workflow-prompt-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.company-workflow-vars-trigger {
+  gap: 0.35rem;
+  padding-left: 0;
+}
+
+.company-workflow-vars-chevron {
+  width: 14px;
+  height: 14px;
+}
+
+.company-workflow-vars-body {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.company-workflow-wizard {
+  max-width: 720px;
+}
+
+.company-workflow-wizard-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.company-workflow-wizard-back-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.company-workflow-wizard-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.company-workflow-wizard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.company-workflow-wizard-card {
+  text-align: left;
+  padding: 1.25rem 1.35rem;
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.1));
+  background: var(--card, #fff);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.company-workflow-wizard-card:hover {
+  border-color: var(--ring, rgba(0, 0, 0, 0.2));
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.company-workflow-wizard-card-title {
+  display: block;
+  font-weight: 600;
+  font-size: 1.0625rem;
+  margin-bottom: 0.5rem;
+}
+
+.company-workflow-wizard-card-desc {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted-foreground, rgba(0, 0, 0, 0.55));
+  line-height: 1.5;
+}
+
+.company-workflow-wizard-templates-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-bottom: 0.65rem;
+  color: var(--muted-foreground, rgba(0, 0, 0, 0.55));
+}
+
+.company-workflow-wizard-template-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .company-workflow-edit-page {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .company-workflow-edit-header {
+    flex-direction: column;
+  }
+}

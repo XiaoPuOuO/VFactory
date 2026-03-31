@@ -1,0 +1,56 @@
+.workflow-flow-readonly {
+  margin-top: 1.25rem;
+  padding: 1rem 1.125rem;
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  background: var(--muted, rgba(0, 0, 0, 0.03));
+}
+
+.workflow-flow-readonly-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--foreground, inherit);
+}
+
+.workflow-flow-readonly-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.workflow-flow-readonly-item {
+  position: relative;
+  padding-bottom: 1.25rem;
+  padding-left: 0.5rem;
+}
+
+.workflow-flow-readonly-item:last-child {
+  padding-bottom: 0;
+}
+
+.workflow-flow-readonly-arrow {
+  display: block;
+  position: absolute;
+  left: 0.35rem;
+  bottom: 0.2rem;
+  width: 2px;
+  height: 0.75rem;
+  background: var(--border, rgba(0, 0, 0, 0.12));
+}
+
+.workflow-flow-readonly-kind {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground, rgba(0, 0, 0, 0.5));
+  min-width: 4.5rem;
+}
+
+.workflow-flow-readonly-text {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--foreground, inherit);
+}

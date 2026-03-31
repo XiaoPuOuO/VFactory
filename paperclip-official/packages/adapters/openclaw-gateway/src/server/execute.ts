@@ -357,6 +357,10 @@ function buildPaperclipEnvForWake(ctx: AdapterExecutionContext, wakePayload: Wak
   if (wakePayload.chatProjectId) paperclipEnv.PAPERCLIP_CHAT_PROJECT_ID = wakePayload.chatProjectId;
   if (wakePayload.chatProjectName) paperclipEnv.PAPERCLIP_CHAT_PROJECT_NAME = wakePayload.chatProjectName;
 
+  const snap = ctx.context && typeof ctx.context === "object" ? (ctx.context as Record<string, unknown>) : {};
+  if (snap.paperclipWorkflowSuppressChat === true) paperclipEnv.PAPERCLIP_WORKFLOW_SUPPRESS_CHAT = "1";
+  if (snap.paperclipWorkflowTerminalReportDue === true) paperclipEnv.PAPERCLIP_WORKFLOW_TERMINAL_REPORT_DUE = "1";
+
   return paperclipEnv;
 }
 
@@ -380,6 +384,8 @@ function buildWakeText(payload: WakePayload, paperclipEnv: Record<string, string
     "PAPERCLIP_CHAT_MODE",
     "PAPERCLIP_CHAT_PROJECT_ID",
     "PAPERCLIP_CHAT_PROJECT_NAME",
+    "PAPERCLIP_WORKFLOW_SUPPRESS_CHAT",
+    "PAPERCLIP_WORKFLOW_TERMINAL_REPORT_DUE",
   ];
 
   const envLines: string[] = [];
@@ -391,6 +397,24 @@ function buildWakeText(payload: WakePayload, paperclipEnv: Record<string, string
 
   const issueIdHint = payload.taskId ?? payload.issueId ?? "";
   const apiBaseHint = paperclipEnv.PAPERCLIP_API_URL ?? "<set PAPERCLIP_API_URL>";
+
+  const workflowPaperclipNotes =
+    paperclipEnv.PAPERCLIP_WORKFLOW_SUPPRESS_CHAT === "1" && paperclipEnv.PAPERCLIP_CHAT_ROOM_ID
+      ? [
+          "Paperclip workflow (non-terminal):",
+          "  Do NOT POST /api/companies/.../chat/rooms/.../messages while the workflow run is in progress (HTTP 409).",
+          "  Advance the run only via POST .../companies/{companyId}/workflow-runs/{runId}/worker-step-result with the required JSON body.",
+          "  When the run completes, a later wake may set PAPERCLIP_WORKFLOW_TERMINAL_REPORT_DUE=1 so you POST one user summary.",
+          "",
+        ]
+      : paperclipEnv.PAPERCLIP_WORKFLOW_TERMINAL_REPORT_DUE === "1" && paperclipEnv.PAPERCLIP_CHAT_ROOM_ID
+        ? [
+            "Paperclip workflow (terminal report):",
+            "  POST exactly ONE user-facing summary to /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with Authorization and X-Paperclip-Run-Id.",
+            "  Cover outcomes, key findings, and if failed/cancelled explain why and next steps.",
+            "",
+          ]
+        : [];
 
   const lines = [
     "VFactory wake event for a cloud adapter.",
@@ -423,6 +447,7 @@ function buildWakeText(payload: WakePayload, paperclipEnv: Record<string, string
     "- Use only /api endpoints listed below.",
     "- Do NOT call guessed endpoints like /api/cloud-adapter/*, /api/cloud-adapters/*, /api/adapters/cloud/*, or /api/heartbeat.",
     "",
+    ...workflowPaperclipNotes,
     "Workflow:",
     "1) GET /api/agents/me",
     `2) Determine issueId: PAPERCLIP_TASK_ID if present, otherwise issue_id (${issueIdHint}).`,

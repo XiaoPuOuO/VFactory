@@ -8,6 +8,8 @@ import { safeParseSkillFrontmatterFromMarkdown } from "@paperclipai/shared";
 export type CompanySkillArgumentFormRow = {
   id: string;
   name: string;
+  /** 人類可讀標題（對應 YAML `label`）；變數名仍為 `name`（`{{name}}`） */
+  label: string;
   type: SkillArgumentDefinition["type"];
   required: boolean;
   description: string;
@@ -20,6 +22,7 @@ export type CompanySkillFormState = {
   name: string;
   description: string;
   mode: SkillMode;
+  /** `metadata.internal`：預設自工作流程列表隱藏，且不參與被動注入；主動觸發仍可用。 */
   internal: boolean;
   prompt: string;
   /** 第二個 --- 之後的 Markdown（參考說明、範例等） */
@@ -59,6 +62,7 @@ export function createEmptyArgumentRow(): CompanySkillArgumentFormRow {
   return {
     id: newRowId(),
     name: "",
+    label: "",
     type: "string",
     required: false,
     description: "",
@@ -67,10 +71,22 @@ export function createEmptyArgumentRow(): CompanySkillArgumentFormRow {
   };
 }
 
+/** 從已解析的 YAML `arguments` 還原為表單列（流程編輯器／進階模式用）。 */
+export function skillArgumentDefinitionsToFormRows(defs: SkillArgumentDefinition[] | undefined): CompanySkillArgumentFormRow[] {
+  if (!defs?.length) return [];
+  return defs.map(argumentToRow);
+}
+
+/** 表單列 → 寫入 SKILL.md 的 arguments（略過空白 name）。 */
+export function companySkillArgumentRowsToDefinitions(rows: CompanySkillArgumentFormRow[]): SkillArgumentDefinition[] {
+  return rows.filter((row) => row.name.trim().length > 0).map(rowToArgument);
+}
+
 function argumentToRow(def: SkillArgumentDefinition): CompanySkillArgumentFormRow {
   const base = {
     id: newRowId(),
     name: def.name,
+    label: def.label ?? "",
     type: def.type,
     required: def.required === true,
     description: def.description ?? "",
@@ -111,8 +127,10 @@ function rowToArgument(row: CompanySkillArgumentFormRow): SkillArgumentDefinitio
     throw new Error("Argument name is required");
   }
   const desc = row.description.trim();
+  const label = row.label.trim();
   const base = {
     name,
+    ...(label.length > 0 ? { label } : {}),
     ...(desc.length > 0 ? { description: desc } : {}),
     ...(row.required ? { required: true as const } : {}),
   };
@@ -174,7 +192,8 @@ export type ParseCompanySkillFormResult =
   | { mode: "advanced"; rawMarkdown: string; hint?: string };
 
 /**
- * 若技能使用 `flow`（多步驟）或 frontmatter 無法通過驗證，改以進階 Markdown 編輯。
+ * 若技能使用 `flow`（多步驟）或 frontmatter 無法通過驗證，改以「流程編輯器」模式。
+ * 注意：流程編輯器模式下仍可透過 UI 編輯基本欄位（名稱/描述/模式/內部），不依賴 Markdown 編輯。
  */
 export function parseCompanySkillMarkdownToFormOrAdvanced(markdown: string): ParseCompanySkillFormResult {
   const parsed = safeParseSkillFrontmatterFromMarkdown(markdown);
@@ -191,7 +210,7 @@ export function parseCompanySkillMarkdownToFormOrAdvanced(markdown: string): Par
     return {
       mode: "advanced",
       rawMarkdown: markdown,
-      hint: "flowNotSupportedInForm",
+      hint: "flowUsesFlowEditor",
     };
   }
 

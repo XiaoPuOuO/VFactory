@@ -295,6 +295,34 @@
       "when": 1775000001000,
       "tag": "0051_agent_chat_memories_room_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1775000002000,
+      "tag": "0052_workflow_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1775000003000,
+      "tag": "0053_workflow_runs_invoke",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1775000004000,
+      "tag": "0054_chat_room_awaiting_session_title",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1775000005000,
+      "tag": "0055_workflow_run_worker_approval",
+      "breakpoints": true
     }
   ]
 }

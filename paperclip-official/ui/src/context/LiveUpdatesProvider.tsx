@@ -550,6 +550,17 @@ function handleLiveEvent(
     return;
   }
 
+  if (event.type === "chat.room.updated") {
+    const roomId = readString(payload.roomId);
+    if (roomId) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms(expectedCompanyId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.chat.room(expectedCompanyId, roomId),
+      });
+    }
+    return;
+  }
+
   if (event.type === "heartbeat.run.queued" || event.type === "heartbeat.run.status") {
     if (isChatTriggeredRun(payload)) {
       handleChatRunStatus(queryClient, expectedCompanyId, event.type, payload);

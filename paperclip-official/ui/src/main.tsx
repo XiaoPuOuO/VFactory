@@ -2,6 +2,7 @@ import "./i18n";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "@/lib/router";
+import { WorkflowUnsavedProvider } from "@/context/WorkflowUnsavedContext";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { getQueryPersisterStorageKey, shouldPersistReadonlyIssueQuery } from "./lib/react-query-persist";
@@ -47,17 +48,19 @@ createRoot(document.getElementById("root")!).render(
           <ToastProvider>
             <LiveUpdatesProvider>
               <BrowserRouter>
-                <TooltipProvider>
-                  <BreadcrumbProvider>
-                    <SidebarProvider>
-                      <PanelProvider>
-                        <DialogProvider>
-                          <App />
-                        </DialogProvider>
-                      </PanelProvider>
-                    </SidebarProvider>
-                  </BreadcrumbProvider>
-                </TooltipProvider>
+                <WorkflowUnsavedProvider>
+                  <TooltipProvider>
+                    <BreadcrumbProvider>
+                      <SidebarProvider>
+                        <PanelProvider>
+                          <DialogProvider>
+                            <App />
+                          </DialogProvider>
+                        </PanelProvider>
+                      </SidebarProvider>
+                    </BreadcrumbProvider>
+                  </TooltipProvider>
+                </WorkflowUnsavedProvider>
               </BrowserRouter>
             </LiveUpdatesProvider>
           </ToastProvider>

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams, useNavigate } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { chatApi } from "../api/chat";
+import { companySkillsApi } from "../api/companySkills";
 import { heartbeatsApi } from "../api/heartbeats";
 import { agentsApi } from "../api/agents";
 import { projectsApi } from "../api/projects";
@@ -14,13 +15,15 @@ import { useProjectOrder } from "../hooks/useProjectOrder";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { InlineEntitySelector, type InlineEntityOption } from "@/components/InlineEntitySelector";
 import { Button } from "@/components/ui/button";
-import { MarkdownEditor, type MentionOption } from "@/components/MarkdownEditor";
+import { MarkdownEditor, type MentionOption, type SlashWorkflowOption } from "@/components/MarkdownEditor";
 import { MarkdownBody } from "@/components/MarkdownBody";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AgentIcon } from "@/components/AgentIconPicker";
-import { MessageCircle, X, UserPlus, Square, Paperclip } from "lucide-react";
+import { MessageCircle, X, UserPlus, Square, Paperclip, Users } from "lucide-react";
+import { ChatGroupMembersDialog } from "@/components/ChatGroupMembersDialog";
 import type { ChatMessage } from "@paperclipai/shared";
 import { MAX_GROUP_AGENT_COUNT } from "@paperclipai/shared";
+import { safeParseSkillFrontmatterFromMarkdown } from "@paperclipai/shared";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +37,8 @@ import {
   extractIssueIdentifiers,
   ChatMessageIssueRunCard,
 } from "@/components/ChatMessageIssueRunCard";
+import { useChatComposerPipeline } from "../hooks/useChatComposerPipeline";
+import { ChatComposerQueue, type ChatQueuedDraft } from "@/components/ChatComposerQueue";
 
 const MESSAGES_PAGE_SIZE = 50;
 const POLL_INTERVAL_MS = 4000;
@@ -86,6 +91,10 @@ export function ChatRoom() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [addToGroupOpen, setAddToGroupOpen] = useState(false);
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [manageMembersOpen, setManageMembersOpen] = useState(false);
+  /** 管線忙碌時新訊息進入 FIFO；管線空時 debounce 自動送第一則 */
+  const [queuedMessages, setQueuedMessages] = useState<ChatQueuedDraft[]>([]);
+  const [queueCollapsed, setQueueCollapsed] = useState(false);
 
   const { data: roomDetail, isLoading: roomLoading } = useQuery({
     queryKey: queryKeys.chat.room(selectedCompanyId!, roomId!),
@@ -109,6 +118,12 @@ export function ChatRoom() {
     enabled: !!selectedCompanyId && !!roomId,
   });
 
+  const { isPipelineBusy, chatRunBusy } = useChatComposerPipeline({
+    issuePrefix: prefix,
+    messages,
+    activeChatRuns: activeRuns,
+  });
+
   const { data: agents } = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId!),
     queryFn: () => agentsApi.list(selectedCompanyId!),
@@ -119,6 +134,12 @@ export function ChatRoom() {
     queryKey: queryKeys.projects.list(selectedCompanyId!),
     queryFn: () => projectsApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId && !!roomId,
+  });
+
+  const { data: companySkillsList } = useQuery({
+    queryKey: queryKeys.companySkills.list(selectedCompanyId!),
+    queryFn: () => companySkillsApi.list(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
   });
   const { orderedProjects } = useProjectOrder({
     projects: projectsList ?? [],
@@ -183,35 +204,132 @@ export function ChatRoom() {
   );
   const selectedProject = orderedProjects.find((p) => p.id === selectedProjectId);
 
-  /** 群組聊天時，@ 標記僅能標記「此群組內的 AI」；direct 時不顯示 mention（由外層傳 []）。 */
+  const projectLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of orderedProjects) {
+      m.set(p.id, p.name);
+    }
+    return m;
+  }, [orderedProjects]);
+
+  /** 群組聊天時，@ 標記僅能標記「此群組內的 AI」；含 @everyone 以同時標註群內全部 AI。direct 時不顯示 mention（由外層傳 []）。 */
   const mentionOptions = useMemo<MentionOption[]>(() => {
     const roomAgentIds = new Set(
       (roomDetail?.members ?? [])
         .filter((m) => m.memberType === "agent")
         .map((m) => m.memberId),
     );
-    return [...(agents ?? [])]
+    const agentOptions = [...(agents ?? [])]
       .filter((a) => a.status !== "terminated" && roomAgentIds.has(a.id))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((a) => ({ id: `agent:${a.id}`, name: a.name, kind: "agent" as const }));
+    if (agentOptions.length === 0) return [];
+    const everyoneOption: MentionOption = {
+      id: "special:everyone",
+      name: "everyone",
+      kind: "agent",
+    };
+    return [everyoneOption, ...agentOptions];
   }, [agents, roomDetail?.members]);
 
+  /** 群組與 1:1 皆顯示：可手動 `/` 觸發的工作流程（與 @ 不同，不依 isDirect 清空）。 */
+  const slashWorkflowOptions = useMemo<SlashWorkflowOption[]>(() => {
+    const skills = companySkillsList?.skills ?? [];
+    const argsNone = t("chat.slashWorkflowArgsNone");
+    return skills
+      .filter((s) => s.isManualSlashWorkflow === true)
+      .map((s) => {
+        const parsed = safeParseSkillFrontmatterFromMarkdown(s.skillMarkdown);
+        const args = parsed.success ? (parsed.data.arguments ?? []) : [];
+        const argsHint =
+          args.length === 0
+            ? argsNone
+            : args
+                .slice(0, 2)
+                .map((a) => `${(a.label ?? a.name).trim()} → {{${a.name}}}${a.required ? "*" : ""}`)
+                .join(" · ") + (args.length > 2 ? " …" : "");
+
+        return {
+          key: s.key,
+          name: s.name,
+          description: s.description,
+          argsHint,
+        };
+      });
+  }, [companySkillsList, t]);
+
   const addMessage = useMutation({
-    mutationFn: ({ text, projectId }: { text: string; projectId?: string | null }) =>
-      chatApi.addMessage(selectedCompanyId!, roomId!, text, projectId || undefined),
-    onSuccess: () => {
+    mutationFn: ({
+      text,
+      projectId,
+    }: {
+      text: string;
+      projectId?: string | null;
+      queueItemId?: string | null;
+    }) => chatApi.addMessage(selectedCompanyId!, roomId!, text, projectId || undefined),
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.chat.messages(selectedCompanyId!, roomId!),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.chat.activeRuns(selectedCompanyId!, roomId!),
       });
+      void queryClient.invalidateQueries({ queryKey: ["issues", "active-run"] });
       setBody("");
+      if (vars.queueItemId) {
+        setQueuedMessages((q) => q.filter((x) => x.id !== vars.queueItemId));
+      }
     },
   });
 
-  /** AI 運行中時改為顯示「停止」按鈕，可即時取消目前 run。 */
-  const isRunning = Boolean(activeRuns && activeRuns.length > 0);
+  useEffect(() => {
+    setQueuedMessages([]);
+    setQueueCollapsed(false);
+  }, [roomId, selectedCompanyId]);
+
+  /** 佇列第一則：管線空、debounce，避免編輯佇列時立刻送出 */
+  useEffect(() => {
+    if (!selectedCompanyId || !roomId) return;
+    if (isPipelineBusy || queuedMessages.length === 0) return;
+    const first = queuedMessages[0];
+    if (!first.text.trim() || addMessage.isPending) return;
+    const t = window.setTimeout(() => {
+      addMessage.mutate({
+        text: first.text.trim(),
+        projectId: first.projectId,
+        queueItemId: first.id,
+      });
+    }, 480);
+    return () => window.clearTimeout(t);
+  }, [isPipelineBusy, queuedMessages, addMessage.mutate, addMessage.isPending, selectedCompanyId, roomId]);
+
+  const trySendOrQueue = () => {
+    const trimmed = body.trim();
+    if (!trimmed || addMessage.isPending) return;
+    if (isPipelineBusy) {
+      setQueuedMessages((q) => [
+        ...q,
+        { id: crypto.randomUUID(), text: trimmed, projectId: selectedProjectId || null },
+      ]);
+      setBody("");
+      return;
+    }
+    addMessage.mutate({ text: trimmed, projectId: selectedProjectId || null });
+  };
+
+  const sendQueuedNow = (id: string) => {
+    if (isPipelineBusy || addMessage.isPending) return;
+    const item = queuedMessages.find((x) => x.id === id);
+    if (!item?.text.trim()) return;
+    addMessage.mutate({
+      text: item.text.trim(),
+      projectId: item.projectId,
+      queueItemId: id,
+    });
+  };
+
+  /** 聊天室 taskKey=chat:room 的 run（顯示「停止」與 typing）。Issue 後續 run 不顯示停止，但會納入 isPipelineBusy。 */
+  const isRunning = chatRunBusy;
   const cancelRun = useMutation({
     mutationFn: (runId: string) => heartbeatsApi.cancel(runId),
     onSuccess: () => {
@@ -232,6 +350,7 @@ export function ChatRoom() {
   });
 
   const isDirect = roomDetail?.room?.type === "direct";
+  const isGroup = roomDetail?.room?.type === "group";
   const currentAgentId = useMemo(() => {
     const agentMember = roomDetail?.members?.find((m) => m.memberType === "agent");
     return agentMember?.memberId ?? null;
@@ -242,6 +361,12 @@ export function ChatRoom() {
       .filter((a) => a.status !== "terminated" && a.id !== currentAgentId)
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [agents, currentAgentId]);
+
+  const groupAgentMemberIds = useMemo(() => {
+    return (roomDetail?.members ?? [])
+      .filter((m) => m.memberType === "agent")
+      .map((m) => m.memberId);
+  }, [roomDetail?.members]);
 
   const createGroupMutation = useMutation({
     mutationFn: (agentIds: string[]) =>
@@ -254,6 +379,17 @@ export function ChatRoom() {
       setSelectedAgentIds([]);
       const path = prefix ? `/${prefix}/chat/${data.room.id}` : `chat/${data.room.id}`;
       navigate(path);
+    },
+  });
+
+  const updateMembersMutation = useMutation({
+    mutationFn: (payload: { addAgentIds?: string[]; removeAgentIds?: string[] }) =>
+      chatApi.updateRoomMembers(selectedCompanyId!, roomId!, payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.chat.room(selectedCompanyId!, roomId!), data);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chat.room(selectedCompanyId!, roomId!) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms(selectedCompanyId!) });
+      setManageMembersOpen(false);
     },
   });
 
@@ -315,6 +451,18 @@ export function ChatRoom() {
             title={t("chat.addToGroup")}
           >
             <UserPlus />
+          </Button>
+        )}
+        {isGroup && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="chat-room-header-btn"
+            onClick={() => setManageMembersOpen(true)}
+            aria-label={t("chat.manageMembers")}
+            title={t("chat.manageMembers")}
+          >
+            <Users />
           </Button>
         )}
         <Button
@@ -384,19 +532,38 @@ export function ChatRoom() {
       </div>
 
       <div className="chat-room-composer">
+        <ChatComposerQueue
+          items={queuedMessages}
+          collapsed={queueCollapsed}
+          onCollapsedChange={setQueueCollapsed}
+          onUpdateItem={(id, patch) => {
+            setQueuedMessages((q) =>
+              q.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+            );
+          }}
+          onRemoveItem={(id) => setQueuedMessages((q) => q.filter((x) => x.id !== id))}
+          onSendNow={sendQueuedNow}
+          isPipelineBusy={isPipelineBusy}
+          isSending={addMessage.isPending}
+          mentionOptions={isDirect ? [] : mentionOptions}
+          slashWorkflows={slashWorkflowOptions}
+          projectLabelById={projectLabelById}
+        />
         <div className="chat-room-composer-row">
           <div className="chat-room-composer-editor-wrap">
             <MarkdownEditor
               value={body}
               onChange={setBody}
               placeholder={
-                isDirect ? t("chat.placeholderDirect") : t("chat.placeholder")
+                isPipelineBusy
+                  ? t("chat.followUpPlaceholder")
+                  : isDirect
+                    ? t("chat.placeholderDirect")
+                    : t("chat.placeholder")
               }
               mentions={isDirect ? [] : mentionOptions}
-              onSubmit={() => {
-                const trimmed = body.trim();
-                if (trimmed) addMessage.mutate({ text: trimmed, projectId: selectedProjectId || null });
-              }}
+              slashWorkflows={slashWorkflowOptions}
+              onSubmit={trySendOrQueue}
               imageUploadHandler={async (file) => {
                 const asset = await uploadChatImage.mutateAsync(file);
                 return asset.contentPath;
@@ -443,8 +610,7 @@ export function ChatRoom() {
               if (isRunning && activeRuns?.[0]?.id) {
                 cancelRun.mutate(activeRuns[0].id);
               } else {
-                const trimmed = body.trim();
-                if (trimmed) addMessage.mutate({ text: trimmed, projectId: selectedProjectId || null });
+                trySendOrQueue();
               }
             }}
             disabled={
@@ -452,7 +618,13 @@ export function ChatRoom() {
                 ? cancelRun.isPending
                 : !body.trim() || addMessage.isPending
             }
-            variant={isRunning ? "destructive" : "default"}
+            variant={
+              isRunning
+                ? "destructive"
+                : isPipelineBusy && queuedMessages.length > 0
+                  ? "secondary"
+                  : "default"
+            }
             aria-label={isRunning ? t("chat.stop") : t("chat.send")}
           >
             {isRunning ? (
@@ -460,6 +632,8 @@ export function ChatRoom() {
                 <Square className="chat-composer-stop-icon" aria-hidden />
                 {cancelRun.isPending ? t("chat.stopping") : t("chat.stop")}
               </>
+            ) : isPipelineBusy ? (
+              t("chat.enqueueSend")
             ) : (
               t("chat.send")
             )}
@@ -564,6 +738,16 @@ export function ChatRoom() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ChatGroupMembersDialog
+        open={manageMembersOpen}
+        onOpenChange={setManageMembersOpen}
+        agents={agents}
+        groupAgentMemberIds={groupAgentMemberIds}
+        maxAgents={MAX_GROUP_AGENT_COUNT}
+        onSave={(payload) => updateMembersMutation.mutate(payload)}
+        isPending={updateMembersMutation.isPending}
+      />
     </div>
   );
 }

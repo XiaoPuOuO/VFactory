@@ -67,8 +67,19 @@ export const queryKeys = {
       ["schedules", companyId, "conflicts", horizonDays, thresholdSec] as const,
   },
   companySkills: {
-    list: (companyId: string) => ["company-skills", companyId] as const,
+    /**
+     * 技能／工作流程相關查詢前綴。mutation 後請搭配
+     * `invalidateQueries({ queryKey: root(id), refetchType: "all" })`，否則僅會 refetch
+     * 當下「active」的查詢；從全頁編輯返回列表時列表快取可能仍為 inactive 而不會立即重抓。
+     */
+    root: (companyId: string) => ["company-skills", companyId] as const,
+    list: (companyId: string, includeInternal?: boolean) =>
+      ["company-skills", companyId, includeInternal ?? false] as const,
     exportLatest: (companyId: string) => ["company-skills", companyId, "export-latest"] as const,
+  },
+  workflowRuns: {
+    list: (companyId: string) => ["workflow-runs", companyId] as const,
+    detail: (companyId: string, runId: string) => ["workflow-runs", companyId, runId] as const,
   },
   runQuality: {
     summary: (companyId: string, from: string, to: string) =>

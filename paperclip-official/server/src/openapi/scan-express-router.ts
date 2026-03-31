@@ -59,12 +59,30 @@ function getRoutePath(route: unknown): string | null {
   return null;
 }
 
-function findZodSchemaInRouteStack(routeStack: Array<{ handle?: unknown }>): ZodSchema | undefined {
+function findZodSchemaInRouteStack(routeStack: Array<unknown>): ZodSchema | undefined {
   for (const entry of routeStack) {
-    const handle = entry.handle as ZodMiddlewareHandle | undefined;
-    const schema = handle?.__paperclip_zod_schema;
-    if (schema) return schema;
+    const candidates: unknown[] = [];
+
+    // Some Express versions expose the middleware function directly.
+    if (typeof entry === "function") {
+      candidates.push(entry);
+    } else if (entry && typeof entry === "object") {
+      const anyEntry = entry as Record<string, unknown>;
+      const handle = anyEntry.handle as ZodMiddlewareHandle | undefined;
+      const fn = anyEntry.fn as ZodMiddlewareHandle | undefined;
+      const middleware = anyEntry.middleware as ZodMiddlewareHandle | undefined;
+
+      if (handle) candidates.push(handle);
+      if (fn) candidates.push(fn);
+      if (middleware) candidates.push(middleware);
+    }
+
+    for (const candidate of candidates) {
+      const schema = (candidate as ZodMiddlewareHandle | undefined)?.__paperclip_zod_schema;
+      if (schema) return schema;
+    }
   }
+
   return undefined;
 }
 

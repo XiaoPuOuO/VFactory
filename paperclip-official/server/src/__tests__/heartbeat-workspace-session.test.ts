@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
 import {
+  readContextProjectId,
   resolveRuntimeSessionParamsForWorkspace,
   shouldResetTaskSessionForWake,
   type ResolvedWorkspaceForRun,
@@ -19,6 +20,25 @@ function buildResolvedWorkspace(overrides: Partial<ResolvedWorkspaceForRun> = {}
     ...overrides,
   };
 }
+
+describe("readContextProjectId", () => {
+  it("prefers projectId when both are set", () => {
+    expect(
+      readContextProjectId({
+        projectId: "p-issue",
+        chatProjectId: "p-chat",
+      }),
+    ).toBe("p-issue");
+  });
+
+  it("falls back to chatProjectId when composer-selected project (chat) has no projectId", () => {
+    expect(readContextProjectId({ chatProjectId: "p-composer" })).toBe("p-composer");
+  });
+
+  it("returns null when neither is set", () => {
+    expect(readContextProjectId({})).toBeNull();
+  });
+});
 
 describe("resolveRuntimeSessionParamsForWorkspace", () => {
   it("migrates fallback workspace sessions to project workspace when project cwd becomes available", () => {

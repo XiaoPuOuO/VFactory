@@ -37,6 +37,14 @@ type CacheEntry = {
 
 const cacheByCompanyId = new Map<string, CacheEntry>();
 
+/**
+ * Clears the in-memory bundle cache for one company. Call after any mutation that
+ * writes a new company-skills bundle so GET /skills immediately reflects storage.
+ */
+export function invalidateCompanySkillBundleCache(companyId: string): void {
+  cacheByCompanyId.delete(companyId);
+}
+
 function normalizeSkillKey(input: string): string {
   return input.trim().toLowerCase().replace(/_/g, "-");
 }

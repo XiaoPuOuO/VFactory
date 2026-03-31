@@ -11,8 +11,10 @@ import {
   createChatRoomSchema,
   addChatMessageSchema,
   updateChatRoomSchema,
+  updateChatRoomMembersSchema,
   updateChatListPreferencesSchema,
 } from "@paperclipai/shared";
+import { assertAgentChatAllowedForWorkflow } from "../lib/workflow-chat-guard.js";
 
 export type ChatServiceInstance = ReturnType<typeof chatService>;
 
@@ -110,11 +112,22 @@ export function chatRoutes(db: Db, chatInstance?: ChatServiceInstance) {
     const companyId = req.params.companyId as string;
     await assertCompanyAccess(req, companyId, db);
     assertBoard(req);
-    const body = req.body as { type: "direct" | "group"; agentId?: string; agentIds?: string[]; name?: string | null };
+    const body = req.body as {
+      type: "direct" | "group";
+      agentId?: string;
+      agentIds?: string[];
+      name?: string | null;
+      autoSessionTitle?: boolean;
+    };
     if (body.type === "direct" && body.agentId) {
       const nameTrimmed = typeof body.name === "string" ? body.name.trim() || undefined : undefined;
+      if (body.autoSessionTitle === true && !nameTrimmed) {
+        return res.status(400).json({ error: "autoSessionTitle requires a non-empty name" });
+      }
       const room = nameTrimmed
-        ? await chat.createDirectRoom(companyId, getBoardUserId(req), body.agentId, nameTrimmed)
+        ? await chat.createDirectRoom(companyId, getBoardUserId(req), body.agentId, nameTrimmed, {
+            awaitingSessionTitle: body.autoSessionTitle === true,
+          })
         : await chat.getOrCreateDirectRoom(companyId, getBoardUserId(req), body.agentId);
       const detail = await chat.listMembers(companyId, room.id);
       return res.status(201).json(detail ?? { room, members: [] });
@@ -193,6 +206,32 @@ export function chatRoutes(db: Db, chatInstance?: ChatServiceInstance) {
     return res.json(detail);
   });
 
+  /**
+   * 更新群組聊天室成員（僅 board）。
+   * - 只允許操作 type=group 的房間
+   * - 只允許新增/移除 AI 成員（Board 成員固定保留）
+   */
+  router.patch(
+    "/:companyId/chat/rooms/:roomId/members",
+    validate(updateChatRoomMembersSchema),
+    async (req, res) => {
+      const companyId = req.params.companyId as string;
+      const roomId = req.params.roomId as string;
+      await assertCompanyAccess(req, companyId, db);
+      assertBoard(req);
+      const actor = getActor(req);
+      const member = await chat.isMember(roomId, actor);
+      if (!member) return res.status(403).json({ error: "Not a member of this chat room" });
+
+      const body = req.body as { addAgentIds?: string[]; removeAgentIds?: string[] };
+      const detail = await chat.updateGroupMembers(companyId, roomId, {
+        addAgentIds: body.addAgentIds ?? [],
+        removeAgentIds: body.removeAgentIds ?? [],
+      });
+      return res.json(detail);
+    },
+  );
+
   /** List messages (board or agent; agent only if member). */
   router.get("/:companyId/chat/rooms/:roomId/messages", async (req, res) => {
     const companyId = req.params.companyId as string;
@@ -225,6 +264,14 @@ export function chatRoutes(db: Db, chatInstance?: ChatServiceInstance) {
     await assertCompanyAccess(req, companyId, db);
     let actor = getActor(req);
     actor = await resolveActorForAddMessage(req, companyId, roomId, actor);
+    await assertAgentChatAllowedForWorkflow(
+      db,
+      req,
+      companyId,
+      roomId,
+      actor.type,
+      actor.type === "agent" ? actor.agentId : null,
+    );
     const body = req.body as { body: string; projectId?: string | null };
     const projectId = body.projectId && body.projectId.trim() ? body.projectId.trim() : null;
     const runId = req.header("x-paperclip-run-id")?.trim() ?? null;

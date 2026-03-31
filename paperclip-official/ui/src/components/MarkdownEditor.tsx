@@ -28,6 +28,7 @@ import {
   thematicBreakPlugin,
   type RealmPlugin,
 } from "@mdxeditor/editor";
+import { useTranslation } from "react-i18next";
 import { buildProjectMentionHref, parseProjectMentionHref } from "@paperclipai/shared";
 
 /* ---- Mention types ---- */
@@ -38,6 +39,18 @@ export interface MentionOption {
   kind?: "agent" | "project" | "user";
   projectId?: string;
   projectColor?: string | null;
+}
+
+/** 聊天室 `/` 選單：手動觸發的工作流程（skill key + 顯示名稱）。 */
+export interface SlashWorkflowOption {
+  key: string;
+  name: string;
+  description?: string;
+  /**
+   * 顯示於 `/` 選單的參數提示（例如「目標專案名稱 → {{project_name}}」）。
+   * 無參數時可填入 i18n 文案（例如「無參數」）。
+   */
+  argsHint?: string;
 }
 
 /* ---- Editor props ---- */
@@ -53,6 +66,10 @@ interface MarkdownEditorProps {
   bordered?: boolean;
   /** List of mentionable entities. Enables @-mention autocomplete. */
   mentions?: MentionOption[];
+  /**
+   * 手動觸發工作流程列表；輸入 `/` 後可選取並插入 `/skill-key `（群組與 1:1 皆適用）。
+   */
+  slashWorkflows?: SlashWorkflowOption[];
   /** Enter 發送；Shift+Enter 換行。未提供時 Enter 為預設換行。 */
   onSubmit?: () => void;
 }
@@ -71,6 +88,16 @@ interface MentionState {
   rectLeft: number;
   textNode: Text;
   atPos: number;
+  endPos: number;
+}
+
+interface SlashState {
+  query: string;
+  rectTop: number;
+  rectBottom: number;
+  rectLeft: number;
+  textNode: Text;
+  slashPos: number;
   endPos: number;
 }
 
@@ -147,6 +174,58 @@ function detectMention(container: HTMLElement): MentionState | null {
   };
 }
 
+/**
+ * 偵測 `/skill` 指令片段（行內、游標前為 `/` 且 `/` 前為行首或空白）。
+ * 略過 `http://`、`https://` 等協定內的斜線，避免誤觸。
+ */
+function detectSlash(container: HTMLElement): SlashState | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
+
+  const range = sel.getRangeAt(0);
+  const textNode = range.startContainer;
+  if (textNode.nodeType !== Node.TEXT_NODE) return null;
+  if (!container.contains(textNode)) return null;
+
+  const text = textNode.textContent ?? "";
+  const offset = range.startOffset;
+
+  let slashPos = -1;
+  for (let i = offset - 1; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === "/") {
+      const before = i > 0 ? text[i - 1]! : "";
+      if (before === ":") continue;
+      if (before === "/" && i >= 2 && text[i - 2] === ":") continue;
+      if (i === 0 || /\s/.test(before)) {
+        slashPos = i;
+        break;
+      }
+      break;
+    }
+    if (/\s/.test(ch)) break;
+  }
+
+  if (slashPos === -1) return null;
+
+  const query = text.slice(slashPos + 1, offset);
+
+  const tempRange = document.createRange();
+  tempRange.setStart(textNode, slashPos);
+  tempRange.setEnd(textNode, slashPos + 1);
+  const rect = tempRange.getBoundingClientRect();
+
+  return {
+    query,
+    rectTop: rect.top,
+    rectBottom: rect.bottom,
+    rectLeft: rect.left,
+    textNode: textNode as Text,
+    slashPos,
+    endPos: offset,
+  };
+}
+
 function mentionMarkdown(option: MentionOption): string {
   if (option.kind === "project" && option.projectId) {
     return `[@${option.name}](${buildProjectMentionHref(option.projectId, option.projectColor ?? null)}) `;
@@ -158,6 +237,15 @@ function mentionMarkdown(option: MentionOption): string {
 function applyMention(markdown: string, query: string, option: MentionOption): string {
   const search = `@${query}`;
   const replacement = mentionMarkdown(option);
+  const idx = markdown.lastIndexOf(search);
+  if (idx === -1) return markdown;
+  return markdown.slice(0, idx) + replacement + markdown.slice(idx + search.length);
+}
+
+/** Replace `/<query>` with `/key ` for markdown fallback when DOM 與游標不同步。 */
+function applySlash(markdown: string, query: string, key: string): string {
+  const search = `/${query}`;
+  const replacement = `/${key} `;
   const idx = markdown.lastIndexOf(search);
   if (idx === -1) return markdown;
   return markdown.slice(0, idx) + replacement + markdown.slice(idx + search.length);
@@ -200,8 +288,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   imageUploadHandler,
   bordered = true,
   mentions,
+  slashWorkflows,
   onSubmit,
 }: MarkdownEditorProps, forwardedRef) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const ref = useRef<MDXEditorMethods>(null);
   const latestValueRef = useRef(value);
@@ -218,6 +308,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   const mentionStateRef = useRef<MentionState | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionActive = mentionState !== null && mentions && mentions.length > 0;
+
+  const [slashState, setSlashState] = useState<SlashState | null>(null);
+  const slashStateRef = useRef<SlashState | null>(null);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const slashActive =
+    slashState !== null && slashWorkflows !== undefined && slashWorkflows.length > 0;
+
   const projectColorById = useMemo(() => {
     const map = new Map<string, string | null>();
     for (const mention of mentions ?? []) {
@@ -233,6 +330,25 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     const q = mentionState.query.toLowerCase();
     return mentions.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 8);
   }, [mentionState?.query, mentions]);
+
+  const filteredSlash = useMemo(() => {
+    if (!slashState || !slashWorkflows) return [];
+    const q = slashState.query.toLowerCase().trim();
+    if (!q) return slashWorkflows.slice(0, 50);
+    return slashWorkflows
+      .filter(
+        (w) =>
+          w.key.toLowerCase().includes(q) ||
+          w.name.toLowerCase().includes(q) ||
+          (w.description ?? "").toLowerCase().includes(q),
+      )
+      .slice(0, 50);
+  }, [slashState?.query, slashWorkflows]);
+
+  useEffect(() => {
+    if (!slashState || filteredSlash.length === 0) return;
+    setSlashIndex((i) => Math.min(i, filteredSlash.length - 1));
+  }, [filteredSlash, slashState]);
 
   useImperativeHandle(forwardedRef, () => ({
     focus: () => {
@@ -320,38 +436,56 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     }
   }, [projectColorById]);
 
-  // Mention detection: listen for selection changes and input events
-  const checkMention = useCallback(() => {
-    if (!mentions || mentions.length === 0 || !containerRef.current) {
-      mentionStateRef.current = null;
-      setMentionState(null);
-      return;
+  /**
+   * @ 優先於 /：同一游標位置若同時符合兩者，只顯示 mention。
+   */
+  const checkPopovers = useCallback(() => {
+    if (!containerRef.current) return;
+
+    if (mentions && mentions.length > 0) {
+      const m = detectMention(containerRef.current);
+      if (m) {
+        mentionStateRef.current = m;
+        setMentionState(m);
+        setMentionIndex(0);
+        slashStateRef.current = null;
+        setSlashState(null);
+        return;
+      }
     }
-    const result = detectMention(containerRef.current);
-    mentionStateRef.current = result;
-    if (result) {
-      setMentionState(result);
-      setMentionIndex(0);
+    mentionStateRef.current = null;
+    setMentionState(null);
+
+    if (slashWorkflows && slashWorkflows.length > 0) {
+      const s = detectSlash(containerRef.current);
+      slashStateRef.current = s;
+      if (s) {
+        setSlashState(s);
+        setSlashIndex(0);
+      } else {
+        setSlashState(null);
+      }
     } else {
-      setMentionState(null);
+      slashStateRef.current = null;
+      setSlashState(null);
     }
-  }, [mentions]);
+  }, [mentions, slashWorkflows]);
 
   useEffect(() => {
-    if (!mentions || mentions.length === 0) return;
+    const hasMentions = Boolean(mentions && mentions.length > 0);
+    const hasSlash = Boolean(slashWorkflows && slashWorkflows.length > 0);
+    if (!hasMentions && !hasSlash) return;
 
     const el = containerRef.current;
-    // Listen for input events on the container so mention detection
-    // also fires after typing (e.g. space to dismiss).
-    const onInput = () => requestAnimationFrame(checkMention);
+    const onInput = () => requestAnimationFrame(checkPopovers);
 
-    document.addEventListener("selectionchange", checkMention);
+    document.addEventListener("selectionchange", checkPopovers);
     el?.addEventListener("input", onInput, true);
     return () => {
-      document.removeEventListener("selectionchange", checkMention);
+      document.removeEventListener("selectionchange", checkPopovers);
       el?.removeEventListener("input", onInput, true);
     };
-  }, [checkMention, mentions]);
+  }, [checkPopovers, mentions, slashWorkflows]);
 
   useEffect(() => {
     const editable = containerRef.current?.querySelector('[contenteditable="true"]');
@@ -470,6 +604,76 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     [decorateProjectMentions, onChange],
   );
 
+  const selectSlash = useCallback(
+    (option: SlashWorkflowOption) => {
+      const state = slashStateRef.current;
+      if (!state) return;
+
+      const replacement = `/${option.key} `;
+
+      const sel = window.getSelection();
+      if (sel && state.textNode.isConnected) {
+        const range = document.createRange();
+        range.setStart(state.textNode, state.slashPos);
+        range.setEnd(state.textNode, state.endPos);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        document.execCommand("insertText", false, replacement);
+
+        const cursorTarget = state.slashPos + replacement.length;
+        requestAnimationFrame(() => {
+          const newSel = window.getSelection();
+          if (!newSel) return;
+          if (state.textNode.isConnected) {
+            const len = state.textNode.textContent?.length ?? 0;
+            if (cursorTarget <= len) {
+              const r = document.createRange();
+              r.setStart(state.textNode, cursorTarget);
+              r.collapse(true);
+              newSel.removeAllRanges();
+              newSel.addRange(r);
+              return;
+            }
+          }
+          const editable = containerRef.current?.querySelector('[contenteditable="true"]');
+          if (!editable) return;
+          const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT);
+          let node: Text | null;
+          while ((node = walker.nextNode() as Text | null)) {
+            const text = node.textContent ?? "";
+            const idx = text.indexOf(replacement);
+            if (idx !== -1) {
+              const pos = idx + replacement.length;
+              if (pos <= text.length) {
+                const r = document.createRange();
+                r.setStart(node, pos);
+                r.collapse(true);
+                newSel.removeAllRanges();
+                newSel.addRange(r);
+                return;
+              }
+            }
+          }
+        });
+      } else {
+        const current = latestValueRef.current;
+        const next = applySlash(current, state.query, option.key);
+        if (next !== current) {
+          latestValueRef.current = next;
+          ref.current?.setMarkdown(next);
+          onChange(next);
+        }
+        requestAnimationFrame(() => {
+          ref.current?.focus(undefined, { defaultSelection: "rootEnd" });
+        });
+      }
+
+      slashStateRef.current = null;
+      setSlashState(null);
+    },
+    [onChange],
+  );
+
   function hasFilePayload(evt: DragEvent<HTMLDivElement>) {
     return Array.from(evt.dataTransfer?.types ?? []).includes("Files");
   }
@@ -522,6 +726,39 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
               e.preventDefault();
               e.stopPropagation();
               selectMention(filteredMentions[mentionIndex]);
+              return;
+            }
+          }
+        } else if (slashActive) {
+          if (e.key === " ") {
+            slashStateRef.current = null;
+            setSlashState(null);
+            return;
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            slashStateRef.current = null;
+            setSlashState(null);
+            return;
+          }
+          if (filteredSlash.length > 0) {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              e.stopPropagation();
+              setSlashIndex((prev) => Math.min(prev + 1, filteredSlash.length - 1));
+              return;
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              e.stopPropagation();
+              setSlashIndex((prev) => Math.max(prev - 1, 0));
+              return;
+            }
+            if (e.key === "Enter" || e.key === "Tab") {
+              e.preventDefault();
+              e.stopPropagation();
+              selectSlash(filteredSlash[slashIndex]!);
               return;
             }
           }
@@ -633,6 +870,69 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
                 )}
               </button>
             ))}
+          </div>
+        );
+        return createPortal(dropdown, document.body);
+      })()}
+
+      {/* 工作流程 `/` 選單（與 @ 相同定位邏輯；@ 優先時不顯示） */}
+      {slashActive && slashState && !mentionActive && (() => {
+        const PAD = 8;
+        const GAP = 6;
+        const MAX_H = 200;
+        const MIN_W = 220;
+        const { rectLeft } = slashState;
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        const useContainer = containerRect && containerRect.height > 0;
+        const anchorBottom = useContainer ? containerRect.bottom : slashState.rectBottom;
+        const anchorTop = useContainer ? containerRect.top : slashState.rectTop;
+        const preferredBelow = anchorBottom + GAP;
+        const fitsBelow = preferredBelow + MAX_H <= window.innerHeight - PAD;
+        const showAbove = !fitsBelow && anchorTop - GAP >= PAD;
+
+        let left = rectLeft;
+        if (left + MIN_W > window.innerWidth - PAD) {
+          left = window.innerWidth - PAD - MIN_W;
+        }
+        if (left < PAD) left = PAD;
+
+        const style: CSSProperties = { left };
+        if (showAbove) {
+          style.bottom = window.innerHeight - anchorTop + GAP;
+        } else {
+          style.top = fitsBelow ? preferredBelow : Math.min(preferredBelow, window.innerHeight - PAD - MAX_H);
+        }
+
+        const dropdown = (
+          <div className="ui-mde-mention-dropdown" style={style} role="listbox" aria-label={t("chat.slashWorkflowListLabel")}>
+            {filteredSlash.length === 0 ? (
+              <div className="ui-mde-slash-empty">{t("chat.slashWorkflowEmpty")}</div>
+            ) : (
+              filteredSlash.map((option, i) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  className="ui-mde-mention-item ui-mde-slash-item"
+                  role="option"
+                  data-selected={i === slashIndex ? "" : undefined}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    selectSlash(option);
+                  }}
+                  onMouseEnter={() => setSlashIndex(i)}
+                  title={option.argsHint ? `${option.name} — ${option.argsHint}` : option.name}
+                >
+                  <div className="ui-mde-slash-main">
+                    <div className="ui-mde-slash-row">
+                      <span className="ui-mde-mention-at">/</span>
+                      <span className="ui-mde-slash-name">{option.name}</span>
+                      <span className="ui-mde-slash-key">{option.key}</span>
+                    </div>
+                    {option.argsHint && <div className="ui-mde-slash-args-hint">{option.argsHint}</div>}
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         );
         return createPortal(dropdown, document.body);

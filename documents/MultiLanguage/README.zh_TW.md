@@ -289,6 +289,7 @@ CLI 是管理 Paperclip 實例的運維人員的主要工具。
 | Activity | 公司整體活動日誌 |
 | Inbox | 通知和未讀項目 |
 | Instance Settings | 使用者管理、群組權限、SCIM 金鑰、合規保留、封存公司 |
+| Workflows（工作流程） | 公司層級 SOP／流程設定；側欄與路由為 `/company/workflows`（舊路徑 `/company/skills` 會轉址） |
 | Org Chart | 視覺化代理人層級和匯報結構 |
 
 ---

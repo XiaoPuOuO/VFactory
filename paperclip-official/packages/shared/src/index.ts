@@ -357,11 +357,13 @@ export {
   MAX_GROUP_AGENT_COUNT,
   addChatMessageSchema,
   updateChatRoomSchema,
+  updateChatRoomMembersSchema,
   updateChatListPreferencesSchema,
   addAgentMemorySchema,
   type CreateChatRoom,
   type AddChatMessage,
   type UpdateChatRoom,
+  type UpdateChatRoomMembers,
   type UpdateChatListPreferences,
   type AddAgentMemory,
   createCompanyInviteSchema,
@@ -490,14 +492,36 @@ export type {
   SkillArgumentType,
   SkillArgumentDefinition,
   SkillFlowStep,
+  SkillFlowInvokeWorkflowStep,
   SkillFrontmatter,
+  WorkflowTrigger,
+  WorkflowBuiltinAction,
 } from "./types/skill.js";
+export type {
+  WorkflowStepWorkerResult,
+  WorkflowStepWorkerResultV1,
+  WorkflowStepWorkerResultSchemaVersion,
+} from "./types/workflow-worker.js";
 
 export {
   skillFrontmatterSchema,
+  skillFrontmatterSchemaForFlowEditor,
   skillArgumentDefinitionSchema,
   skillFlowStepSchema,
   extractSkillFrontmatterYaml,
   safeParseSkillFrontmatterFromMarkdown,
+  safeParseSkillFrontmatterFromMarkdownForFlowEditor,
   parseSkillFrontmatterFromMarkdown,
+  normalizeSkillFrontmatterRecord,
+  requiresWorkflowRuntime,
 } from "./validators/skill.js";
+
+export {
+  WORKFLOW_TEMPLATE_BUILTIN_KEYS,
+  extractWorkflowTemplatePlaceholders,
+  collectRegisteredTemplateKeysFromFrontmatter,
+  validateWorkflowFrontmatterTemplatePlaceholders,
+  type WorkflowTemplatePlaceholderValidation,
+} from "./workflow-template-validation.js";
+
+export { workflowStepWorkerResultSchema, type WorkflowStepWorkerResultParsed } from "./validators/workflow-worker.js";

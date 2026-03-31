@@ -23,12 +23,21 @@ export const chatApi = {
   saveListPreferences: (companyId: string, prefs: ChatListPreferences) =>
     api.put(`/companies/${companyId}/chat/list-preferences`, prefs),
 
-  /** 不帶 name：取得或建立預設一對一房；帶 name：一律建立新的具名 session。 */
-  createDirectRoom: (companyId: string, agentId: string, name?: string | null) =>
+  /**
+   * 不帶 name：取得或建立預設一對一房；帶 name：一律建立新的具名 session。
+   * autoSessionTitle：待第一則 Board 訊息後以輕量方式產生房名（後端設定 HTTP adapter 或 OpenAI）。
+   */
+  createDirectRoom: (
+    companyId: string,
+    agentId: string,
+    name?: string | null,
+    opts?: { autoSessionTitle?: boolean },
+  ) =>
     api.post<ChatRoomDetail>(`/companies/${companyId}/chat/rooms`, {
       type: "direct",
       agentId,
       ...(name != null && name !== "" ? { name: name.trim() } : {}),
+      ...(opts?.autoSessionTitle ? { autoSessionTitle: true } : {}),
     }),
 
   createGroupRoom: (
@@ -48,6 +57,14 @@ export const chatApi = {
   /** 持久化「針對專案」選取；composerProjectId 為 null 表示清除。 */
   updateRoom: (companyId: string, roomId: string, body: { composerProjectId: string | null }) =>
     api.patch<ChatRoomDetail>(`/companies/${companyId}/chat/rooms/${roomId}`, body),
+
+  /** 更新群組成員（僅 AI 成員；board 固定保留）。 */
+  updateRoomMembers: (
+    companyId: string,
+    roomId: string,
+    body: { addAgentIds?: string[]; removeAgentIds?: string[] },
+  ) =>
+    api.patch<ChatRoomDetail>(`/companies/${companyId}/chat/rooms/${roomId}/members`, body),
 
   getActiveRuns: (companyId: string, roomId: string) =>
     api.get<ChatActiveRun[]>(`/companies/${companyId}/chat/rooms/${roomId}/active-runs`),

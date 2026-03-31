@@ -32,6 +32,7 @@ import { ChatRoom } from "./pages/ChatRoom";
 import { CompanySettings } from "./pages/CompanySettings";
 import { CompanyAutomation } from "./pages/CompanyAutomation";
 import { CompanySkills } from "./pages/CompanySkills";
+import { CompanyWorkflowEditPage, CompanyWorkflowNewPage } from "./pages/CompanyWorkflowEdit";
 import { Account } from "./pages/Account";
 import { DesignGuide } from "./pages/DesignGuide";
 import { InstanceSettings } from "./pages/InstanceSettings";
@@ -237,7 +238,10 @@ function boardRoutes() {
       <Route path="goals" element={<Goals />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />
       <Route path="schedules" element={<Schedules />} />
-      <Route path="company/skills" element={<CompanySkills />} />
+      <Route path="company/workflows" element={<CompanySkills />} />
+      <Route path="company/workflows/new" element={<CompanyWorkflowNewPage />} />
+      <Route path="company/workflows/:skillKey/edit" element={<CompanyWorkflowEditPage />} />
+      <Route path="company/skills" element={<Navigate to="/company/workflows" replace />} />
       <Route path="runs" element={<RunQuality />} />
       <Route path="approvals" element={<Navigate to="/approvals/pending" replace />} />
       <Route path="approvals/pending" element={<Approvals />} />

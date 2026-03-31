@@ -220,10 +220,12 @@ export {
   MAX_GROUP_AGENT_COUNT,
   addChatMessageSchema,
   updateChatRoomSchema,
+  updateChatRoomMembersSchema,
   updateChatListPreferencesSchema,
   type CreateChatRoom,
   type AddChatMessage,
   type UpdateChatRoom,
+  type UpdateChatRoomMembers,
   type UpdateChatListPreferences,
 } from "./chat.js";
 
@@ -298,10 +300,14 @@ export {
 
 export {
   skillFrontmatterSchema,
+  skillFrontmatterSchemaForFlowEditor,
   skillArgumentDefinitionSchema,
   skillFlowStepSchema,
   extractSkillFrontmatterYaml,
   safeParseSkillFrontmatterFromMarkdown,
+  safeParseSkillFrontmatterFromMarkdownForFlowEditor,
   parseSkillFrontmatterFromMarkdown,
   type SkillFrontmatterSchema,
 } from "./skill.js";
+
+export { workflowStepWorkerResultSchema, type WorkflowStepWorkerResultParsed } from "./workflow-worker.js";

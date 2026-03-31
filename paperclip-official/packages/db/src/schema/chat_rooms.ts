@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, index, boolean } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 import { projects } from "./projects.js";
 
@@ -13,6 +13,11 @@ export const chatRooms = pgTable(
     composerProjectId: uuid("composer_project_id").references(() => projects.id, {
       onDelete: "set null",
     }),
+    /**
+     * 透過「快速新增對話」建立的 direct session：使用者送出第一則 Board 訊息後，
+     * 以輕量方式（HTTP adapter 或 OpenAI）產生房間顯示名稱，完成後清除為 false。
+     */
+    awaitingSessionTitle: boolean("awaiting_session_title").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

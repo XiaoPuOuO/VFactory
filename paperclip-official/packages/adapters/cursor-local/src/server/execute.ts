@@ -355,6 +355,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     env.PAPERCLIP_WORKSPACES_JSON = JSON.stringify(workspaceHints);
   }
   mergePaperclipContextIntoEnv(env, context);
+  const ctxObj = context && typeof context === "object" ? (context as Record<string, unknown>) : {};
+  if (ctxObj.paperclipWorkflowSuppressChat === true) env.PAPERCLIP_WORKFLOW_SUPPRESS_CHAT = "1";
+  if (ctxObj.paperclipWorkflowTerminalReportDue === true) env.PAPERCLIP_WORKFLOW_TERMINAL_REPORT_DUE = "1";
   for (const [k, v] of Object.entries(envConfig)) {
     if (typeof v === "string") env[k] = v;
   }
@@ -461,21 +464,43 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   const chatRoomIdForPrompt = env.PAPERCLIP_CHAT_ROOM_ID;
   const chatRoomTypeForPrompt = env.PAPERCLIP_CHAT_ROOM_TYPE;
   const wakeReasonLabelForPrompt = env.PAPERCLIP_WAKE_REASON_LABEL;
-  const chatModePrefix =
-    chatRoomIdForPrompt && chatRoomTypeForPrompt
-      ? [
-          "You are in a live VFactory chat room. This heartbeat is one conversational turn.",
-          "Reply in the user's language (usually Traditional Chinese), concise and professional.",
-          "You MUST post the reply via POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\":\"...\"} and header X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID.",
-          "Do not output a long report unless asked; write exactly what should appear in chat.",
-          "你是公司代理人，正在回覆董事長；請先直接回答，再視需要拆成任務。",
-          "若董事長要求持續追蹤或多步驟工作，必須在同一個 heartbeat 建立或更新至少一個 Issue，並在回覆中附上 identifier（如 PAP-123）。",
-          wakeReasonLabelForPrompt ? `Wake context: ${wakeReasonLabelForPrompt}` : "",
-          "",
-        ]
-          .filter(Boolean)
-          .join("\n")
-      : "";
+  const workflowSuppressChat = ctxObj.paperclipWorkflowSuppressChat === true;
+  const workflowTerminalReportDue = ctxObj.paperclipWorkflowTerminalReportDue === true;
+  const chatModePrefix = (() => {
+    if (!chatRoomIdForPrompt || !chatRoomTypeForPrompt) return "";
+    if (workflowSuppressChat) {
+      return [
+        "A Paperclip workflow run linked to this chat room is still IN PROGRESS (non-terminal).",
+        "Do NOT POST to /api/companies/.../chat/rooms/.../messages (the server returns HTTP 409).",
+        "Advance the workflow only via POST .../workflow-runs/{runId}/worker-step-result with the required JSON body.",
+        "After the run reaches a terminal status, you will receive instructions to POST exactly ONE user-facing summary.",
+        wakeReasonLabelForPrompt ? `Wake context: ${wakeReasonLabelForPrompt}` : "",
+        "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+    if (workflowTerminalReportDue) {
+      return [
+        "The workflow run for this chat room has TERMINATED (completed, failed, or cancelled).",
+        "You MUST POST exactly ONE message via POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\":\"...\"} and header X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID.",
+        "Summarize outcomes, key findings, and if failed/cancelled explain why and suggested next steps. Reply in the user's language (usually Traditional Chinese).",
+        "",
+      ].join("\n");
+    }
+    return [
+      "You are in a live VFactory chat room. This heartbeat is one conversational turn.",
+      "Reply in the user's language (usually Traditional Chinese), concise and professional.",
+      "You MUST post the reply via POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\":\"...\"} and header X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID.",
+      "Do not output a long report unless asked; write exactly what should appear in chat.",
+      "你是公司代理人，正在回覆董事長；請先直接回答，再視需要拆成任務。",
+      "若董事長要求持續追蹤或多步驟工作，必須在同一個 heartbeat 建立或更新至少一個 Issue，並在回覆中附上 identifier（如 PAP-123）。",
+      wakeReasonLabelForPrompt ? `Wake context: ${wakeReasonLabelForPrompt}` : "",
+      "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  })();
   const crossChatBlock =
     crossChatSummary !== ""
       ? `Cross-chat context (brief; things you remembered across conversations):\n${crossChatSummary}\n\n`

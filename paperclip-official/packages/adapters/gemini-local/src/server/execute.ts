@@ -327,6 +327,10 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
   mergePaperclipContextIntoEnv(env, context);
 
+  const ctxObj = context && typeof context === "object" ? (context as Record<string, unknown>) : {};
+  if (ctxObj.paperclipWorkflowSuppressChat === true) env.PAPERCLIP_WORKFLOW_SUPPRESS_CHAT = "1";
+  if (ctxObj.paperclipWorkflowTerminalReportDue === true) env.PAPERCLIP_WORKFLOW_TERMINAL_REPORT_DUE = "1";
+
   for (const [key, value] of Object.entries(envConfig)) {
     if (typeof value === "string") env[key] = value;
   }
@@ -429,20 +433,42 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   const chatRoomIdForPrompt = env.PAPERCLIP_CHAT_ROOM_ID;
   const chatRoomTypeForPrompt = env.PAPERCLIP_CHAT_ROOM_TYPE;
   const wakeReasonLabelForPrompt = env.PAPERCLIP_WAKE_REASON_LABEL;
-  const chatModePrefix =
-    chatRoomIdForPrompt && chatRoomTypeForPrompt
-      ? [
-          "You are in a live VFactory chat room. This heartbeat is one conversational turn.",
-          "Reply in the user's language (usually Traditional Chinese), concise and professional.",
-          "You MUST post the reply via POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\":\"...\"} and header X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID.",
-          "Do not only inspect issues and exit; respond directly to the latest Board message in this room.",
-          "你是公司 CEO 代理人，正在回覆董事長；先回答，再視需要拆任務。",
-          wakeReasonLabelForPrompt ? `Wake context: ${wakeReasonLabelForPrompt}` : "",
-          "",
-        ]
-          .filter(Boolean)
-          .join("\n")
-      : "";
+  const workflowSuppressChat = ctxObj.paperclipWorkflowSuppressChat === true;
+  const workflowTerminalReportDue = ctxObj.paperclipWorkflowTerminalReportDue === true;
+  const chatModePrefix = (() => {
+    if (!chatRoomIdForPrompt || !chatRoomTypeForPrompt) return "";
+    if (workflowSuppressChat) {
+      return [
+        "A Paperclip workflow run linked to this chat room is still IN PROGRESS (non-terminal).",
+        "Do NOT POST to /api/companies/.../chat/rooms/.../messages (the server returns HTTP 409).",
+        "Advance the workflow only via POST .../workflow-runs/{runId}/worker-step-result with the required JSON body.",
+        "After the run reaches a terminal status, you will receive instructions to POST exactly ONE user-facing summary.",
+        wakeReasonLabelForPrompt ? `Wake context: ${wakeReasonLabelForPrompt}` : "",
+        "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+    if (workflowTerminalReportDue) {
+      return [
+        "The workflow run for this chat room has TERMINATED (completed, failed, or cancelled).",
+        "You MUST POST exactly ONE message via POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\":\"...\"} and header X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID.",
+        "Summarize outcomes, key findings, and if failed/cancelled explain why and suggested next steps. Reply in the user's language (usually Traditional Chinese).",
+        "",
+      ].join("\n");
+    }
+    return [
+      "You are in a live VFactory chat room. This heartbeat is one conversational turn.",
+      "Reply in the user's language (usually Traditional Chinese), concise and professional.",
+      "You MUST post the reply via POST /api/companies/$PAPERCLIP_COMPANY_ID/chat/rooms/$PAPERCLIP_CHAT_ROOM_ID/messages with {\"body\":\"...\"} and header X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID.",
+      "Do not only inspect issues and exit; respond directly to the latest Board message in this room.",
+      "你是公司 CEO 代理人，正在回覆董事長；先回答，再視需要拆任務。",
+      wakeReasonLabelForPrompt ? `Wake context: ${wakeReasonLabelForPrompt}` : "",
+      "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  })();
   const crossChatBlock =
     crossChatSummary !== ""
       ? `Cross-chat context (brief; things you remembered across conversations):\n${crossChatSummary}\n\n`

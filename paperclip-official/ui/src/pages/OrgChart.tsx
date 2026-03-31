@@ -10,7 +10,15 @@ import { agentUrl } from "../lib/utils";
 import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { AgentIcon } from "../components/AgentIconPicker";
-import { Network } from "lucide-react";
+import { Download, ListTree, Minus, Network, Plus, RotateCcw } from "lucide-react";
+import { OrgChartTreeView } from "../components/OrgChartTreeView";
+import { useToast } from "../context/ToastContext";
+import {
+  buildOrgMarkdownExport,
+  downloadTextFile,
+  escapeMarkdownInline,
+  orgMarkdownFilename,
+} from "../lib/orgExportMarkdown";
 import { AGENT_ROLE_LABELS, type Agent } from "@paperclipai/shared";
 import "./OrgChart.css";
 
@@ -141,10 +149,45 @@ const statusDotColor: Record<string, string> = {
 };
 const defaultDotColor = "#a3a3a3";
 
+const VIEW_STORAGE_KEY = "paperclip-org-chart-view";
+
+type OrgChartViewMode = "graph" | "tree";
+
+function readStoredViewMode(): OrgChartViewMode {
+  if (typeof window === "undefined") return "graph";
+  try {
+    const v = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    return v === "tree" ? "tree" : "graph";
+  } catch {
+    return "graph";
+  }
+}
+
+const TREE_SCALE_KEY = "paperclip-org-tree-scale";
+const MIN_TREE_SCALE = 0.7;
+const MAX_TREE_SCALE = 1.6;
+const TREE_SCALE_STEP = 0.1;
+
+function readStoredTreeScale(): number {
+  if (typeof window === "undefined") return 1;
+  try {
+    const v = parseFloat(window.localStorage.getItem(TREE_SCALE_KEY) ?? "1");
+    if (!Number.isFinite(v)) return 1;
+    return Math.min(MAX_TREE_SCALE, Math.max(MIN_TREE_SCALE, Math.round(v * 10) / 10));
+  } catch {
+    return 1;
+  }
+}
+
+function clampTreeScale(n: number): number {
+  return Math.min(MAX_TREE_SCALE, Math.max(MIN_TREE_SCALE, Math.round(n * 10) / 10));
+}
+
 // ── Main component ──────────────────────────────────────────────────────
 
 export function OrgChart() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, selectedCompany } = useCompany();
+  const { pushToast } = useToast();
   const { setBreadcrumbs } = useBreadcrumbs();
   const navigate = useNavigate();
 
@@ -166,7 +209,65 @@ export function OrgChart() {
     return m;
   }, [agents]);
 
-  const { t } = useTranslation("org");
+  const { t, i18n } = useTranslation("org");
+  const [viewMode, setViewMode] = useState<OrgChartViewMode>(readStoredViewMode);
+  const [treeScale, setTreeScale] = useState(readStoredTreeScale);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, viewMode);
+    } catch {
+      /* ignore quota */
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TREE_SCALE_KEY, String(treeScale));
+    } catch {
+      /* ignore quota */
+    }
+  }, [treeScale]);
+
+  const handleExportMarkdown = useCallback(() => {
+    if (!orgTree?.length) {
+      pushToast({ title: t("exportMarkdownNoData"), tone: "warn" });
+      return;
+    }
+    try {
+      const companyName = selectedCompany?.name?.trim() || t("untitledCompany");
+      const dateStr = new Intl.DateTimeFormat(i18n.language?.startsWith("zh") ? "zh-TW" : "en", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date());
+      const intro = t("exportIntro", { date: dateStr });
+      const note = t("exportMarkdownBodyNote");
+      const introLine = `> ${escapeMarkdownInline(intro)}\n> ${escapeMarkdownInline(note)}`;
+      const md = buildOrgMarkdownExport({
+        companyName,
+        introLine,
+        hierarchyHeading: `## ${t("exportSectionHierarchy")}`,
+        emptyHierarchyNote: t("exportEmptyHierarchy"),
+        roots: orgTree,
+        agentMap,
+        labels: {
+          fieldTitle: t("exportFieldTitle"),
+          fieldCapabilities: t("exportFieldCapabilities"),
+          emptyCapabilities: t("exportEmptyCapabilities"),
+        },
+      });
+      downloadTextFile(orgMarkdownFilename(companyName), md);
+      pushToast({ title: t("exportMarkdownSuccess"), tone: "success" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      pushToast({
+        title: t("exportMarkdownError"),
+        body: message,
+        tone: "error",
+      });
+    }
+  }, [agentMap, i18n.language, orgTree, pushToast, selectedCompany?.name, t]);
+
   useEffect(() => {
     setBreadcrumbs([{ label: t("pageTitle") }]);
   }, [setBreadcrumbs, t]);
@@ -194,30 +295,36 @@ export function OrgChart() {
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
-  // Center the chart on first load
-  const hasInitialized = useRef(false);
+  /** 圖表模式初次載入或從樹狀切回時自動 fit；其餘時機保留使用者平移／縮放 */
+  const chartFitDone = useRef(false);
+  const prevViewMode = useRef<OrgChartViewMode>(viewMode);
   useEffect(() => {
-    if (hasInitialized.current || allNodes.length === 0 || !containerRef.current) return;
-    hasInitialized.current = true;
+    if (prevViewMode.current === "tree" && viewMode === "graph") {
+      chartFitDone.current = false;
+    }
+    prevViewMode.current = viewMode;
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== "graph") return;
+    if (chartFitDone.current || allNodes.length === 0 || !containerRef.current) return;
 
     const container = containerRef.current;
     const containerW = container.clientWidth;
     const containerH = container.clientHeight;
-
-    // Fit chart to container
     const scaleX = (containerW - 40) / bounds.width;
     const scaleY = (containerH - 40) / bounds.height;
     const fitZoom = Math.min(scaleX, scaleY, 1);
-
     const chartW = bounds.width * fitZoom;
     const chartH = bounds.height * fitZoom;
 
+    chartFitDone.current = true;
     setZoom(fitZoom);
     setPan({
       x: (containerW - chartW) / 2,
       y: (containerH - chartH) / 2,
     });
-  }, [allNodes, bounds]);
+  }, [allNodes, bounds, viewMode]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
@@ -273,76 +380,176 @@ export function OrgChart() {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="org-chart-container"
-      style={{ cursor: dragging ? "grabbing" : "grab" }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
-    >
-      <div className="org-chart-zoom-buttons">
-        <button
-          type="button"
-          className="org-chart-zoom-btn"
-          onClick={() => {
-            const newZoom = Math.min(zoom * 1.2, 2);
-            const container = containerRef.current;
-            if (container) {
-              const cx = container.clientWidth / 2;
-              const cy = container.clientHeight / 2;
-              const scale = newZoom / zoom;
-              setPan({ x: cx - scale * (cx - pan.x), y: cy - scale * (cy - pan.y) });
-            }
-            setZoom(newZoom);
-          }}
-          aria-label="Zoom in"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          className="org-chart-zoom-btn"
-          onClick={() => {
-            const newZoom = Math.max(zoom * 0.8, 0.2);
-            const container = containerRef.current;
-            if (container) {
-              const cx = container.clientWidth / 2;
-              const cy = container.clientHeight / 2;
-              const scale = newZoom / zoom;
-              setPan({ x: cx - scale * (cx - pan.x), y: cy - scale * (cy - pan.y) });
-            }
-            setZoom(newZoom);
-          }}
-          aria-label="Zoom out"
-        >
-          &minus;
-        </button>
-        <button
-          type="button"
-          className="org-chart-zoom-btn fit"
-          onClick={() => {
-            if (!containerRef.current) return;
-            const cW = containerRef.current.clientWidth;
-            const cH = containerRef.current.clientHeight;
-            const scaleX = (cW - 40) / bounds.width;
-            const scaleY = (cH - 40) / bounds.height;
-            const fitZoom = Math.min(scaleX, scaleY, 1);
-            const chartW = bounds.width * fitZoom;
-            const chartH = bounds.height * fitZoom;
-            setZoom(fitZoom);
-            setPan({ x: (cW - chartW) / 2, y: (cH - chartH) / 2 });
-          }}
-          title="Fit to screen"
-          aria-label="Fit chart to screen"
-        >
-          Fit
-        </button>
+    <div className="org-chart-page">
+      <div
+        className="org-chart-toolbar"
+        role="toolbar"
+        aria-label={t("viewModeToolbarAria")}
+      >
+        <div className="org-chart-toolbar-start">
+          <div
+            className="org-chart-view-segment"
+            role="tablist"
+            aria-label={t("viewModeAria")}
+          >
+            <button
+              type="button"
+              role="tab"
+              className={`org-chart-view-tab ${viewMode === "graph" ? "active" : ""}`}
+              aria-selected={viewMode === "graph"}
+              onClick={() => setViewMode("graph")}
+              title={t("viewGraph")}
+            >
+              <Network aria-hidden className="org-chart-view-tab-icon" />
+              <span className="org-chart-view-tab-label">{t("viewGraph")}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={`org-chart-view-tab ${viewMode === "tree" ? "active" : ""}`}
+              aria-selected={viewMode === "tree"}
+              onClick={() => setViewMode("tree")}
+              title={t("viewTree")}
+            >
+              <ListTree aria-hidden className="org-chart-view-tab-icon" />
+              <span className="org-chart-view-tab-label">{t("viewTree")}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="org-chart-toolbar-end">
+          {viewMode === "tree" && (
+            <div
+              className="org-chart-tree-size"
+              role="group"
+              aria-label={t("treeSizeAria")}
+            >
+              <button
+                type="button"
+                className="org-chart-tree-size-btn"
+                onClick={() => setTreeScale((s) => clampTreeScale(s - TREE_SCALE_STEP))}
+                disabled={treeScale <= MIN_TREE_SCALE}
+                aria-label={t("treeSizeSmaller")}
+                title={t("treeSizeSmaller")}
+              >
+                <Minus aria-hidden className="org-chart-tree-size-icon" />
+              </button>
+              <span className="org-chart-tree-size-value" aria-live="polite">
+                {Math.round(treeScale * 100)}%
+              </span>
+              <button
+                type="button"
+                className="org-chart-tree-size-btn"
+                onClick={() => setTreeScale((s) => clampTreeScale(s + TREE_SCALE_STEP))}
+                disabled={treeScale >= MAX_TREE_SCALE}
+                aria-label={t("treeSizeLarger")}
+                title={t("treeSizeLarger")}
+              >
+                <Plus aria-hidden className="org-chart-tree-size-icon" />
+              </button>
+              <button
+                type="button"
+                className="org-chart-tree-size-btn org-chart-tree-size-reset"
+                onClick={() => setTreeScale(1)}
+                aria-label={t("treeSizeReset")}
+                title={t("treeSizeReset")}
+              >
+                <RotateCcw aria-hidden className="org-chart-tree-size-icon" />
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            className="org-chart-export-btn"
+            onClick={handleExportMarkdown}
+            title={t("exportMarkdownHint")}
+          >
+            <Download aria-hidden className="org-chart-export-icon" />
+            <span>{t("exportMarkdown")}</span>
+          </button>
+        </div>
       </div>
 
-      <svg
+      {viewMode === "tree" ? (
+        <div className="org-chart-tree-panel">
+          <div
+            className="org-chart-tree-panel-inner"
+            style={{ zoom: treeScale }}
+          >
+            <OrgChartTreeView nodes={orgTree ?? []} agentMap={agentMap} />
+          </div>
+        </div>
+      ) : (
+        <div
+          ref={containerRef}
+          className="org-chart-container"
+          style={{ cursor: dragging ? "grabbing" : "grab" }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onWheel={handleWheel}
+        >
+          <div className="org-chart-zoom-buttons">
+            <button
+              type="button"
+              className="org-chart-zoom-btn"
+              onClick={() => {
+                const newZoom = Math.min(zoom * 1.2, 2);
+                const container = containerRef.current;
+                if (container) {
+                  const cx = container.clientWidth / 2;
+                  const cy = container.clientHeight / 2;
+                  const scale = newZoom / zoom;
+                  setPan({ x: cx - scale * (cx - pan.x), y: cy - scale * (cy - pan.y) });
+                }
+                setZoom(newZoom);
+              }}
+              aria-label={t("zoomIn")}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="org-chart-zoom-btn"
+              onClick={() => {
+                const newZoom = Math.max(zoom * 0.8, 0.2);
+                const container = containerRef.current;
+                if (container) {
+                  const cx = container.clientWidth / 2;
+                  const cy = container.clientHeight / 2;
+                  const scale = newZoom / zoom;
+                  setPan({ x: cx - scale * (cx - pan.x), y: cy - scale * (cy - pan.y) });
+                }
+                setZoom(newZoom);
+              }}
+              aria-label={t("zoomOut")}
+            >
+              &minus;
+            </button>
+            <button
+              type="button"
+              className="org-chart-zoom-btn fit"
+              onClick={() => {
+                if (!containerRef.current) return;
+                const cW = containerRef.current.clientWidth;
+                const cH = containerRef.current.clientHeight;
+                const scaleX = (cW - 40) / bounds.width;
+                const scaleY = (cH - 40) / bounds.height;
+                const fitZoom = Math.min(scaleX, scaleY, 1);
+                const chartW = bounds.width * fitZoom;
+                const chartH = bounds.height * fitZoom;
+                setZoom(fitZoom);
+                setPan({ x: (cW - chartW) / 2, y: (cH - chartH) / 2 });
+              }}
+              title={t("fitToScreen")}
+              aria-label={t("fitToScreen")}
+            >
+              Fit
+            </button>
+          </div>
+
+          <svg
         className="org-chart-svg"
         style={{ width: "100%", height: "100%" }}
       >
@@ -417,6 +624,8 @@ export function OrgChart() {
           );
         })}
       </div>
+        </div>
+      )}
     </div>
   );
 }

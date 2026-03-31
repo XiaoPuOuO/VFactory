@@ -24,12 +24,20 @@ import {
 import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
 import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { FolderOpen, Heart, ChevronDown, X } from "lucide-react";
+import { Check, FolderOpen, Heart, ChevronDown, X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { extractModelName, extractProviderId } from "../lib/model-utils";
 import { queryKeys } from "../lib/queryKeys";
@@ -42,6 +50,7 @@ import {
   DraftInput,
   DraftNumberInput,
   adapterLabels,
+  roleLabels,
 } from "./agent-config-primitives";
 import { defaultCreateValues } from "./agent-config-defaults";
 import { getUIAdapter } from "../adapters";
@@ -116,6 +125,15 @@ function isOverlayDirty(o: Overlay): boolean {
 /* ---- Shared input class ---- */
 const inputClass =
   "w-full rounded-md border border-border px-2.5 py-1.5 bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/40";
+
+/** 直屬主管選單顯示字串（排序與搜尋用 value 需一致）。 */
+function buildReportsToManagerLabel(
+  a: Agent,
+  roleLabelMap: Record<string, string>,
+  inactiveHint: string,
+): string {
+  return `${a.name}${a.status === "terminated" ? ` (${inactiveHint})` : ""}${a.title ? ` — ${a.title}` : ""} (${roleLabelMap[a.role] ?? a.role})`;
+}
 
 function parseCommaArgs(value: string): string[] {
   return value
@@ -192,6 +210,44 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     enabled: Boolean(selectedCompanyId),
   });
 
+  const { data: companyAgents = [] } = useQuery({
+    queryKey: selectedCompanyId ? queryKeys.agents.list(selectedCompanyId) : ["agents", "none"],
+    queryFn: () => agentsApi.list(selectedCompanyId!),
+    enabled: Boolean(!isCreate && selectedCompanyId),
+  });
+
+  const reportsToManagerChoices = useMemo(() => {
+    if (props.mode !== "edit") return [];
+    const selfId = props.agent.id;
+    const currentReportsTo = props.agent.reportsTo;
+    const inactiveHint = t("agents:reportsToInactiveHint");
+    const pickable = companyAgents.filter(
+      (a) => a.id !== selfId && a.status !== "terminated",
+    );
+    const list = [...pickable];
+    if (
+      currentReportsTo &&
+      !list.some((a) => a.id === currentReportsTo)
+    ) {
+      const stillListed = companyAgents.find((a) => a.id === currentReportsTo);
+      if (stillListed) list.push(stillListed);
+    }
+    list.sort((a, b) =>
+      buildReportsToManagerLabel(a, roleLabels, inactiveHint).localeCompare(
+        buildReportsToManagerLabel(b, roleLabels, inactiveHint),
+        undefined,
+        { sensitivity: "base" },
+      ),
+    );
+    return list;
+  }, [
+    props.mode,
+    companyAgents,
+    props.mode === "edit" ? props.agent.id : "",
+    props.mode === "edit" ? props.agent.reportsTo : null,
+    t,
+  ]);
+
   const createSecret = useMutation({
     mutationFn: (input: { name: string; value: string }) => {
       if (!selectedCompanyId) throw new Error("Select a company to create secrets");
@@ -212,6 +268,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
 
   // ---- Edit mode: overlay for dirty tracking ----
   const [overlay, setOverlay] = useState<Overlay>(emptyOverlay);
+  const [reportsToPickerOpen, setReportsToPickerOpen] = useState(false);
   const agentRef = useRef<Agent | null>(null);
 
   // Clear overlay when agent data refreshes (after save)
@@ -450,6 +507,97 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 className={inputClass}
                 placeholder={t("agents:titlePlaceholder")}
               />
+            </Field>
+            <Field label={t("agents:reportsToField")} hint={t("agents:helpReportsTo")}>
+              {(() => {
+                const inactiveHint = t("agents:reportsToInactiveHint");
+                const effectiveReportsTo = eff("identity", "reportsTo", props.agent.reportsTo);
+                const selectedId =
+                  typeof effectiveReportsTo === "string" && effectiveReportsTo.length > 0
+                    ? effectiveReportsTo
+                    : null;
+                const selectedAgent =
+                  selectedId != null
+                    ? reportsToManagerChoices.find((x) => x.id === selectedId) ??
+                      companyAgents.find((x) => x.id === selectedId)
+                    : null;
+                const triggerLabel =
+                  selectedId == null
+                    ? t("agents:reportsToNone")
+                    : selectedAgent
+                      ? buildReportsToManagerLabel(selectedAgent, roleLabels, inactiveHint)
+                      : selectedId.slice(0, 8);
+                return (
+                  <Popover open={reportsToPickerOpen} onOpenChange={setReportsToPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          inputClass,
+                          "flex w-full cursor-pointer items-center justify-between gap-2 text-left font-sans",
+                        )}
+                        aria-expanded={reportsToPickerOpen}
+                        aria-haspopup="listbox"
+                        aria-label={t("agents:reportsToField")}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{triggerLabel}</span>
+                        <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] min-w-[min(100vw-2rem,22rem)] p-0"
+                      align="start"
+                    >
+                      <Command>
+                        <CommandInput placeholder={t("agents:reportsToSearchPlaceholder")} />
+                        <CommandList>
+                          <CommandEmpty>{t("agents:reportsToNoMatches")}</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value={`${t("agents:reportsToNone")} __root__`}
+                              onSelect={() => {
+                                mark("identity", "reportsTo", null);
+                                setReportsToPickerOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 size-4 shrink-0",
+                                  selectedId == null ? "opacity-100" : "opacity-0",
+                                )}
+                                aria-hidden
+                              />
+                              {t("agents:reportsToNone")}
+                            </CommandItem>
+                            {reportsToManagerChoices.map((a) => {
+                              const label = buildReportsToManagerLabel(a, roleLabels, inactiveHint);
+                              return (
+                                <CommandItem
+                                  key={a.id}
+                                  value={`${a.id} ${label}`}
+                                  onSelect={() => {
+                                    mark("identity", "reportsTo", a.id);
+                                    setReportsToPickerOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 size-4 shrink-0",
+                                      selectedId === a.id ? "opacity-100" : "opacity-0",
+                                    )}
+                                    aria-hidden
+                                  />
+                                  <span className="truncate">{label}</span>
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                );
+              })()}
             </Field>
             <Field label={t("agents:capabilities")} hint={t("agents:helpCapabilities")}>
               <MarkdownEditor

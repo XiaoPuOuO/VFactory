@@ -223,6 +223,7 @@ Access control:
 - **Escalate** via `chainOfCommand` when stuck. Reassign to manager or create a task for them.
 - **Permission escalation (sub-agent):** When you lack a required permission (e.g. `canCreateAgents` for agent-hires), **do not** report to the Board first. **First** notify the **Parent Issue's responsible agent**: from `GET /api/issues/{issueId}` your task has `parentId` and `ancestors`; the immediate parent's `assigneeAgentId` is who to call. You must **tag** them in the comment with **@AgentName** (e.g. `@CEO`) — **plain text like "請 CEO 代為送出" does not trigger a wake**; only @-mention does. Post a comment with the @-tag, set status to `blocked`, and explain what action is needed. Only if there is no parent or no parent assignee, then escalate via `chainOfCommand` to CEO or Board.
 - **Hiring**: use `paperclip-create-agent` skill for new agent creation workflows.
+- **Hiring (no duplicate hires):** Call `POST /api/companies/{companyId}/agent-hires` **at most once** per logical hire. After `201` (or after board approval activates the pending agent), **do not** call `agent-hires` again for the same person. When you receive `approval_approved` for a hire you requested, the new agent **already exists**—link to them in chat or the Issue (`GET /api/companies/{companyId}/agents`) instead of submitting another hire. Creating an Issue from chat to track the work does **not** require a second hire API call for the same role.
 - **Commit Co-author**: if you make a git commit you MUST add `Co-Authored-By: VFactory <noreply@vfactory.dev>` to the end of each commit message
 
 ## Comment Style (Required)
@@ -311,6 +312,25 @@ PATCH /api/agents/{agentId}/instructions-path
 }
 ```
 
+## Organizational hierarchy (`reportsTo`)
+
+To **move an agent under a different manager** (e.g. reassign from CTO to CISO), update their reporting line:
+
+```http
+PATCH /api/agents/{agentId}
+Authorization: Bearer $PAPERCLIP_API_KEY
+X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID
+Content-Type: application/json
+
+{ "reportsTo": "<manager-agent-uuid>" }
+```
+
+To clear the manager (root of the tree, when allowed), send `"reportsTo": null`.
+
+**Permissions (same as other `PATCH /api/agents/:id` updates on *other* agents):** CEO role, principal grant `agents:create`, or `canCreateAgents` on the actor. If you lack permission, the API returns **403**. You can still patch **your own** agent record for many fields; changing **your own** `reportsTo` is allowed by the same self-update path—use only when product policy permits.
+
+**Validation:** The server rejects **cycles** (you cannot set `reportsTo` to yourself or to a descendant). Inspect the tree with `GET /api/companies/{companyId}/org` or `GET /api/companies/{companyId}/agents`.
+
 ## Key Endpoints (Quick Reference)
 
 | Action                                | Endpoint                                                                                   |
@@ -330,6 +350,8 @@ PATCH /api/agents/{agentId}/instructions-path
 | Set instructions path                 | `PATCH /api/agents/:agentId/instructions-path`                                             |
 | Release task                          | `POST /api/issues/:issueId/release`                                                        |
 | List agents                           | `GET /api/companies/:companyId/agents`                                                     |
+| Org tree (reporting lines)            | `GET /api/companies/:companyId/org`                                                        |
+| Change who an agent reports to        | `PATCH /api/agents/:agentId` body `{ "reportsTo": "<uuid>" \| null }`                     |
 | Dashboard                             | `GET /api/companies/:companyId/dashboard`                                                  |
 | Search issues                         | `GET /api/companies/:companyId/issues?q=search+term`                                       |
 | List schedules                        | `GET /api/companies/:companyId/schedules` (optional `?agentId=`, `?enabled=`)              |

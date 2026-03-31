@@ -54,41 +54,6 @@ function errorResponseSchema(): ZodSchema {
     .passthrough();
 }
 
-function schemaContainsZodNever(schema: ZodSchema): boolean {
-  const seen = new Set<unknown>();
-
-  const visit = (s: unknown): boolean => {
-    if (!s || typeof s !== "object") return false;
-    if (seen.has(s)) return false;
-    seen.add(s);
-
-    const anySchema = s as any;
-    const typeName = anySchema?._def?.typeName;
-    if (typeName === "ZodNever") return true;
-
-    const def = anySchema?._def;
-    if (!def || typeof def !== "object") return false;
-
-    for (const value of Object.values(def)) {
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          if (visit(item)) return true;
-        }
-      } else {
-        // Only recurse into nested Zod schemas (best-effort by `_def.typeName`).
-        const nestedTypeName = (value as any)?._def?.typeName;
-        if (typeof nestedTypeName === "string" && nestedTypeName.startsWith("Zod")) {
-          if (visit(value)) return true;
-        }
-      }
-    }
-
-    return false;
-  };
-
-  return visit(schema);
-}
-
 export function createOpenApiDocument(
   targets: Array<{ mountPath: string; router: Router }>,
   options: { apiPrefix: string },
@@ -129,7 +94,7 @@ export function createOpenApiDocument(
     const request: Record<string, unknown> = {};
     if (params) request.params = params;
 
-    if (route.requestBodySchema && !schemaContainsZodNever(route.requestBodySchema)) {
+    if (route.requestBodySchema) {
       const componentKey = `RequestBody_${method}_${sanitizeComponentKey(normalizedPath)}`;
       try {
         const registered = registry.register(componentKey, route.requestBodySchema);
@@ -187,16 +152,31 @@ export function createOpenApiDocument(
   }
 
   const generator = new OpenApiGeneratorV3(registry.definitions);
-  const doc = generator.generateDocument({
-    openapi: "3.0.3",
-    info: {
-      title: "Paperclip API",
-      version: "0.3.0",
-      description:
-        "文件提供用於外部整合；所有受保護的 API 主要使用 `Authorization: Bearer <token>`。\n若以 session(cookie) 呼叫，所有 unsafe 方法（POST/PUT/PATCH/DELETE）需滿足 CSRF 檢查（Origin/Referer 與請求來源一致）。",
-    },
-    servers: [{ url: "/" }],
-  });
+  const baseInfo = {
+    title: "Paperclip API",
+    version: "0.3.0",
+    description:
+      "文件提供用於外部整合；所有受保護的 API 主要使用 `Authorization: Bearer <token>`。\n若以 session(cookie) 呼叫，所有 unsafe 方法（POST/PUT/PATCH/DELETE）需滿足 CSRF 檢查（Origin/Referer 與請求來源一致）。",
+  };
+
+  // 對外 OpenAPI 文件生成屬於「非必要」；若 zod-to-openapi 遇到某些無法映射的 schema（例如 ZodNever），
+  // 直接回傳最小文件，避免整個 server 因單一路由的 schema 問題而啟動失敗。
+  let doc: JsonObject;
+  try {
+    doc = generator.generateDocument({
+      openapi: "3.0.3",
+      info: baseInfo,
+      servers: [{ url: "/" }],
+    });
+  } catch (err) {
+    console.error("OpenAPI generation failed, falling back to minimal document:", err);
+    doc = {
+      openapi: "3.0.3",
+      info: baseInfo,
+      servers: [{ url: "/" }],
+      paths: {},
+    } as JsonObject;
+  }
 
   const anyDoc = doc as any;
   const components = (anyDoc.components ??= {}) as Record<string, unknown>;

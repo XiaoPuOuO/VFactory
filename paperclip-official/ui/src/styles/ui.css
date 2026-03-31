@@ -4211,6 +4211,56 @@
   color: var(--muted-foreground);
 }
 
+.ui-mde-slash-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-mde-slash-key {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--muted-foreground);
+}
+
+.ui-mde-slash-item {
+  align-items: stretch;
+}
+
+.ui-mde-slash-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.ui-mde-slash-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.ui-mde-slash-args-hint {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-mde-slash-empty {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
 .ui-mde-drop-overlay {
   pointer-events: none;
   position: absolute;

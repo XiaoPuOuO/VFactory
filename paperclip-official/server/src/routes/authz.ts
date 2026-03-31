@@ -1,7 +1,7 @@
 import type { Request } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companies } from "@paperclipai/db";
+import { companies, workflowRuns } from "@paperclipai/db";
 import { forbidden, notFound, unauthorized } from "../errors.js";
 
 export function assertBoard(req: Request) {
@@ -11,6 +11,42 @@ export function assertBoard(req: Request) {
   if (req.actor.type !== "board") {
     throw forbidden("Board access required");
   }
+}
+
+/**
+ * `POST .../workflow-runs/:runId/worker-step-result`：Board 可操作；若為 agent API，
+ * 僅限該 run 的 `agentId`（heartbeat 續跑之代理人）與請求身分一致。
+ */
+export async function assertBoardOrAgentWorkflowWorker(
+  req: Request,
+  db: Db,
+  companyId: string,
+  runId: string,
+): Promise<void> {
+  await assertCompanyAccess(req, companyId, db);
+  if (req.actor.type === "board") {
+    assertBoard(req);
+    return;
+  }
+  if (req.actor.type === "agent") {
+    const agentId = req.actor.agentId;
+    if (!agentId) {
+      throw forbidden("Agent identity required");
+    }
+    const [row] = await db
+      .select({ agentId: workflowRuns.agentId })
+      .from(workflowRuns)
+      .where(and(eq(workflowRuns.id, runId), eq(workflowRuns.companyId, companyId)))
+      .limit(1);
+    if (!row) {
+      throw notFound("Run not found");
+    }
+    if (!row.agentId || row.agentId !== agentId) {
+      throw forbidden("Agent is not assigned to this workflow run");
+    }
+    return;
+  }
+  throw forbidden("Board access required");
 }
 
 /** 是否有權限查看／存取所有公司（local_implicit 或身分組權限 company.view.all / *） */

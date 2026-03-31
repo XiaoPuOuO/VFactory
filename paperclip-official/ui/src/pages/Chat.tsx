@@ -49,11 +49,15 @@ export function Chat() {
   });
 
   const createDirect = useMutation({
-    mutationFn: (payload: string | { agentId: string; name: string }) => {
+    mutationFn: (
+      payload: string | { agentId: string; name: string; autoSessionTitle?: boolean },
+    ) => {
       if (typeof payload === "string") {
         return chatApi.createDirectRoom(selectedCompanyId!, payload);
       }
-      return chatApi.createDirectRoom(selectedCompanyId!, payload.agentId, payload.name);
+      return chatApi.createDirectRoom(selectedCompanyId!, payload.agentId, payload.name, {
+        autoSessionTitle: payload.autoSessionTitle === true,
+      });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms(selectedCompanyId!) });
@@ -124,8 +128,12 @@ export function Chat() {
             agents={activeAgents}
             isLoadingRooms={isLoadingRooms}
             onCreateDirect={(agentId) => createDirect.mutate(agentId)}
-            onCreateDirectWithName={(agentId, name) =>
-              createDirect.mutate({ agentId, name })
+            onCreateNewDirectSession={(agentId) =>
+              createDirect.mutate({
+                agentId,
+                name: t("chat.newSessionDefaultName"),
+                autoSessionTitle: true,
+              })
             }
             createDirectPending={createDirect.isPending}
             onCreateGroup={(agentIds, name) =>

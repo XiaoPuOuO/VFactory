@@ -5,10 +5,21 @@ import { z } from "zod";
 import { validate } from "../middleware/validate.js";
 import { safeParseSkillFrontmatterFromMarkdown } from "@paperclipai/shared";
 import type { SkillFrontmatter } from "@paperclipai/shared";
+
+/** 聊天室輸入 `/` 時可挑選：active、具 flow、且非僅排程／事件觸發的工作流程。 */
+function isManualSlashWorkflow(fm: SkillFrontmatter): boolean {
+  if (fm.mode !== "active") return false;
+  const flow = fm.flow;
+  if (!flow || flow.length === 0) return false;
+  const on = fm.trigger?.on;
+  if (on === "schedule" || on === "event") return false;
+  return true;
+}
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
 import { assertBoard } from "./authz.js";
 import {
   companySkillBundleConstants,
+  invalidateCompanySkillBundleCache,
   loadCompanySkillBundleForExport,
   loadCompanySkillsForInjection,
 } from "../services/company-skill-bundle.js";
@@ -103,6 +114,7 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
         details: { skillsCount: mergedSkills.length },
       });
 
+      invalidateCompanySkillBundleCache(args.companyId);
       return { ok: true as const };
     })();
   }
@@ -111,16 +123,25 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
     const companyId = req.params.companyId as string;
     await assertCompanyAccess(req, companyId, db);
 
-    const loaded = await loadCompanySkillsForInjection({ db, storage, companyId });
-    const skills = loaded.map((s) => ({
-      key: s.key,
-      name: s.name,
-      description: s.frontmatter.description,
-      mode: s.frontmatter.mode,
-      skillMarkdown: s.skillMarkdown,
-    }));
+    const q = req.query as { includeInternal?: string };
+    const includeInternal = q.includeInternal === "1" || q.includeInternal === "true";
 
-    // Best-effort: if nothing saved yet, return empty list.
+    const loaded = await loadCompanySkillsForInjection({ db, storage, companyId });
+    const mapped = loaded.map((s) => {
+      const internal = s.frontmatter.metadata?.internal === true;
+      return {
+        key: s.key,
+        name: s.name,
+        description: s.frontmatter.description,
+        mode: s.frontmatter.mode,
+        skillMarkdown: s.skillMarkdown,
+        internal,
+        isManualSlashWorkflow: isManualSlashWorkflow(s.frontmatter),
+      };
+    });
+
+    const skills = includeInternal ? mapped : mapped.filter((row) => !row.internal);
+
     res.json({ skills });
   });
 
@@ -224,6 +245,7 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
       },
     });
 
+    invalidateCompanySkillBundleCache(companyId);
     res.status(201).json({ ok: true });
   });
 

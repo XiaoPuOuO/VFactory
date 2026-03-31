@@ -1,12 +1,65 @@
-import { eq, and, desc, inArray, lt, isNull } from "drizzle-orm";
+import { eq, and, desc, inArray, lt, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { chatRooms, chatRoomMembers, chatMessages, chatListPreferences, agents, projects } from "@paperclipai/db";
-import type { ChatListPreferences, ChatMessage } from "@paperclipai/shared";
+import {
+  MAX_GROUP_AGENT_COUNT,
+  type ChatListPreferences,
+  type ChatMessage,
+  type SkillFrontmatter,
+  requiresWorkflowRuntime,
+} from "@paperclipai/shared";
 import { notFound, forbidden, unprocessable } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { issueService } from "./issues.js";
 import { publishLiveEvent } from "./live-events.js";
 import { parseSkillInvocations } from "./skill-invocation-parser.js";
+import { mergeEveryoneMentionedAgentIds } from "../lib/chat-everyone-mention.js";
+import { generateChatSessionTitleFromUserText } from "./chat-session-title.js";
+import type { StorageService } from "../storage/types.js";
+import { createWorkflowRunService } from "./workflow-run-service.js";
+import { loadCompanySkillsForInjection } from "./company-skill-bundle.js";
+
+function normalizeSkillKeyForChat(input: string): string {
+  return input.trim().toLowerCase().replace(/_/g, "-");
+}
+
+/**
+ * Board 在聊天室送出 `/skill` 時，若為多階段工作流程則應建立 workflow run（否則僅有技能注入文字，引擎不會推進）。
+ * 與 {@link requiresWorkflowRuntime} 對齊，並補上「多個 prompt 步驟但無 depends_on/output」之情形。
+ */
+function shouldAutoStartWorkflowRunFromChatInvocation(fm: SkillFrontmatter): boolean {
+  if (fm.mode !== "active") return false;
+  const flow = fm.flow;
+  if (!flow || flow.length === 0) return false;
+  if (requiresWorkflowRuntime(fm)) return true;
+  return flow.length > 1;
+}
+
+async function claimDirectRoomForSessionTitleJob(
+  db: Db,
+  companyId: string,
+  roomId: string,
+): Promise<boolean> {
+  return await db.transaction(async (tx) => {
+    const [cntRow] = await tx
+      .select({ c: sql<number>`count(*)::int` })
+      .from(chatMessages)
+      .where(and(eq(chatMessages.roomId, roomId), eq(chatMessages.companyId, companyId)));
+    if (Number(cntRow?.c) !== 1) return false;
+    const [row] = await tx
+      .update(chatRooms)
+      .set({ awaitingSessionTitle: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(chatRooms.id, roomId),
+          eq(chatRooms.companyId, companyId),
+          eq(chatRooms.awaitingSessionTitle, true),
+        ),
+      )
+      .returning({ id: chatRooms.id });
+    return Boolean(row);
+  });
+}
 
 export type ChatActor =
   | { type: "board"; userId: string }
@@ -21,12 +74,16 @@ export type ChatHeartbeat = {
     requestedByActorType?: string | null;
     requestedByActorId?: string | null;
     contextSnapshot?: Record<string, unknown> | null;
+    /** 同一則聊天訊息對同一 agent 重複喚醒時去重（heartbeat enqueueWakeup 內使用）。 */
+    idempotencyKey?: string | null;
   }) => Promise<unknown>;
 };
 
 export function chatService(
   db: Db,
   heartbeat: ChatHeartbeat,
+  /** 若缺省，聊天訊息不會自動建立 workflow run（測試／無儲存層情境）。 */
+  storage?: StorageService | null,
 ) {
   const issuesSvc = issueService(db);
 
@@ -200,7 +257,7 @@ export function chatService(
       }
       const [room] = await db
         .insert(chatRooms)
-        .values({ companyId, type: "direct", name: null })
+        .values({ companyId, type: "direct", name: null, awaitingSessionTitle: false })
         .returning();
       if (!room) throw new Error("Failed to create chat room");
       await db.insert(chatRoomMembers).values([
@@ -216,10 +273,16 @@ export function chatService(
       userId: string,
       agentId: string,
       name?: string | null,
+      opts?: { awaitingSessionTitle?: boolean },
     ) => {
       const [room] = await db
         .insert(chatRooms)
-        .values({ companyId, type: "direct", name: name ?? null })
+        .values({
+          companyId,
+          type: "direct",
+          name: name ?? null,
+          awaitingSessionTitle: Boolean(opts?.awaitingSessionTitle),
+        })
         .returning();
       if (!room) throw new Error("Failed to create chat room");
       await db.insert(chatRoomMembers).values([
@@ -237,7 +300,7 @@ export function chatService(
     ) => {
       const [room] = await db
         .insert(chatRooms)
-        .values({ companyId, type: "group", name: name ?? null })
+        .values({ companyId, type: "group", name: name ?? null, awaitingSessionTitle: false })
         .returning();
       if (!room) throw new Error("Failed to create chat room");
       const memberRows: Array<{ roomId: string; memberType: string; memberId: string }> = [
@@ -314,6 +377,95 @@ export function chatService(
         .update(chatRooms)
         .set({ composerProjectId: resolved, updatedAt: new Date() })
         .where(and(eq(chatRooms.id, roomId), eq(chatRooms.companyId, companyId)));
+
+      return chatSvc.listMembers(companyId, roomId);
+    },
+
+    /**
+     * 更新群組聊天室成員（僅 AI 成員）。
+     * 規則：
+     * - 僅允許 type=group
+     * - 新增的 agent 必須屬於同一 company
+     * - 移除時不可把群組 AI 清空（至少保留 1 位）
+     * - 群組 AI 上限：MAX_GROUP_AGENT_COUNT
+     */
+    updateGroupMembers: async (
+      companyId: string,
+      roomId: string,
+      input: { addAgentIds: string[]; removeAgentIds: string[] },
+    ) => {
+      const room = await getRoom(companyId, roomId);
+      if (!room) throw notFound("Chat room not found");
+      if (room.type !== "group") throw unprocessable("Only group rooms support member updates");
+
+      const addSet = new Set((input.addAgentIds ?? []).map((x) => x.trim()).filter(Boolean));
+      const removeSet = new Set((input.removeAgentIds ?? []).map((x) => x.trim()).filter(Boolean));
+      if (addSet.size === 0 && removeSet.size === 0) {
+        throw unprocessable("Must provide addAgentIds or removeAgentIds");
+      }
+
+      const members = await db
+        .select({ memberType: chatRoomMembers.memberType, memberId: chatRoomMembers.memberId })
+        .from(chatRoomMembers)
+        .where(eq(chatRoomMembers.roomId, roomId));
+
+      const currentAgentIds = members
+        .filter((m) => m.memberType === "agent")
+        .map((m) => m.memberId);
+      const currentAgentSet = new Set(currentAgentIds);
+
+      // Validate remove: must exist in room
+      for (const id of removeSet) {
+        if (!currentAgentSet.has(id)) {
+          throw unprocessable("Cannot remove: agent is not a member of this room");
+        }
+      }
+
+      // Validate add: must exist in company (and not already member)
+      const addCandidates = [...addSet].filter((id) => !currentAgentSet.has(id));
+      if (addCandidates.length > 0) {
+        const rows = await db
+          .select({ id: agents.id })
+          .from(agents)
+          .where(eq(agents.companyId, companyId));
+        const companyAgentIds = new Set(rows.map((r) => r.id));
+        for (const id of addCandidates) {
+          if (!companyAgentIds.has(id)) throw unprocessable("Cannot add: agent not found in this company");
+        }
+      }
+
+      const nextAgentIds = [...currentAgentIds]
+        .filter((id) => !removeSet.has(id))
+        .concat(addCandidates);
+
+      const uniqueNext = [...new Set(nextAgentIds)];
+      if (uniqueNext.length === 0) throw unprocessable("Group must include at least one agent");
+      if (uniqueNext.length > MAX_GROUP_AGENT_COUNT) {
+        throw unprocessable(`Group agent limit exceeded (max ${MAX_GROUP_AGENT_COUNT})`);
+      }
+
+      await db.transaction(async (tx) => {
+        if (removeSet.size > 0) {
+          await tx
+            .delete(chatRoomMembers)
+            .where(
+              and(
+                eq(chatRoomMembers.roomId, roomId),
+                eq(chatRoomMembers.memberType, "agent"),
+                inArray(chatRoomMembers.memberId, [...removeSet]),
+              ),
+            );
+        }
+        if (addCandidates.length > 0) {
+          await tx.insert(chatRoomMembers).values(
+            addCandidates.map((id) => ({ roomId, memberType: "agent" as const, memberId: id })),
+          );
+        }
+        await tx
+          .update(chatRooms)
+          .set({ updatedAt: new Date() })
+          .where(and(eq(chatRooms.id, roomId), eq(chatRooms.companyId, companyId)));
+      });
 
       return chatSvc.listMembers(companyId, roomId);
     },
@@ -454,8 +606,42 @@ export function chatService(
       } catch {
         // ignore parse errors
       }
+      mentionedIds = mergeEveryoneMentionedAgentIds(
+        room.type,
+        body,
+        mentionedIds,
+        memberAgentIds,
+      );
 
       const skillInvocations = parseSkillInvocations(body);
+
+      if (storage && skillInvocations.length > 0 && actor.type === "board" && memberAgentIds.length > 0) {
+        const wfSvc = createWorkflowRunService(db, storage);
+        try {
+          const loaded = await loadCompanySkillsForInjection({ db, storage, companyId });
+          const byKey = new Map(loaded.map((s) => [normalizeSkillKeyForChat(s.key), s]));
+          const facilitatorAgentId = memberAgentIds[0]!;
+          for (const inv of skillInvocations) {
+            const row = byKey.get(normalizeSkillKeyForChat(inv.name));
+            if (!row) {
+              continue;
+            }
+            if (!shouldAutoStartWorkflowRunFromChatInvocation(row.frontmatter)) {
+              continue;
+            }
+            await wfSvc.startRun({
+              companyId,
+              skillKey: normalizeSkillKeyForChat(inv.name),
+              invocationArgs: inv.args,
+              agentId: facilitatorAgentId,
+              chatRoomId: roomId,
+            });
+          }
+        } catch (err) {
+          logger.warn({ err, companyId, roomId }, "chat workflow auto-start failed");
+        }
+      }
+
       const wakeups = new Map<
         string,
         {
@@ -533,8 +719,9 @@ export function chatService(
       }
 
       for (const [agentId, { payload, contextSnapshot, reason }] of wakeups) {
-        heartbeat
-          .wakeup(agentId, {
+        const idempotencyKey = `chat:${roomId}:msg:${msg.id}:agent:${agentId}`;
+        try {
+          await heartbeat.wakeup(agentId, {
             source: "automation",
             triggerDetail: "system",
             reason,
@@ -542,10 +729,11 @@ export function chatService(
             requestedByActorType: actor.type === "board" ? "user" : "agent",
             requestedByActorId: actor.type === "board" ? actor.userId : actor.agentId,
             contextSnapshot,
-          })
-          .catch((err) => {
-            logger.error({ err, agentId, roomId, reason }, "chat wakeup failed");
+            idempotencyKey,
           });
+        } catch (err) {
+          logger.error({ err, agentId, roomId, reason }, "chat wakeup failed");
+        }
       }
 
       // Push live event for real-time chat updates (WebSocket subscribers).
@@ -577,6 +765,33 @@ export function chatService(
           message: messageForEvent,
         },
       });
+
+      if (actor.type === "board" && room.type === "direct" && room.awaitingSessionTitle) {
+        try {
+          const claimed = await claimDirectRoomForSessionTitleJob(db, companyId, roomId);
+          if (claimed) {
+            const textForTitle = body.trim();
+            void (async () => {
+              const title = await generateChatSessionTitleFromUserText(textForTitle);
+              if (!title) return;
+              const [updated] = await db
+                .update(chatRooms)
+                .set({ name: title, updatedAt: new Date() })
+                .where(and(eq(chatRooms.id, roomId), eq(chatRooms.companyId, companyId)))
+                .returning({ id: chatRooms.id });
+              if (updated) {
+                publishLiveEvent({
+                  companyId,
+                  type: "chat.room.updated",
+                  payload: { roomId, name: title },
+                });
+              }
+            })();
+          }
+        } catch (err) {
+          logger.warn({ err, roomId }, "chat session title scheduling failed");
+        }
+      }
 
       return msg;
     },

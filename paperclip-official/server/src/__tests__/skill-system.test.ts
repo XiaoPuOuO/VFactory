@@ -17,6 +17,14 @@ async function writeSkill(tmpRoot: string, skillDirName: string, skillMarkdown: 
 }
 
 describe("Skill system v0 (parser + injection)", () => {
+  it("parses slash line when editor encodes trailing space as &#x20;", () => {
+    const text = "/code-review-sop&#x20;";
+    const invocations = parseSkillInvocations(text);
+    expect(invocations.length).toBe(1);
+    expect(invocations[0]!.name).toBe("code-review-sop");
+    expect(invocations[0]!.args).toEqual([]);
+  });
+
   it("parses /skillname invocations line-by-line with quoted args", () => {
     const text = `請先處理
 /active-test "hello world" high
@@ -245,6 +253,56 @@ body
       expect(textOut).toContain("### Active Skill: shared-active");
       expect(textOut).toContain("Company active arg1=hello");
       expect(textOut).not.toContain("Workspace active arg1=hello");
+    } finally {
+      await fs.rm(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("injects workflow notice when skill uses checkpoint / branching flow", async () => {
+    const tmpRoot = await makeTempDir("paperclip-skill-workflow-");
+    try {
+      await writeSkill(
+        tmpRoot,
+        "wf-test",
+        `---
+name: wf-test
+description: workflow test
+mode: active
+arguments: []
+flow:
+  - id: a
+    kind: prompt
+    template: |
+      Step A
+    output: outA
+  - id: c
+    kind: checkpoint
+    message: "Check {{outA}}"
+    on_approve: b
+    on_reject: a
+    depends_on: [a]
+  - id: b
+    kind: prompt
+    template: |
+      Step B
+    depends_on: [c]
+---
+`,
+      );
+
+      const injection = await buildSkillInjectionPrompt({
+        workspaceCwd: tmpRoot,
+        agentId: "agent-1",
+        companyId: "company-1",
+        context: {
+          skillInvocations: [{ name: "wf-test", args: [] }],
+        },
+      });
+
+      const textOut = injection ?? "";
+      expect(textOut).toContain("### Active Skill: wf-test");
+      expect(textOut).toContain("[Workflow skill");
+      expect(textOut).toContain("Company Skills");
     } finally {
       await fs.rm(tmpRoot, { recursive: true, force: true });
     }

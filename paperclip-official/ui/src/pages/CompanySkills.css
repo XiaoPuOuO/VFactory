@@ -22,14 +22,95 @@
 
 .company-skills-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.company-skills-header-titles {
+  min-width: 0;
 }
 
 .company-skills-title {
   font-size: 1.125rem;
   font-weight: 600;
+  margin: 0;
+}
+
+.company-skills-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+  max-width: 36rem;
+}
+
+.company-skills-name-cell {
+  vertical-align: top;
+}
+
+.company-skills-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.company-skills-name {
+  font-weight: 500;
+}
+
+.company-skills-internal-badge {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--muted-foreground) 18%, transparent);
+  color: var(--muted-foreground);
+}
+
+.company-skills-show-internal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  user-select: none;
+  margin-right: 0.25rem;
+}
+
+.company-skills-name-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  line-height: 1.35;
+  margin-top: 0.25rem;
+  max-width: 18rem;
+}
+
+.company-skills-trigger-cell {
+  vertical-align: top;
+}
+
+.company-skills-execution-badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  padding: 0.125rem 0.4rem;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--muted) 80%, transparent);
+  color: var(--foreground);
+}
+
+.company-skills-delete-btn {
+  gap: 0.35rem;
 }
 
 .company-skills-actions {
@@ -66,19 +147,56 @@
   padding: 0.5rem 0.75rem;
 }
 
+.company-skills-workflow-col {
+  width: 14rem;
+  vertical-align: top;
+}
+
+.company-skills-workflow-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.125rem 0;
+}
+
+.company-skills-workflow-badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  color: var(--primary);
+  width: fit-content;
+}
+
+.company-skills-workflow-meta {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  line-height: 1.35;
+}
+
+.company-skills-workflow-dash {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
 .company-skills-desc-col {
-  width: 48%;
+  width: 34%;
 }
 
 .company-skills-actions-col {
-  width: 10rem;
+  width: 14rem;
 }
 
 .company-skills-actions-cell {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .company-skills-action-icon {
@@ -131,8 +249,12 @@
   flex-direction: column;
 }
 
-.company-skills-select {
+/* 高於全域 [data-slot="select-trigger"] 的 width: fit-content，避免在表單格線內寬度不正確 */
+.company-skills-select[data-slot="select-trigger"] {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .company-skills-textarea {
@@ -157,6 +279,32 @@
   max-width: 62rem;
 }
 
+.company-skills-editor-dialog-flow {
+  max-width: min(96vw, 72rem);
+  width: min(96vw, 72rem);
+}
+
+.company-skills-advanced-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.company-skills-workflow-dialog {
+  max-width: min(100vw - 2rem, 28rem);
+}
+
+.company-skills-workflow-args {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.company-skills-workflow-dialog-footer {
+  margin-top: 0.5rem;
+}
+
 .company-skills-editor-scroll {
   max-height: min(70vh, 40rem);
   overflow-y: auto;
@@ -172,8 +320,13 @@
 
 .company-skills-form-grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0,1fr) 讓欄位可縮至格線內，避免左欄內容（含編輯模式提示）撐破與右欄重疊 */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.75rem;
+}
+
+.company-skills-form-grid-2 > .company-skills-field-block {
+  min-width: 0;
 }
 
 @media (max-width: 36rem) {
@@ -184,13 +337,32 @@
 
 .company-skills-form-grid-3 {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 0.75rem;
   align-items: end;
 }
 
+.company-skills-form-grid-4 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.company-skills-form-grid-3 > .company-skills-field-block {
+  min-width: 0;
+}
+
+.company-skills-form-grid-4 > .company-skills-field-block {
+  min-width: 0;
+}
+
 @media (max-width: 42rem) {
   .company-skills-form-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .company-skills-form-grid-4 {
     grid-template-columns: 1fr;
   }
 }
@@ -212,10 +384,14 @@
   color: var(--muted-foreground);
   margin: 0;
   line-height: 1.35;
+  overflow-wrap: break-word;
 }
 
 .company-skills-input {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .company-skills-textarea-tall {

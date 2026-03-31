@@ -1,4 +1,5 @@
 import type { SkillArgumentDefinition, SkillFrontmatter } from "@paperclipai/shared";
+import { requiresWorkflowRuntime } from "@paperclipai/shared";
 import { loadSkillRegistryForWorkspace } from "./skill-registry.js";
 import { logger } from "../middleware/logger.js";
 
@@ -87,7 +88,10 @@ function renderAllowedTemplateVariables(input: string, allowed: Set<string>, val
   });
 }
 
-function resolveSkillValues(frontmatter: SkillFrontmatter, invocationArgs: string[] | null): Record<string, string> | null {
+export function resolveSkillValuesForWorkflow(
+  frontmatter: SkillFrontmatter,
+  invocationArgs: string[] | null,
+): Record<string, string> | null {
   const argDefs = Array.isArray(frontmatter.arguments) ? frontmatter.arguments : [];
   const values: Record<string, string> = {};
 
@@ -115,7 +119,18 @@ function resolveSkillValues(frontmatter: SkillFrontmatter, invocationArgs: strin
   return values;
 }
 
+function resolveSkillValues(frontmatter: SkillFrontmatter, invocationArgs: string[] | null): Record<string, string> | null {
+  return resolveSkillValuesForWorkflow(frontmatter, invocationArgs);
+}
+
 function buildSkillPromptForInjection(frontmatter: SkillFrontmatter, values: Record<string, string>): string {
+  if (requiresWorkflowRuntime(frontmatter)) {
+    return [
+      `[Workflow skill "${frontmatter.name}"]`,
+      "This company skill uses checkpoints, branching, loops, or step outputs. Run it from Company Skills (Run) or the workflow API; it cannot be fully inlined here.",
+    ].join("\n");
+  }
+
   const allowed = new Set<string>(["companyId", "agentId", "skillName", ...(frontmatter.arguments?.map((a) => a.name) ?? [])]);
 
   const pieces: string[] = [];
@@ -172,6 +187,8 @@ export async function buildSkillInjectionPrompt(args: {
 
   const passiveSkillsAll = all
     .filter((e) => e.frontmatter.mode === "passive")
+    /** `metadata.internal`：不進一般列表／不參與被動注入；主動 `/skill` 引用仍可由下方 active 路徑處理。 */
+    .filter((e) => e.frontmatter.metadata?.internal !== true)
     .sort((a, b) => a.name.localeCompare(b.name));
   /** 聊天輕量模式省略被動技能注入以節省 prompt。 */
   const passiveSkills = args.chatLightMode ? [] : passiveSkillsAll;

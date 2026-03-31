@@ -10,6 +10,7 @@ type ApprovalRow = typeof approvals.$inferSelect;
 
 /**
  * 核准通過後之 activity 與請求者喚醒（與 POST /approvals/:id/approve 行為一致）。
+ * `hire_agent` 不會喚醒請求者：避免同一聊天請求在第二次 heartbeat 再次 POST .../agent-hires 造成重複建立。
  */
 export async function runApprovalApprovedFollowUp(
   db: Db,
@@ -45,6 +46,13 @@ export async function runApprovalApprovedFollowUp(
   });
 
   if (!approval.requestedByAgentId) return;
+
+  // hire_agent: the agent row is already created/activated in approvalService.approve().
+  // Waking the requester again often causes a second POST .../agent-hires in the next heartbeat
+  // (duplicate hire for the same chat request). Board/UI notifications remain sufficient.
+  if (approval.type === "hire_agent") {
+    return;
+  }
 
   try {
     const wakeRun = await heartbeat.wakeup(approval.requestedByAgentId, {

@@ -1148,6 +1148,28 @@ button.board-nav-item:disabled {
   overflow: auto;
 }
 
+/* 組織圖：佔滿 main 剩餘高度，捲動發生在圖表／樹狀內層，避免與 100vh 疊加超出視窗 */
+main.board-main:has(.org-chart-page) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (min-width: 768px) {
+  main.board-main:has(.org-chart-page) {
+    overflow: hidden;
+  }
+}
+
+/* 手機：main 非 flex 子項時高度由內容撐開，限制組織圖區塊勿超過視窗 */
+main.board-main-mobile:has(.org-chart-page) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100dvh - 10rem);
+  overflow: hidden;
+}
+
 @media (min-width: 768px) {
   .board-main {
     padding: 1.5rem;

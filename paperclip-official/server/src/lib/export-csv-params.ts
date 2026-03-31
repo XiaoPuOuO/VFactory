@@ -5,8 +5,21 @@
 export function csvEscapeCell(value: unknown): string {
   if (value == null) return "";
   const s = String(value);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
+  // Spreadsheet formula injection mitigation:
+  // If a cell value starts with one of these characters after leading whitespace,
+  // Excel/Sheets may treat it as a formula when opened from CSV.
+  // Prefix with a single quote to force "text" interpretation.
+  const m = /^(\s*)(.*)$/.exec(s);
+  const leadingWs = m?.[1] ?? "";
+  const rest = m?.[2] ?? s;
+  const firstNonWsChar = rest.trimStart().charAt(0);
+  const neutralized =
+    firstNonWsChar && /^[=+\-@]$/.test(firstNonWsChar)
+      ? `${leadingWs}'${rest}`
+      : s;
+
+  if (/[",\n\r]/.test(neutralized)) return `"${neutralized.replace(/"/g, '""')}"`;
+  return neutralized;
 }
 
 export const EXPORT_CSV_DEFAULT_LIMIT = 2000;

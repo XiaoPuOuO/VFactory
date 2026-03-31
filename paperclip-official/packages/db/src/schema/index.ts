@@ -60,3 +60,12 @@ export { chatMessages } from "./chat_messages.js";
 export { chatListPreferences } from "./chat_list_preferences.js";
 export { agentChatMemories } from "./agent_chat_memories.js";
 export { agentSchedules, scheduleKindEnum } from "./agent_schedules.js";
+export {
+  workflowRuns,
+  workflowStepLogs,
+  type WorkflowRunStatus,
+  type WorkflowPendingPrompt,
+  type WorkflowPendingCheckpoint,
+  type WorkflowPendingApproval,
+  type WorkflowPendingWorker,
+} from "./workflow_runs.js";

@@ -43,6 +43,11 @@ import { runApprovalApprovedFollowUp } from "../services/approval-follow-up.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { computeAutoPauseFields } from "../lib/auto-pause.js";
+import {
+  getCachedAgentHireResponse,
+  hireDedupeKey,
+  setCachedAgentHireResponse,
+} from "../lib/agent-hire-dedupe.js";
 import { assertBoard, assertCompanyAccess, getActorInfo, hasCompanyViewAll } from "./authz.js";
 import { assertCompanyPermission } from "./company-permission.js";
 import { assertCompanyIntegrationScope } from "./integration-scope.js";
@@ -961,6 +966,8 @@ export function agentRoutes(db: Db, storage: StorageService) {
       adapterConfig: normalizedAdapterConfig,
     };
 
+    const runIdHeader = req.header("x-paperclip-run-id")?.trim() ?? null;
+
     const company = await db
       .select()
       .from(companies)
@@ -969,6 +976,20 @@ export function agentRoutes(db: Db, storage: StorageService) {
     if (!company) {
       res.status(404).json({ error: "Company not found" });
       return;
+    }
+
+    if (runIdHeader) {
+      const dedupeKey = hireDedupeKey(companyId, runIdHeader, {
+        name: normalizedHireInput.name,
+        role: normalizedHireInput.role,
+        title: normalizedHireInput.title ?? null,
+        reportsTo: normalizedHireInput.reportsTo ?? null,
+        adapterType: normalizedHireInput.adapterType,
+      });
+      const cachedHire = getCachedAgentHireResponse(dedupeKey);
+      if (cachedHire) {
+        return res.status(200).json(cachedHire);
+      }
     }
 
     const requiresApproval = company.requireBoardApprovalForNewAgents;
@@ -1104,7 +1125,18 @@ export function agentRoutes(db: Db, storage: StorageService) {
       }
     }
 
-    res.status(201).json({ agent, approval });
+    const hireResponse = { agent, approval };
+    if (runIdHeader) {
+      const dedupeKey = hireDedupeKey(companyId, runIdHeader, {
+        name: normalizedHireInput.name,
+        role: normalizedHireInput.role,
+        title: normalizedHireInput.title ?? null,
+        reportsTo: normalizedHireInput.reportsTo ?? null,
+        adapterType: normalizedHireInput.adapterType,
+      });
+      setCachedAgentHireResponse(dedupeKey, hireResponse);
+    }
+    res.status(201).json(hireResponse);
   });
 
   function stripCwdIfNotAdmin(adapterConfig: Record<string, unknown>, req: Request): Record<string, unknown> {

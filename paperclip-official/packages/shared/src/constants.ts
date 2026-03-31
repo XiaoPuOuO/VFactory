@@ -274,6 +274,7 @@ export const LIVE_EVENT_TYPES = [
   "agent.status",
   "activity.logged",
   "chat.message.created",
+  "chat.room.updated",
 ] as const;
 export type LiveEventType = (typeof LIVE_EVENT_TYPES)[number];
 
