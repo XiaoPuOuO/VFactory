@@ -4,7 +4,7 @@ Paperclip 的 Browser-Use 微服務封裝，提供 `/v1/*` 端點給 `server` �
 
 ## 啟動（本機，不用 Docker）
 
-在 **`paperclip-official/browser-use-service`** 目錄：
+在 **`paperclip-official/browser-use-service`** 目錄（請先於 Paperclip 根目錄執行 `git submodule update --init browser-use`，確保 `../../browser-use` 存在）：
 
 ```bash
 cd paperclip-official/browser-use-service
@@ -12,6 +12,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+`requirements.txt` 以 **可編輯安裝（`-e`）** 使用倉庫根目錄的 **`browser-use` 子模組**，執行路徑需與上述 `cd` 一致，才會正確解析 `../../browser-use`。
 
 與 Paperclip **同一組** secret／token（與 `paperclip-official/.env` 一致）：
 

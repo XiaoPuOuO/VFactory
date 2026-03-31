@@ -1,4 +1,5 @@
 fastapi
 uvicorn
-browser-use
+# 與 Paperclip 根目錄之 browser-use Git submodule 一致（請先 git submodule update --init）
+-e ../../browser-use
 redis
