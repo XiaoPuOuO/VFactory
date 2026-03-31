@@ -21,7 +21,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DollarSign } from "lucide-react";
+import { DollarSign, TrendingUp, Cpu } from "lucide-react";
 import {
   SpendByBillingCodeChart,
   SpendByRequestDepthChart,
@@ -186,6 +186,12 @@ export function Costs() {
           : String(error)
       : null;
 
+  /** 總 token 數量（供 KPI 卡片使用） */
+  const totalTokens = useMemo(() => {
+    if (!data) return 0;
+    return data.byAgent.reduce((acc, row) => acc + row.inputTokens + row.outputTokens, 0);
+  }, [data]);
+
   const totalTokenSummary = useMemo(() => {
     if (!data) return "";
     const totalInput = data.byAgent.reduce((acc, row) => acc + row.inputTokens, 0);
@@ -207,6 +213,7 @@ export function Costs() {
 
   return (
     <div className="costs-page">
+      {/* ── 工具列 ── */}
       <div className="costs-toolbar">
         <Tabs
           value={preset}
@@ -275,6 +282,7 @@ export function Costs() {
         </Button>
       </div>
 
+      {/* ── 錯誤訊息 ── */}
       {errorMessage && (
         <div className="costs-error" role="alert" aria-live="assertive">
           {errorMessage}
@@ -288,202 +296,259 @@ export function Costs() {
 
       {data && (
         <>
+          {/* ── KPI 摘要卡片（Apple Finance widget 風格） ── */}
+          <div className="costs-kpi-grid" aria-label={t("kpiSummary", { defaultValue: "費用摘要" })}>
+            {/* 本期支出 */}
+            <div className="costs-kpi-card">
+              <div className="costs-kpi-icon costs-kpi-icon--blue">
+                <DollarSign size={18} />
+              </div>
+              <p className="costs-kpi-label">{t(PRESET_KEYS[preset])}</p>
+              <p className="costs-kpi-value">{formatCents(data.summary.spendCents)}</p>
+              <p className="costs-kpi-sub">
+                {data.summary.budgetCents > 0
+                  ? t("utilized", { pct: data.summary.utilizationPercent })
+                  : t("unlimitedBudget")}
+              </p>
+            </div>
+
+            {/* 月底預測支出 */}
+            <div className="costs-kpi-card">
+              <div className="costs-kpi-icon costs-kpi-icon--orange">
+                <TrendingUp size={18} />
+              </div>
+              <p className="costs-kpi-label">
+                {t("forecastTitle", { defaultValue: "月底預測" })}
+              </p>
+              <p className="costs-kpi-value">
+                {data.summary.forecast
+                  ? formatCents(data.summary.forecast.monthProjectedSpendCents)
+                  : "—"}
+              </p>
+              <p className={`costs-kpi-sub${
+                data.summary.forecast?.likelyMonthBudgetBreach ? " costs-kpi-sub--alert" : ""
+              }`}>
+                {data.summary.forecast?.likelyMonthBudgetBreach
+                  ? t("forecastLikelyBreach")
+                  : data.summary.forecast
+                    ? t("forecastWeekCompare", {
+                        last: formatCents(data.summary.forecast.last7DaysSpendCents),
+                        prev: formatCents(data.summary.forecast.previous7DaysSpendCents),
+                      })
+                    : "—"}
+              </p>
+            </div>
+
+            {/* Token 總量 */}
+            <div className="costs-kpi-card">
+              <div className="costs-kpi-icon costs-kpi-icon--purple">
+                <Cpu size={18} />
+              </div>
+              <p className="costs-kpi-label">
+                {t("totalTokensLabel", { defaultValue: "Token 總量" })}
+              </p>
+              <p className="costs-kpi-value">{formatTokens(totalTokens)}</p>
+              <p className="costs-kpi-sub">
+                {t("agents", { count: data.byAgent.length, defaultValue: `${data.byAgent.length} 個 AI 員工` })}
+              </p>
+            </div>
+          </div>
+
+          {/* ── 主要洞察：Token 圖表 + 金額明細 ── */}
           <div className="costs-insights-grid">
-                <div className="costs-insights-left">
-                      <Card>
-                        <CardContent className="costs-panel costs-left-panel">
-                          <Tabs
-                            value={tokenUsageView}
-                            onValueChange={(v) => setTokenUsageView(v as TokenUsageView)}
-                          >
-                            <div className="costs-insights-left-header">
-                              <TabsList
-                                variant="default"
-                                align="start"
-                                aria-label={t("tokenUsageTabsLabel")}
-                                className="costs-toggle-tabs"
-                              >
-                                <TabsTrigger value="agent">{t("byAgent")}</TabsTrigger>
-                                <TabsTrigger value="project">{t("byProject")}</TabsTrigger>
-                              </TabsList>
-                            </div>
-
-                            <TabsContent value="agent" className="costs-tabs-content">
-                              <TokenUsageByAgentChart data={data.byAgent} totalTokenSummary={totalTokenSummary} />
-                            </TabsContent>
-                            <TabsContent value="project" className="costs-tabs-content">
-                              <TokenUsageByProjectChart data={data.byProject} totalTokenSummary={totalTokenSummary} />
-                            </TabsContent>
-                          </Tabs>
-                        </CardContent>
-                      </Card>
-                </div>
-
-                <div className="costs-insights-right">
-                  <Card>
-                    <CardContent className="costs-panel">
-                      <Tabs
-                        value={breakdownView}
-                        onValueChange={(v) => setBreakdownView(v as BreakdownView)}
+            {/* 左：Token 使用量橫條圖 */}
+            <div className="costs-insights-left">
+              <Card className="costs-glass-panel">
+                <CardContent className="costs-panel costs-left-panel">
+                  <Tabs
+                    value={tokenUsageView}
+                    onValueChange={(v) => setTokenUsageView(v as TokenUsageView)}
+                  >
+                    <div className="costs-insights-left-header">
+                      <TabsList
+                        variant="default"
+                        align="start"
+                        aria-label={t("tokenUsageTabsLabel")}
+                        className="costs-toggle-tabs"
                       >
-                        <div className="costs-breakdown-header">
-                          <div className="costs-breakdown-title-wrap">
-                            <div className="costs-breakdown-title-top">
-                              <h3 className="costs-panel-title">{t("breakdown")}</h3>
-                              <span className="costs-breakdown-range">{t(PRESET_KEYS[preset])}</span>
-                            </div>
-                            <div className="costs-breakdown-title-bottom">
-                              <span className="costs-breakdown-amount">
-                                {formatCents(data.summary.spendCents)}
-                              </span>
-                              <span className="costs-breakdown-budget">
-                                {data.summary.budgetCents > 0
-                                  ? `/ ${formatCents(data.summary.budgetCents)}`
-                                  : t("unlimitedBudget")}
-                              </span>
-                              {data.summary.budgetCents > 0 && (
-                                <span className="costs-breakdown-utilized">
-                                  {t("utilized", { pct: data.summary.utilizationPercent })}
-                                </span>
-                              )}
-                            </div>
-                            {data.summary.budgetCents > 0 && (
-                              <div className="costs-breakdown-bar-wrap">
-                                <div
-                                  className={`costs-breakdown-bar ${barVariant}`}
-                                  style={{ width: `${Math.min(100, data.summary.utilizationPercent)}%` }}
-                                  role="progressbar"
-                                  aria-label={t("budgetUtilizationProgressbar")}
-                                  aria-valuemin={0}
-                                  aria-valuemax={100}
-                                  aria-valuenow={Math.min(100, Math.max(0, data.summary.utilizationPercent))}
-                                />
-                              </div>
-                            )}
-                            {data.summary.forecast && (
-                              <div className="costs-forecast">
-                                <p>
-                                  {data.summary.budgetCents > 0
-                                    ? t("forecastMonthProjectedWithBudget", {
-                                        amount: formatCents(data.summary.forecast.monthProjectedSpendCents),
-                                        pct: data.summary.forecast.monthProjectedUtilizationPercent,
-                                      })
-                                    : t("forecastMonthProjectedNoBudget", {
-                                        amount: formatCents(data.summary.forecast.monthProjectedSpendCents),
-                                      })}
-                                </p>
-                                {data.summary.budgetCents > 0 &&
-                                  data.summary.forecast.likelyMonthBudgetBreach && (
-                                    <p className="costs-forecast-alert">{t("forecastLikelyBreach")}</p>
-                                  )}
-                                {data.summary.forecast.spendSpikeVsPreviousWeek && (
-                                  <p className="costs-forecast-alert">{t("forecastSpendSpike")}</p>
-                                )}
-                                <p className="costs-forecast-week">
-                                  {t("forecastWeekCompare", {
-                                    last: formatCents(data.summary.forecast.last7DaysSpendCents),
-                                    prev: formatCents(data.summary.forecast.previous7DaysSpendCents),
-                                  })}
-                                </p>
-                              </div>
-                            )}
-                          </div>
+                        <TabsTrigger value="agent">{t("byAgent")}</TabsTrigger>
+                        <TabsTrigger value="project">{t("byProject")}</TabsTrigger>
+                      </TabsList>
+                    </div>
 
-                          <TabsList
-                            variant="default"
-                            align="start"
-                            aria-label={t("breakdownTabsLabel")}
-                            className="costs-breakdown-toggle"
-                          >
-                            <TabsTrigger value="agent">{t("byAgent")}</TabsTrigger>
-                            <TabsTrigger value="project">{t("byProject")}</TabsTrigger>
-                          </TabsList>
+                    <TabsContent value="agent" className="costs-tabs-content">
+                      <TokenUsageByAgentChart data={data.byAgent} totalTokenSummary={totalTokenSummary} />
+                    </TabsContent>
+                    <TabsContent value="project" className="costs-tabs-content">
+                      <TokenUsageByProjectChart data={data.byProject} totalTokenSummary={totalTokenSummary} />
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* 右：金額明細 + 列表 */}
+            <div className="costs-insights-right">
+              <Card className="costs-glass-panel">
+                <CardContent className="costs-panel">
+                  <Tabs
+                    value={breakdownView}
+                    onValueChange={(v) => setBreakdownView(v as BreakdownView)}
+                  >
+                    {/* Header：金額 Hero */}
+                    <div className="costs-breakdown-header">
+                      <div className="costs-breakdown-title-wrap">
+                        <div className="costs-breakdown-title-top">
+                          <h3 className="costs-panel-title">{t("breakdown")}</h3>
+                          <span className="costs-breakdown-range">{t(PRESET_KEYS[preset])}</span>
+                        </div>
+                        <div className="costs-breakdown-title-bottom">
+                          <span className="costs-breakdown-amount">
+                            {formatCents(data.summary.spendCents)}
+                          </span>
+                          <span className="costs-breakdown-budget">
+                            {data.summary.budgetCents > 0
+                              ? `/ ${formatCents(data.summary.budgetCents)}`
+                              : t("unlimitedBudget")}
+                          </span>
+                          {data.summary.budgetCents > 0 && (
+                            <span className="costs-breakdown-utilized">
+                              {t("utilized", { pct: data.summary.utilizationPercent })}
+                            </span>
+                          )}
                         </div>
 
-                        <TabsContent value="agent" className="costs-breakdown-body costs-tabs-content">
-                          {data.byAgent.length === 0 ? (
-                            <p className="costs-panel-empty">{t("noCostEventsYet")}</p>
-                          ) : (
-                            <div className="costs-breakdown-list">
-                              {data.byAgent.map((row) => (
-                                <div key={row.agentId} className="costs-breakdown-item">
-                                  <div className="costs-breakdown-item-top">
-                                    <div className="costs-breakdown-item-left">
-                                      <Identity name={row.agentName ?? row.agentId} size="sm" />
-                                      {row.agentStatus === "terminated" && (
-                                        <StatusBadge status="terminated" />
-                                      )}
-                                    </div>
-                                    <div className="costs-breakdown-item-right">
-                                      <span className="costs-breakdown-item-amount">
-                                        {formatCents(row.costCents)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="costs-breakdown-item-sub">
-                                    <span className="costs-breakdown-item-tokens">
-                                      {t("inOutTok", {
-                                        in: formatTokens(row.inputTokens),
-                                        out: formatTokens(row.outputTokens),
-                                      })}
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </TabsContent>
+                        {/* 進度條 */}
+                        {data.summary.budgetCents > 0 && (
+                          <div className="costs-breakdown-bar-wrap">
+                            <div
+                              className={`costs-breakdown-bar ${barVariant}`}
+                              style={{ width: `${Math.min(100, data.summary.utilizationPercent)}%` }}
+                              role="progressbar"
+                              aria-label={t("budgetUtilizationProgressbar")}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-valuenow={Math.min(100, Math.max(0, data.summary.utilizationPercent))}
+                            />
+                          </div>
+                        )}
 
-                        <TabsContent value="project" className="costs-breakdown-body costs-tabs-content">
-                          {data.byProject.length === 0 ? (
-                            <p className="costs-panel-empty">{t("noProjectCostsYet")}</p>
-                          ) : (
-                            <div className="costs-breakdown-list">
-                              {data.byProject.map((row) => (
-                                <div key={row.projectId ?? "na"} className="costs-breakdown-item">
-                                  <div className="costs-breakdown-item-top">
-                                    <div className="costs-breakdown-item-left">
-                                      <span className="costs-breakdown-item-name">
-                                        {row.projectName ?? row.projectId ?? t("unattributed")}
-                                      </span>
-                                    </div>
-                                    <div className="costs-breakdown-item-right">
-                                      <span className="costs-breakdown-item-amount">
-                                        {formatCents(row.costCents)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="costs-breakdown-item-sub">
-                                    <span className="costs-breakdown-item-tokens">
-                                      {t("inOutTok", {
-                                        in: formatTokens(row.inputTokens),
-                                        out: formatTokens(row.outputTokens),
-                                      })}
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </TabsContent>
-                      </Tabs>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
+                        {/* 預測資訊（精簡版，大數字已在 KPI 卡片呈現） */}
+                        {data.summary.forecast && (
+                          <div className="costs-forecast">
+                            {data.summary.forecast.likelyMonthBudgetBreach && (
+                              <p className="costs-forecast-alert">{t("forecastLikelyBreach")}</p>
+                            )}
+                            {data.summary.forecast.spendSpikeVsPreviousWeek && (
+                              <p className="costs-forecast-alert">{t("forecastSpendSpike")}</p>
+                            )}
+                            <p className="costs-forecast-week">
+                              {t("forecastWeekCompare", {
+                                last: formatCents(data.summary.forecast.last7DaysSpendCents),
+                                prev: formatCents(data.summary.forecast.previous7DaysSpendCents),
+                              })}
+                            </p>
+                          </div>
+                        )}
+                      </div>
 
+                      <TabsList
+                        variant="default"
+                        align="start"
+                        aria-label={t("breakdownTabsLabel")}
+                        className="costs-breakdown-toggle"
+                      >
+                        <TabsTrigger value="agent">{t("byAgent")}</TabsTrigger>
+                        <TabsTrigger value="project">{t("byProject")}</TabsTrigger>
+                      </TabsList>
+                    </div>
+
+                    {/* 明細列表 */}
+                    <TabsContent value="agent" className="costs-breakdown-body costs-tabs-content">
+                      {data.byAgent.length === 0 ? (
+                        <p className="costs-panel-empty">{t("noCostEventsYet")}</p>
+                      ) : (
+                        <div className="costs-breakdown-list">
+                          {data.byAgent.map((row) => (
+                            <div key={row.agentId} className="costs-breakdown-item">
+                              <div className="costs-breakdown-item-top">
+                                <div className="costs-breakdown-item-left">
+                                  <Identity name={row.agentName ?? row.agentId} size="sm" />
+                                  {row.agentStatus === "terminated" && (
+                                    <StatusBadge status="terminated" />
+                                  )}
+                                </div>
+                                <div className="costs-breakdown-item-right">
+                                  <span className="costs-breakdown-item-amount">
+                                    {formatCents(row.costCents)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="costs-breakdown-item-sub">
+                                <span className="costs-breakdown-item-tokens">
+                                  {t("inOutTok", {
+                                    in: formatTokens(row.inputTokens),
+                                    out: formatTokens(row.outputTokens),
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="project" className="costs-breakdown-body costs-tabs-content">
+                      {data.byProject.length === 0 ? (
+                        <p className="costs-panel-empty">{t("noProjectCostsYet")}</p>
+                      ) : (
+                        <div className="costs-breakdown-list">
+                          {data.byProject.map((row) => (
+                            <div key={row.projectId ?? "na"} className="costs-breakdown-item">
+                              <div className="costs-breakdown-item-top">
+                                <div className="costs-breakdown-item-left">
+                                  <span className="costs-breakdown-item-name">
+                                    {row.projectName ?? row.projectId ?? t("unattributed")}
+                                  </span>
+                                </div>
+                                <div className="costs-breakdown-item-right">
+                                  <span className="costs-breakdown-item-amount">
+                                    {formatCents(row.costCents)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="costs-breakdown-item-sub">
+                                <span className="costs-breakdown-item-tokens">
+                                  {t("inOutTok", {
+                                    in: formatTokens(row.inputTokens),
+                                    out: formatTokens(row.outputTokens),
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* ── 進階歸因（Billing Code / Request Depth） ── */}
           <section className="costs-advanced-section" aria-labelledby="costs-advanced-heading">
             <h2 id="costs-advanced-heading" className="costs-advanced-heading">
               {t("advancedAttribution")}
             </h2>
             <p className="costs-attribution-hint">{t("attributionHint")}</p>
             <div className="costs-panels-grid">
-              <Card>
+              <Card className="costs-glass-panel">
                 <CardContent className="costs-panel costs-advanced-chart-wrap">
                   <SpendByBillingCodeChart data={data.byBillingCode} />
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="costs-glass-panel">
                 <CardContent className="costs-panel costs-advanced-chart-wrap">
                   <SpendByRequestDepthChart data={data.byRequestDepth} />
                 </CardContent>
@@ -491,8 +556,9 @@ export function Costs() {
             </div>
           </section>
 
+          {/* ── 違規紀錄 ── */}
           {data.summary.breachEvents != null && (
-            <Card>
+            <Card className="costs-glass-panel">
               <CardContent className="costs-panel">
                 <h3 className="costs-panel-title">{t("breachHistory")}</h3>
                 {(data.summary.breachEvents?.length ?? 0) === 0 ? (
@@ -539,13 +605,15 @@ export function Costs() {
             </Card>
           )}
 
-          <Card>
+          {/* ── 預算政策 ── */}
+          <Card className="costs-glass-panel">
             <CardContent className="costs-panel">
               <BudgetPoliciesSection companyId={selectedCompanyId} />
             </CardContent>
           </Card>
 
-          <Card>
+          {/* ── 公司限額設定 ── */}
+          <Card className="costs-glass-panel">
             <CardContent className="costs-panel">
               <h3 className="costs-panel-title">{t("companyLimits")}</h3>
               <p className="costs-limits-desc">{t("tokenLimitDescription")}</p>

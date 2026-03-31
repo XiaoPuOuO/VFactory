@@ -1,0 +1,93 @@
+# Change Log: 2026-04-01 07:27
+
+## [Modified] ui/src/pages/Costs.css
+
+**全面重寫為 Apple HIG + Glassmorphism 設計系統**
+
+- 刪除所有舊有平淡樣式，以 Apple Finance/Health App widget 視覺語言重建
+- 新增 CSS token：`--costs-blue`（#0a84ff）、`--costs-green`（#34c759）、`--costs-orange`（#ff9500）、`--costs-red`（#ff3b30）、`--costs-purple`（#bf5af2）
+- **KPI 摘要卡片（`.costs-kpi-card`）**：
+  - `border-radius: 20px`，`backdrop-filter: blur(24px)` Glassmorphism 效果
+  - `linear-gradient` 多層背景，頂部光澤線 `::before` 偽元素
+  - hover 動畫：`translateY(-3px)` + `box-shadow` 加深
+  - KPI 數字 `font-size: 2rem`，`letter-spacing: -0.03em`
+  - Icon 色彩 token：`.costs-kpi-icon--blue/green/orange/purple`
+- **Glass Panel（`.costs-glass-panel`）**：
+  - 統一取代舊 `<Card>` 外觀，`border-radius: 20px`，`backdrop-filter: blur(24px)`
+- **金額 Hero（`.costs-breakdown-amount`）**：
+  - `font-size: 2.125rem`，`letter-spacing: -0.04em`
+  - `background-clip: text`，漸層文字效果（`linear-gradient(135deg, ...)` `-webkit-text-fill-color: transparent`）
+- **進度條（`.costs-breakdown-bar`）**：
+  - 高度從 0.5rem 增至 0.625rem
+  - 各狀態改為漸層色 + `box-shadow` 發光效果（`_green`, `_yellow`, `_red`）
+- **明細列表（`.costs-breakdown-item`）**：
+  - `border-radius: 14px`，backdrop 模糊背景
+  - hover：`translateY(-1px)` + `box-shadow` 提升感
+- **iOS-style Toggle Switch（`.costs-toggle-*`）**：
+  - 以純 CSS 實現 44×24px iOS 風格開關
+  - 選中狀態：`--costs-blue` + `box-shadow` 發光
+  - 滑塊從 Governance 移植，cubic-bezier spring 動畫
+- **Policy Card（`.costs-policy-card`）**：
+  - Apple Inset Grouped 列表卡片風格
+  - 右方含金額、toggle、Trash2 icon 刪除按鈕
+  - 刪除按鈕 hover 變紅色（`#ff3b30`）
+- **on-exceed Badge（`.costs-policy-badge--*`）**：
+  - record_only → 藍色；block → 橙色；pause → 紅色
+- **公司限額輸入框（`.costs-limits-input`）**：
+  - `border-radius: 12px`，`backdrop-filter: blur(8px)`
+  - focus 時：`--costs-blue` 邊框 + `box-shadow`
+- **違規紀錄表格**：升級為圓角容器、uppercase 標頭、hover row 效果
+
+---
+
+## [Modified] ui/src/pages/Costs.tsx
+
+**重寫頁面結構，加入 KPI 卡片群組**
+
+- 新增 import：`TrendingUp`、`Cpu`（lucide-react）
+- **新增 `costs-kpi-grid` 區塊**（在 toolbar 下方、主要洞察上方）：
+  - 3 欄卡片：本期支出（DollarSign/blue）、月底預測（TrendingUp/orange）、Token 總量（Cpu/purple）
+  - 本期支出：顯示 `formatCents(data.summary.spendCents)`，副標為利用率
+  - 月底預測：`forecast.monthProjectedSpendCents`，若有潛在超標顯示 `.costs-kpi-sub--alert` 紅色警告
+  - Token 總量：`formatTokens(totalTokens)`，副標為 AI 員工數量
+- 所有主要 `<Card>` 改為 `<Card className="costs-glass-panel">` 套用 Glassmorphism
+- 移除 `costs-panel` class 的舊 `<CardContent>`，改為套用新樣式系統
+- 預測詳情資訊精簡化（主要數字已移至 KPI 卡片呈現）
+- `totalTokens` useMemo 新增計算（byAgent 輸入+輸出 token 加總）
+
+---
+
+## [Modified] ui/src/components/BudgetPoliciesSection.tsx
+
+**重寫為 Apple Inset Grouped 清單**
+
+- 移除舊 `<table>` + `<input type="checkbox">` 結構
+- 新增 `import { Trash2 } from "lucide-react"` 圖標刪除按鈕
+- 新增 `getOnExceedBadgeClass()` 工具函式：依 `onExceed` 值回傳對應 badge CSS class
+- 政策清單改為 `.costs-policy-list`（`role="list"`）容器
+  - 每個政策改為 `.costs-policy-card`（`role="listitem"`）卡片佈局
+  - 左側：`.costs-policy-card-title`（範疇 + 目標名稱）、`.costs-policy-card-meta`（on-exceed badge）
+  - 右側：金額、iOS toggle switch、Trash2 刪除按鈕
+- Toggle 替換舊 checkbox：`<label class="costs-toggle-wrapper">` + 隱藏的 `costs-toggle-input` + `costs-toggle-slider` 純 CSS 滑塊
+- 刪除按鈕：`<button class="costs-policy-delete-btn">`，hover 變紅，aria-label 保留
+- 表單新增 `costs-budget-policies-form` 改為 glass inset 背景
+
+---
+
+## [Modified] ui/src/styles/ui.css
+
+**升級 ui-cost-chart-* 橫條圖樣式**
+
+- `.ui-cost-chart-empty`：`font-size` 0.75rem → 0.9rem，`text-align: center`，加入 `padding`
+- `.ui-cost-chart-row`：
+  - `gap` 0.5rem → 0.625rem，`min-height` 24px → 28px
+  - 新增 `border-radius: 10px`、`padding: 0.25rem 0.375rem`
+  - 新增 `transition: background 0.18s ease` hover 背景效果
+- `.ui-cost-chart-label`：`font-size` 10px → 0.8rem，`font-weight: 500`，`width` 6rem → 6.5rem，hover 顏色過渡
+- `.ui-cost-chart-bar-wrap`：`height` 1.25rem → 1.5rem，`border-radius` 0.25rem → 6px，hover 背景加深 50%→70%
+- `.ui-cost-chart-bar-segment`：`transition` 加入 `cubic-bezier(0.25, 0.8, 0.25, 1)`，hover 時 `filter: brightness(1.15) saturate(1.1)`
+- `.ui-cost-chart-value`：`font-size` 10px → 0.78rem，`font-weight: 600`，hover 顏色過渡
+- `.ui-cost-chart-legend`：`gap` 0.75rem → 1rem，separator 改為 `color-mix 60%`
+- `.ui-cost-chart-legend-item`：`font-size` 9px → 0.75rem，`font-weight: 500`，`gap` 0.25rem → 0.375rem
+- `.ui-cost-chart-legend-dot`：尺寸 6px → 8px
+- `.ui-cost-chart-total-summary`：`font-size` 9px → 0.72rem，`line-height` 1.2 → 1.3

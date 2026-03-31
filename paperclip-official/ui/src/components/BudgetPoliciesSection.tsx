@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BudgetPolicy } from "@paperclipai/shared";
+import { Trash2 } from "lucide-react";
 import { costsApi } from "../api/costs";
 import { projectsApi } from "../api/projects";
 import { queryKeys } from "../lib/queryKeys";
@@ -9,6 +10,19 @@ import { formatCents } from "../lib/utils";
 import { Button } from "@/components/ui/button";
 
 type ScopeForm = "project" | "billing_code" | "company";
+
+/**
+ * 取得 on-exceed 對應的 badge CSS class。
+ * @param onExceed - 政策超出預算時的行為
+ */
+function getOnExceedBadgeClass(onExceed: BudgetPolicy["onExceed"]): string {
+  switch (onExceed) {
+    case "record_only":            return "costs-policy-badge costs-policy-badge--record";
+    case "block_new_runs_for_scope": return "costs-policy-badge costs-policy-badge--block";
+    case "pause_agents":           return "costs-policy-badge costs-policy-badge--pause";
+    default:                       return "costs-policy-badge costs-policy-badge--record";
+  }
+}
 
 export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
   const { t } = useTranslation("costs");
@@ -95,6 +109,7 @@ export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
       </h3>
       <p className="costs-limits-desc">{t("budgetPoliciesDescription")}</p>
 
+      {/* ── 新增政策表單（Apple 精緻 glass inset card） ── */}
       <form
         className="costs-budget-policies-form"
         onSubmit={(e) => {
@@ -104,6 +119,7 @@ export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
         }}
       >
         <div className="costs-budget-policies-row">
+          {/* 範疇類型 */}
           <label className="costs-limits-label">
             {t("budgetPolicyScope")}
             <select
@@ -117,6 +133,8 @@ export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
               <option value="company">{t("budgetPolicyScopeCompany")}</option>
             </select>
           </label>
+
+          {/* 條件性：選擇專案 */}
           {scopeType === "project" && (
             <label className="costs-limits-label">
               {t("budgetPolicyProject")}
@@ -135,6 +153,8 @@ export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
               </select>
             </label>
           )}
+
+          {/* 條件性：帳務代碼 */}
           {scopeType === "billing_code" && (
             <label className="costs-limits-label">
               {t("budgetPolicyBillingCode")}
@@ -146,6 +166,8 @@ export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
               />
             </label>
           )}
+
+          {/* 預算上限 */}
           <label className="costs-limits-label">
             {t("budgetPolicyLimitCents")}
             <input
@@ -157,6 +179,8 @@ export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
               onChange={(e) => setLimitCents(e.target.value)}
             />
           </label>
+
+          {/* 超出預算行為 */}
           <label className="costs-limits-label">
             {t("budgetPolicyOnExceed")}
             <select
@@ -171,9 +195,11 @@ export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
             </select>
           </label>
         </div>
+
         <Button type="submit" size="sm" disabled={createMutation.isPending}>
           {createMutation.isPending ? t("saving", { ns: "common" }) : t("budgetPolicyCreate")}
         </Button>
+
         {formError && (
           <p className="costs-limits-error" role="alert">
             {formError}
@@ -181,66 +207,79 @@ export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
         )}
       </form>
 
+      {/* ── 政策清單（Apple Inset Grouped 卡片風格） ── */}
       {isLoading ? (
         <p className="costs-panel-empty">{t("loading", { ns: "common" })}</p>
       ) : policies.length === 0 ? (
         <p className="costs-panel-empty">{t("budgetPoliciesEmpty")}</p>
       ) : (
-        <div className="costs-breach-table-wrap">
-          <table className="costs-breach-table">
-            <caption className="sr-only">{t("budgetPoliciesTitle")}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("budgetPolicyScope")}</th>
-                <th scope="col">{t("budgetPolicyTarget")}</th>
-                <th scope="col">{t("budgetPolicyLimitCents")}</th>
-                <th scope="col">{t("budgetPolicyOnExceed")}</th>
-                <th scope="col">{t("budgetPolicyEnabled")}</th>
-                <th scope="col">{t("budgetPolicyActions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {policies.map((p) => (
-                <tr key={p.id}>
-                  <td>{t(`budgetPolicyScope_${p.scopeType}`)}</td>
-                  <td>
-                    {p.scopeType === "project"
-                      ? projects.find((x) => x.id === p.projectId)?.name ?? p.projectId?.slice(0, 8)
-                      : p.scopeType === "billing_code"
-                        ? p.billingCode ?? "—"
-                        : "—"}
-                  </td>
-                  <td>{formatCents(p.limitCents)}</td>
-                  <td>{t(`budgetPolicyOnExceed_${p.onExceed}`)}</td>
-                  <td>
+        <div className="costs-policy-list" role="list">
+          {policies.map((p) => {
+            /** 顯示名稱：專案名 / billing code / 公司全域 */
+            const targetLabel =
+              p.scopeType === "project"
+                ? (projects.find((x) => x.id === p.projectId)?.name ?? p.projectId?.slice(0, 8) ?? "—")
+                : p.scopeType === "billing_code"
+                  ? (p.billingCode ?? "—")
+                  : "—";
+
+            const scopeLabel = t(`budgetPolicyScope_${p.scopeType}`);
+
+            return (
+              <div key={p.id} className="costs-policy-card" role="listitem">
+                {/* 左：名稱 + Meta */}
+                <div className="costs-policy-card-left">
+                  <span className="costs-policy-card-title">
+                    {scopeLabel}
+                    {targetLabel !== "—" && ` · ${targetLabel}`}
+                  </span>
+                  <span className="costs-policy-card-meta">
+                    {/* On-exceed badge */}
+                    <span className={getOnExceedBadgeClass(p.onExceed)}>
+                      {t(`budgetPolicyOnExceed_${p.onExceed}`)}
+                    </span>
+                  </span>
+                </div>
+
+                {/* 右：金額 + Toggle + 刪除 */}
+                <div className="costs-policy-card-right">
+                  <span className="costs-policy-card-amount">{formatCents(p.limitCents)}</span>
+
+                  {/* iOS-style Toggle Switch */}
+                  <label
+                    className="costs-toggle-wrapper"
+                    aria-label={t("budgetPolicyEnabled")}
+                    title={t("budgetPolicyEnabled")}
+                  >
                     <input
                       type="checkbox"
+                      className="costs-toggle-input"
                       checked={p.enabled}
                       onChange={(e) =>
                         patchMutation.mutate({ id: p.id, body: { enabled: e.target.checked } })
                       }
-                      aria-label={t("budgetPolicyEnabled")}
                     />
-                  </td>
-                  <td>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={deleteMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm(t("budgetPolicyDeleteConfirm"))) {
-                          deleteMutation.mutate(p.id);
-                        }
-                      }}
-                    >
-                      {t("budgetPolicyDelete")}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <span className="costs-toggle-slider" />
+                  </label>
+
+                  {/* 刪除 Icon Button */}
+                  <button
+                    type="button"
+                    className="costs-policy-delete-btn"
+                    disabled={deleteMutation.isPending}
+                    aria-label={t("budgetPolicyDelete")}
+                    onClick={() => {
+                      if (window.confirm(t("budgetPolicyDeleteConfirm"))) {
+                        deleteMutation.mutate(p.id);
+                      }
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>
