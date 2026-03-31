@@ -2,7 +2,7 @@
 
 > **Language / 語言：** [English](../../README.md) · [简体中文](README.zh_CN.md)
 
-一個**可自行部署、生產就緒的 AI 程式碼代理人控制平面** —— fork 自 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)，並擴充了瀏覽器自動化、跨對話持久記憶、更豐富的成本分析，以及多項 UX 改進。
+一個**可自行部署、生產就緒的 AI 程式碼代理人控制平面** —— fork 自 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)，並擴充了**公司層級工作流程**（類 SOP 自動化）、瀏覽器自動化、跨對話持久記憶、更豐富的成本分析，以及多項 UX 改進。上游 [`browser-use`](https://github.com/browser-use/browser-use) 函式庫以 **Git 子模組**置於倉庫根目錄（`browser-use/`），選用的 Python 微服務透過 **可編輯安裝（`-e`）** 與該子模組對齊。
 
 ---
 
@@ -28,6 +28,8 @@ Paperclip 將 AI 程式碼代理人（Claude、Codex、Gemini、Cursor 等）轉
 | Execution Labels | 在 Run 上顯示當前執行狀態的視覺標籤 |
 | Issue / 子任務喚醒 | 子任務完成或 Issue 更新時，自動喚醒父代理人 |
 | 可調整寬度側邊欄 | 整個 UI 中可拖曳調整的側邊欄面板 |
+| 公司工作流程 | 視覺化流程編輯、執行紀錄、Worker 審核與可選的 LLM Prompt 步驟；側欄與路由為 `/company/workflows`（舊路徑 `/company/skills` 會轉址） |
+| `browser-use` 子模組 | 不再以整包原始碼納入主倉庫 —— 以子模組提交鎖定上游版本；於 `browser-use-service` 內以 `-e ../../browser-use` 安裝 |
 
 ---
 
@@ -62,7 +64,7 @@ Paperclip 將 AI 程式碼代理人（Claude、Codex、Gemini、Cursor 等）轉
 │                                                                   │
 │  路由                            服務                             │
 │  ──────────────────────          ────────────────────────────     │
-│  issues · agents · chat          heartbeat（Run 編排）             │
+│  issues · agents · chat · company-skills · workflow-runs   heartbeat（Run 編排）             │
 │  approvals · costs · goals       agent-memories（跨對話記憶）      │
 │  schedules · projects            browser-use-gateway（HMAC 代理） │
 │  plugins · secrets               realtime（WebSocket 廣播）       │
@@ -135,20 +137,20 @@ Issue 是工作的基本單位，每個 Issue 可以：
 
 **Browser-Use 微服務**（Python / FastAPI）封裝了 [`browser-use`](https://github.com/browser-use/browser-use) 函式庫，並以已簽章的內部 REST API 方式暴露出來。任何代理人都可取得瀏覽器 Session 並執行真實互動。
 
-**可用操作：**
+**可用操作**（皆為 `POST`，並以簽章的 JSON 信封承載參數）：
 
 | 端點 | 功能 |
 |---|---|
 | `POST /v1/sessions/start` | 啟動 Chromium 瀏覽器 Session（headless 或可見模式） |
 | `POST /v1/navigate` | 在 Session 中載入 URL |
-| `GET /v1/state` | 截取當前頁面狀態（DOM 快照、URL、標題） |
-| `POST /v1/click` | 透過選擇器或描述點擊元素 |
+| `POST /v1/state` | 截取當前頁面狀態（DOM 快照、URL、標題） |
+| `POST /v1/click` | 依頁面狀態索引或座標點擊元素 |
 | `POST /v1/type` | 在聚焦元素中輸入文字 |
 | `POST /v1/extract` | 從頁面擷取結構化資料 |
-| `GET /v1/screenshot` | 截圖並以 base64 回傳 |
+| `POST /v1/screenshot` | 截圖並以 base64 回傳 |
 | `POST /v1/sessions/close` | 終止並清理 Session |
 
-**安全模型：** Node 閘道對 Python 服務的每個請求都以 HMAC-SHA256 簽章驗證。必須包含三個 Header：`x-tool-signature`、`x-tool-timestamp` 和 `x-tool-nonce`。時間戳在 ±5 分鐘視窗內驗證以防止重放攻擊。可選的 `x-tool-token` Header 提供第二層驗證。
+**安全模型：** Node 閘道對 Python 服務的每個請求都以 HMAC-SHA256 簽章驗證。必須包含三個 Header：`x-tool-signature`、`x-tool-timestamp` 和 `x-tool-nonce`。時間戳在 ±5 分鐘視窗內驗證；**nonce 需寫入 Redis**（`PAPERCLIP_REDIS_URL` 或 `PAPERCLIP_BROWSER_USE_NONCE_REDIS_URL`）以避免多實例重放。可選的 `x-tool-token` Header 提供第二層驗證。
 
 **除錯模式：** 在 Node 伺服器和 Python 服務兩側都設定 `PAPERCLIP_BROWSER_USE_DEBUG=true`，Session 將以非 headless 模式運行 —— 螢幕上會出現真實的 Chromium 視窗以便目視除錯。
 
@@ -164,6 +166,12 @@ Issue 是工作的基本單位，每個 Issue 可以：
 - 記憶以代理人為單位，可依關鍵字或來源聊天室搜尋
 
 這讓長期運行的代理人能保持連貫性 —— 知道上週做了什麼、做了什麼決策，以及遇到了什麼問題。
+
+---
+
+### 公司工作流程 — 類 SOP 自動化
+
+公司可定義**工作流程**：多步驟流程（條件、審核、HTTP、LLM Prompt、Worker 交接等），附**視覺化編輯器**、**執行紀錄**，並與 heartbeat／代理人 Run 整合。常見用途包含標準作業程序、帶審核的發布與有副作用動作前的人工確認。側欄入口為**工作流程**（`/company/workflows`）；舊書籤 `/company/skills` 仍會轉址。
 
 ---
 
@@ -317,8 +325,24 @@ CLI 是管理 Paperclip 實例的運維人員的主要工具。
 - Node.js ≥ 20，pnpm ≥ 9
 - Python ≥ 3.11
 - PostgreSQL（或本機開發使用 embedded-postgres）
+- **Redis** — 成本快取、工作流程協調，以及 **Browser-Use HMAC nonce** 儲存（與 Paperclip 共用 URL 或單獨指定 nonce 用 URL）
+
+### 複製倉庫
+
+```bash
+git clone --recurse-submodules <你的-fork-或-clone-網址> Paperclip
+cd Paperclip
+```
+
+若先前未帶子模組：
+
+```bash
+git submodule update --init --recursive
+```
 
 ### 1. 啟動 Browser-Use 服務
+
+`requirements.txt` 以可編輯方式安裝倉庫根目錄的 **`browser-use` 子模組**（`-e ../../browser-use`），請先完成上一節 **複製倉庫**。
 
 ```bash
 cd paperclip-official/browser-use-service
@@ -327,7 +351,8 @@ python3 -m venv .venv
 source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 必須與 paperclip-official/.env 中的值一致
+# 必須與 paperclip-official/.env 一致（Redis 為 nonce 防重放所需）
+export PAPERCLIP_REDIS_URL="redis://127.0.0.1:6379"
 export PAPERCLIP_BROWSER_USE_SERVICE_SECRET="your-shared-secret"
 export PAPERCLIP_BROWSER_USE_DEBUG=true    # 可選：顯示瀏覽器視窗
 
@@ -343,6 +368,7 @@ cd paperclip-official
 
 cp .env.example .env
 # 在 .env 中新增：
+# PAPERCLIP_REDIS_URL=redis://127.0.0.1:6379
 # PAPERCLIP_BROWSER_USE_SERVICE_URL=http://127.0.0.1:3001
 # PAPERCLIP_BROWSER_USE_SERVICE_SECRET=<與上方相同的 secret>
 # PAPERCLIP_BROWSER_USE_DEBUG=true   （可選，與服務端保持一致）
@@ -382,15 +408,17 @@ pnpm paperclipai doctor
 ```
 Paperclip/
 ├── README.md                             ← 英文主 README
+├── browser-use/                          ← Git 子模組：上游 browser-use（提交由 gitlink 鎖定）
 ├── documents/
 │   ├── MultiLanguage/
 │   │   ├── README.zh_TW.md               ← 本檔案（繁體中文）
 │   │   └── README.zh_CN.md               ← 簡體中文
 │   └── changeLog/                        ← 自動化變更紀錄
 └── paperclip-official/
+    ├── documents/adr/                    ← 架構決策紀錄（選讀）
     ├── browser-use-service/              ← Python 瀏覽器自動化服務
     │   ├── app.py                        ← FastAPI + HMAC 驗證 + browser-use
-    │   └── requirements.txt
+    │   └── requirements.txt              ← 可編輯安裝：../../browser-use
     ├── cli/                              ← paperclipai CLI
     │   └── src/
     │       ├── index.ts                  ← 指令註冊

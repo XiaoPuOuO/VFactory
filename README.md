@@ -2,7 +2,7 @@
 
 > **Language / 語言：** [繁體中文](documents/MultiLanguage/README.zh_TW.md) · [简体中文](documents/MultiLanguage/README.zh_CN.md)
 
-A **self-hosted, production-ready control plane for AI coding agents** — forked from [paperclipai/paperclip](https://github.com/paperclipai/paperclip) and extended with browser automation, persistent cross-chat memory, richer cost analytics, and several UX improvements.
+A **self-hosted, production-ready control plane for AI coding agents** — forked from [paperclipai/paperclip](https://github.com/paperclipai/paperclip) and extended with **company-level workflows** (SOP-style automation), browser automation, persistent cross-chat memory, richer cost analytics, and several UX improvements. The upstream [`browser-use`](https://github.com/browser-use/browser-use) library is included as a **Git submodule** at repo root (`browser-use/`), and the optional Python microservice installs it in **editable** mode so it tracks that submodule.
 
 ---
 
@@ -28,6 +28,8 @@ This repository is a **custom fork** of the upstream Paperclip project. It prese
 | Execution Labels | Visual labels on runs showing current execution state |
 | Issue / Sub-task Wake-up | When a sub-task completes or an issue is updated, the parent agent is automatically woken up |
 | Resizable Sidebar | Drag-to-resize sidebar panels across the UI |
+| Company workflows | Visual flow editor, run history, worker approvals, and optional LLM-backed prompt steps; UI and routes live under `/company/workflows` (legacy `/company/skills` redirects here) |
+| `browser-use` as Git submodule | Upstream library is not vendored as a flat copy — pin the submodule commit in git, and install it with `-e ../../browser-use` from `browser-use-service` |
 
 ---
 
@@ -62,7 +64,7 @@ Most AI agent tooling falls into one of these traps:
 │                                                                   │
 │  Routes                         Services                          │
 │  ─────────────────────          ──────────────────────────────    │
-│  issues · agents · chat         heartbeat (run orchestration)     │
+│  issues · agents · chat · company-skills · workflow-runs   heartbeat (run orchestration)     │
 │  approvals · costs · goals      agent-memories (cross-chat)       │
 │  schedules · projects           browser-use-gateway (HMAC proxy)  │
 │  plugins · secrets              realtime (WebSocket broadcast)    │
@@ -137,20 +139,20 @@ The server's heartbeat service orchestrates the full execution lifecycle — pro
 
 The **Browser-Use microservice** (Python / FastAPI) wraps the [`browser-use`](https://github.com/browser-use/browser-use) library and exposes it as a signed internal REST API. Any agent can acquire a browser session and perform real interactions.
 
-**Available operations:**
+**Available operations** (all routes use `POST` and a signed JSON body envelope):
 
 | Endpoint | What it does |
 |---|---|
 | `POST /v1/sessions/start` | Launch a Chromium browser session (headless or visible) |
 | `POST /v1/navigate` | Load a URL in the session |
-| `GET /v1/state` | Capture the current page state (DOM snapshot, URL, title) |
-| `POST /v1/click` | Click an element by selector or description |
+| `POST /v1/state` | Capture the current page state (DOM snapshot, URL, title) |
+| `POST /v1/click` | Click an element by index or coordinates (from page state) |
 | `POST /v1/type` | Type text into a focused element |
 | `POST /v1/extract` | Extract structured data from the page |
-| `GET /v1/screenshot` | Take a screenshot and return as base64 |
+| `POST /v1/screenshot` | Take a screenshot and return as base64 |
 | `POST /v1/sessions/close` | Terminate and clean up the session |
 
-**Security model:** Every request from the Node gateway to the Python service is authenticated with HMAC-SHA256 signatures. Three headers are required: `x-tool-signature`, `x-tool-timestamp`, and `x-tool-nonce`. Timestamps are validated within a ±5-minute window to prevent replay attacks. An optional `x-tool-token` header adds a second layer of authentication.
+**Security model:** Every request from the Node gateway to the Python service is authenticated with HMAC-SHA256 signatures. Three headers are required: `x-tool-signature`, `x-tool-timestamp`, and `x-tool-nonce`. Timestamps are validated within a ±5-minute window; **nonces are stored in Redis** (via `PAPERCLIP_REDIS_URL` or `PAPERCLIP_BROWSER_USE_NONCE_REDIS_URL`) to prevent replay across instances. An optional `x-tool-token` header adds a second layer of authentication.
 
 **Debug mode:** Set `PAPERCLIP_BROWSER_USE_DEBUG=true` on both the Node server and the Python service to run sessions in non-headless mode — a real Chromium window will appear on screen for visual debugging.
 
@@ -166,6 +168,12 @@ Agents accumulate a personal memory store that persists across chat rooms and se
 - Memories are scoped per agent and searchable by keyword or source room
 
 This enables long-running agents to maintain continuity — knowing what they worked on last week, what decisions were made, and what problems they encountered.
+
+---
+
+### Company Workflows — SOP-Style Automation
+
+Companies can define **workflows**: multi-step flows (conditions, approvals, HTTP calls, LLM prompt steps, worker hand-offs) with a **visual editor**, **run history**, and integration with heartbeat / agent runs. Typical uses include standard operating procedures, gated releases, and human-in-the-loop steps before side effects execute. The UI entry point is **Workflows** in the company sidebar (`/company/workflows`); older bookmarks to `/company/skills` continue to work via redirect.
 
 ---
 
@@ -291,6 +299,7 @@ The CLI is the primary tool for operators managing a Paperclip instance.
 | Activity | Company-wide activity log |
 | Inbox | Notifications and unread items |
 | Instance Settings | User management, group permissions, SCIM keys, compliance retention, archived companies |
+| Workflows | Company-level SOP / flow definitions, editor, and run timeline; routes under `/company/workflows` (legacy `/company/skills` redirects) |
 | Org Chart | Visual agent hierarchy and reporting structure |
 
 ---
@@ -318,8 +327,24 @@ The CLI is the primary tool for operators managing a Paperclip instance.
 - Node.js ≥ 20, pnpm ≥ 9
 - Python ≥ 3.11
 - PostgreSQL (or use the embedded-postgres option for local development)
+- **Redis** — used for cost caching, workflow coordination, and **browser-use HMAC nonce** storage (same URL as Paperclip or a dedicated nonce URL)
+
+### Clone
+
+```bash
+git clone --recurse-submodules <your-fork-or-clone-url> Paperclip
+cd Paperclip
+```
+
+If you already cloned without submodules:
+
+```bash
+git submodule update --init --recursive
+```
 
 ### 1. Start the Browser-Use Service
+
+`requirements.txt` installs the repo’s **`browser-use` submodule** in editable mode (`-e ../../browser-use`). The submodule must be present (see **Clone** above).
 
 ```bash
 cd paperclip-official/browser-use-service
@@ -328,7 +353,8 @@ python3 -m venv .venv
 source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# These must match the values in paperclip-official/.env
+# Must match paperclip-official/.env (and Redis is required for nonce replay protection)
+export PAPERCLIP_REDIS_URL="redis://127.0.0.1:6379"
 export PAPERCLIP_BROWSER_USE_SERVICE_SECRET="your-shared-secret"
 export PAPERCLIP_BROWSER_USE_DEBUG=true    # optional: show browser window
 
@@ -344,6 +370,7 @@ cd paperclip-official
 
 cp .env.example .env
 # Required additions to .env:
+# PAPERCLIP_REDIS_URL=redis://127.0.0.1:6379
 # PAPERCLIP_BROWSER_USE_SERVICE_URL=http://127.0.0.1:3001
 # PAPERCLIP_BROWSER_USE_SERVICE_SECRET=<same secret as above>
 # PAPERCLIP_BROWSER_USE_DEBUG=true   (optional, match the service side)
@@ -383,15 +410,17 @@ With `PAPERCLIP_BROWSER_USE_DEBUG=true`, a visible Chromium window should appear
 ```
 Paperclip/
 ├── README.md                             ← This file (English)
+├── browser-use/                          ← Git submodule: upstream browser-use (pinned commit)
 ├── documents/
 │   ├── MultiLanguage/
 │   │   ├── README.zh_TW.md               ← Traditional Chinese
 │   │   └── README.zh_CN.md               ← Simplified Chinese
 │   └── changeLog/                        ← Automated change logs
 └── paperclip-official/
+    ├── documents/adr/                    ← Architecture decision records (optional)
     ├── browser-use-service/              ← Python browser automation service
     │   ├── app.py                        ← FastAPI app + HMAC auth + browser-use
-    │   └── requirements.txt
+    │   └── requirements.txt              ← editable install: ../../browser-use
     ├── cli/                              ← paperclipai CLI
     │   └── src/
     │       ├── index.ts                  ← Command registration
