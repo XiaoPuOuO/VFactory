@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parseSkillInvocations } from "../services/skill-invocation-parser.js";
-import { buildSkillInjectionPrompt } from "../services/skill-injection.js";
+import { buildSkillInjectionPrompt, buildWakeContextHaystack } from "../services/skill-injection.js";
 import { parseSkillFrontmatterFromMarkdown } from "@paperclipai/shared";
 
 async function makeTempDir(prefix: string): Promise<string> {
@@ -17,6 +17,77 @@ async function writeSkill(tmpRoot: string, skillDirName: string, skillMarkdown: 
 }
 
 describe("Skill system v0 (parser + injection)", () => {
+  it("buildWakeContextHaystack lowercases wake fields", () => {
+    const h = buildWakeContextHaystack({
+      wakeReason: "Chat_Direct",
+      wakeReasonLabel: "label",
+      source: "x",
+    });
+    expect(h).toContain("chat_direct");
+    expect(h).toContain("label");
+  });
+
+  it("filters passive skills when metadata.passiveWakeHints is set and no match", async () => {
+    const tmpRoot = await makeTempDir("paperclip-skill-hints-");
+    try {
+      await writeSkill(
+        tmpRoot,
+        "passive-always",
+        `---
+name: passive-always
+description: always
+mode: passive
+arguments:
+  - name: x
+    type: string
+    default: a
+prompt: |
+  ALWAYS
+---
+`,
+      );
+      await writeSkill(
+        tmpRoot,
+        "passive-hinted",
+        `---
+name: passive-hinted
+description: hinted
+mode: passive
+metadata:
+  passiveWakeHints:
+    - "issue_assigned"
+arguments:
+  - name: x
+    type: string
+    default: a
+prompt: |
+  HINTED
+---
+`,
+      );
+
+      const noMatch = await buildSkillInjectionPrompt({
+        workspaceCwd: tmpRoot,
+        agentId: "agent-1",
+        companyId: "company-1",
+        context: { wakeReason: "chat_message" },
+      });
+      expect(noMatch).not.toBeNull();
+      expect(noMatch ?? "").toContain("passive-always");
+      expect(noMatch ?? "").not.toContain("passive-hinted");
+
+      const matched = await buildSkillInjectionPrompt({
+        workspaceCwd: tmpRoot,
+        agentId: "agent-1",
+        companyId: "company-1",
+        context: { wakeReason: "issue_assigned" },
+      });
+      expect(matched ?? "").toContain("passive-hinted");
+    } finally {
+      await fs.rm(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
   it("parses slash line when editor encodes trailing space as &#x20;", () => {
     const text = "/code-review-sop&#x20;";
     const invocations = parseSkillInvocations(text);

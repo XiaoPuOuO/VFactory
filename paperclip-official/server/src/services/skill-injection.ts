@@ -3,6 +3,36 @@ import { requiresWorkflowRuntime } from "@paperclipai/shared";
 import { loadSkillRegistryForWorkspace } from "./skill-registry.js";
 import { logger } from "../middleware/logger.js";
 
+/** Exported for tests: compact wake signal for passiveWakeHints matching. */
+export function buildWakeContextHaystack(context: unknown): string {
+  if (context == null || typeof context !== "object") return "";
+  const c = context as Record<string, unknown>;
+  const parts: string[] = [];
+  const push = (v: unknown) => {
+    if (typeof v === "string" && v.trim()) parts.push(v);
+  };
+  push(c.wakeReason);
+  push(c.wakeReasonLabel);
+  push(c.reason);
+  push(c.source);
+  if (typeof c.wakeSource === "string") parts.push(c.wakeSource);
+  if (typeof c.chatMode === "string") parts.push(c.chatMode);
+  const task = c.taskKey;
+  if (typeof task === "string") parts.push(task);
+  return parts.join("\u0001").toLowerCase();
+}
+
+function passiveSkillMatchesWakeHints(frontmatter: SkillFrontmatter, haystack: string): boolean {
+  const hints = frontmatter.metadata?.passiveWakeHints;
+  if (!hints || hints.length === 0) return true;
+  for (const h of hints) {
+    const needle = h.trim().toLowerCase();
+    if (needle.length === 0) continue;
+    if (haystack.includes(needle)) return true;
+  }
+  return false;
+}
+
 export type SkillInvocationInput = {
   name: string;
   args: string[];
@@ -185,10 +215,12 @@ export async function buildSkillInjectionPrompt(args: {
   const all = Array.from(combinedByKey.values());
   if (all.length === 0) return null;
 
+  const wakeHaystack = buildWakeContextHaystack(args.context);
   const passiveSkillsAll = all
     .filter((e) => e.frontmatter.mode === "passive")
     /** `metadata.internal`：不進一般列表／不參與被動注入；主動 `/skill` 引用仍可由下方 active 路徑處理。 */
     .filter((e) => e.frontmatter.metadata?.internal !== true)
+    .filter((e) => passiveSkillMatchesWakeHints(e.frontmatter, wakeHaystack))
     .sort((a, b) => a.name.localeCompare(b.name));
   /** 聊天輕量模式省略被動技能注入以節省 prompt。 */
   const passiveSkills = args.chatLightMode ? [] : passiveSkillsAll;

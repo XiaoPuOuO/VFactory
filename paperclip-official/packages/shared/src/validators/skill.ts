@@ -14,6 +14,7 @@ const skillModeSchema = z.enum(["active", "passive"]);
 const skillMetadataSchema = z
   .object({
     internal: z.boolean().optional(),
+    passiveWakeHints: z.array(z.string().min(1).max(128)).max(48).optional(),
   })
   .strict()
   .optional();

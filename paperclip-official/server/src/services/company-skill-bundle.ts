@@ -28,7 +28,15 @@ const SKILL_BUNDLE_NAMESPACE = "skills/company-skills";
 const SKILL_BUNDLE_ORIGINAL_FILENAME = "company-skills.v0.json";
 const SKILL_BUNDLE_CONTENT_TYPE = "application/json";
 
-const CACHE_TTL_MS = 10_000;
+function resolveCompanySkillsCacheTtlMs(): number {
+  const raw = process.env.HEARTBEAT_COMPANY_SKILLS_CACHE_TTL_MS;
+  if (raw == null || raw.trim() === "") return 10_000;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 0) return 10_000;
+  return Math.min(n, 3_600_000);
+}
+
+const CACHE_TTL_MS = resolveCompanySkillsCacheTtlMs();
 
 type CacheEntry = {
   expiresAt: number;

@@ -78,10 +78,23 @@ export async function pollUntilWorkflowWorkerStepAdvances(
   }
 }
 
+function continuationMinimalEnv(): boolean {
+  const v = process.env.HEARTBEAT_WORKFLOW_CONTINUATION_MINIMAL;
+  return v === "1" || v === "true" || v === "yes";
+}
+
 export function buildWorkflowWorkerContinuationPromptBlock(
   pending: PaperclipWorkflowPendingWorkerContext,
 ): string {
   const p = pending.pendingWorker.payload?.trim() ?? "";
+  if (continuationMinimalEnv()) {
+    return (
+      `\n\n---\n[Workflow worker]\n` +
+      `Run \`${pending.runId}\` step \`${pending.pendingWorker.stepId}\` (${pending.pendingWorker.kind}). ` +
+      `No chat POST while waiting_worker; submit worker-step-result for company \`${pending.companyId}\`.\n` +
+      (p ? `Payload:\n${p}\n` : "")
+    );
+  }
   return (
     `\n\n---\n[Paperclip workflow worker]\n` +
     `Run \`${pending.runId}\` is waiting for this session to execute step \`${pending.pendingWorker.stepId}\` (kind: ${pending.pendingWorker.kind}).\n` +

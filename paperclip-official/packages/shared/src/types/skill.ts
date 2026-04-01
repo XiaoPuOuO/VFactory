@@ -6,6 +6,13 @@ export type SkillMetadata = {
    * Used for internal / WIP skills.
    */
   internal?: boolean;
+  /**
+   * Optional hints for **passive** skill injection: when non-empty, the passive skill
+   * is only prepended to the prompt if at least one hint matches (case-insensitive
+   * substring) the heartbeat wake context string (wakeReason, labels, etc.).
+   * When omitted or empty, passive skills behave as before (subject to global char budget).
+   */
+  passiveWakeHints?: string[];
 };
 
 export type SkillArgumentType = "string" | "number" | "boolean" | "enum" | "json";

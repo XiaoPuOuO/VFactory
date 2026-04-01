@@ -1,0 +1,320 @@
+# Change Log: 2026-04-01 20:18
+
+本檔案為本次提交之「逐檔逐行」變更紀錄（繁中）。行號以 `git diff` 顯示為準。
+
+## 變更總覽（檔案清單）
+
+### Modified
+
+- `paperclip-official/packages/adapters/claude-local/src/server/execute.ts`
+- `paperclip-official/packages/shared/package.json`
+- `paperclip-official/packages/shared/src/types/skill.ts`
+- `paperclip-official/packages/shared/src/validators/skill.ts`
+- `paperclip-official/pnpm-lock.yaml`
+- `paperclip-official/server/src/__tests__/skill-system.test.ts`
+- `paperclip-official/server/src/__tests__/workflow-heartbeat-bridge.test.ts`
+- `paperclip-official/server/src/services/company-skill-bundle.ts`
+- `paperclip-official/server/src/services/heartbeat.ts`
+- `paperclip-official/server/src/services/skill-injection.ts`
+- `paperclip-official/server/src/services/workflow-heartbeat-bridge.ts`
+- `paperclip-official/tsconfig.base.json`
+
+### Created
+
+- `paperclip-official/documents/changeLog/2026-04-01-heartbeat-token-optimization.markdown`
+- `paperclip-official/documents/heartbeat-token-cost-optimization.md`
+- `paperclip-official/scripts/analyze-heartbeat-run-log.mjs`
+- `paperclip-official/server/src/__tests__/agents-instruction-path-cache.test.ts`
+- `paperclip-official/server/src/__tests__/heartbeat-company-projects-context.test.ts`
+- `paperclip-official/server/src/services/agents-instruction-path-cache.ts`
+
+## [Modified] paperclip-official/packages/adapters/claude-local/src/server/execute.ts
+
+- Line 447（hunk 顯示為 -447/+447；unified=0 顯示為 Line 450）：
+  - 將 `proc.stderr.split(...).map((line) => line.trim())` 調整為 `map((line: string) => line.trim())`。
+  - 目的：補齊 callback 參數型別，避免 TypeScript 推斷出 `any` 或在更嚴格設定下產生型別警告。
+
+## [Modified] paperclip-official/packages/shared/package.json
+
+- Line 49（unified=0 顯示新增於 Line 49）：
+  - 於 `devDependencies` 新增 `@types/js-yaml: "^4.0.9"`。
+
+## [Modified] paperclip-official/packages/shared/src/types/skill.ts
+
+- Line 9–15（unified=0 顯示新增於 Line 9 起）：
+  - 在 `SkillMetadata` 內新增欄位 `passiveWakeHints?: string[]`。
+  - 新增對應 JSDoc（7 行）說明其語意：
+    - 當被動技能（`mode: passive`）的 `metadata.passiveWakeHints` **非空**時，只有在 heartbeat wake context（wakeReason / labels 等彙整字串）命中至少一個 hint（不分大小寫 substring）才會被注入。
+    - 若省略或空陣列，行為維持原本的「被動技能按全域字元預算注入」。
+
+## [Modified] paperclip-official/packages/shared/src/validators/skill.ts
+
+- Line 17（unified=0 顯示新增於 Line 17）：
+  - 在 `skillMetadataSchema` 新增 Zod 驗證：
+    - `passiveWakeHints: z.array(z.string().min(1).max(128)).max(48).optional()`
+  - 約束細節：
+    - 每個 hint：最短 1、最長 128。
+    - hint 數量上限：48。
+
+## [Modified] paperclip-official/pnpm-lock.yaml
+
+- Line 267–269（unified=0 顯示新增於 Line 267 起）：
+  - 在 `importers` → `paperclip-official/packages/shared` 的 `devDependencies` 新增：
+    - `@types/js-yaml` specifier `^4.0.9`、解析版本 `4.0.9`。
+
+## [Modified] paperclip-official/server/src/__tests__/skill-system.test.ts
+
+- Line 6：
+  - import 調整：
+    - 從 `../services/skill-injection.js` 由僅 import `buildSkillInjectionPrompt`
+    - 改為同時 import `buildSkillInjectionPrompt, buildWakeContextHaystack`。
+
+- Line 20–31：
+  - 新增測試 `it("buildWakeContextHaystack lowercases wake fields", ...)`：
+    - 建立 context：`wakeReason: "Chat_Direct"`, `wakeReasonLabel: "label"`, `source: "x"`。
+    - 斷言：
+      - haystack 含 `chat_direct`（驗證 toLowerCase 與保留底線）
+      - haystack 含 `label`。
+
+- Line 33–90：
+  - 新增測試 `it("filters passive skills when metadata.passiveWakeHints is set and no match", ...)`：
+    - 建立暫存 workspace 目錄 `paperclip-skill-hints-...`。
+    - 寫入兩個技能：
+      - `passive-always`：`mode: passive`，無 `metadata.passiveWakeHints`，prompt 內容含 `ALWAYS`。
+      - `passive-hinted`：`mode: passive`，`metadata.passiveWakeHints: ["issue_assigned"]`，prompt 內容含 `HINTED`。
+    - Case 1：`context.wakeReason = "chat_message"`
+      - 期望注入結果包含 `passive-always`
+      - 期望注入結果不包含 `passive-hinted`（因 hints 未命中）。
+    - Case 2：`context.wakeReason = "issue_assigned"`
+      - 期望注入結果包含 `passive-hinted`（命中 hints）。
+    - finally：移除暫存目錄（recursive + force）。
+
+## [Modified] paperclip-official/server/src/__tests__/workflow-heartbeat-bridge.test.ts
+
+- Line 1：
+  - import 調整：
+    - 從 `import { describe, expect, it } from "vitest";`
+    - 改為 `import { afterEach, describe, expect, it, vi } from "vitest";`
+
+- Line 5–8：
+  - 新增 `afterEach(() => { vi.unstubAllEnvs(); });`
+  - 目的：每個測試結束後清除 stubbed env，避免相互污染。
+
+- Line 27–43：
+  - 新增測試 `it("buildWorkflowWorkerContinuationPromptBlock is shorter when HEARTBEAT_WORKFLOW_CONTINUATION_MINIMAL is set", ...)`：
+    - 先 `vi.stubEnv("HEARTBEAT_WORKFLOW_CONTINUATION_MINIMAL", "1")`
+    - 產生 continuation block
+    - 斷言：
+      - `block.length < 450`
+      - block 包含 runId
+      - block 包含字串 `worker-step-result`（驗證仍保留關鍵 API 指示）。
+
+## [Modified] paperclip-official/server/src/services/company-skill-bundle.ts
+
+- Line 31：
+  - 將常數 `const CACHE_TTL_MS = 10_000;` 改為由函式解析：
+    - 新增函式 `resolveCompanySkillsCacheTtlMs(): number`（Line 31–38）：
+      - 讀取 env `HEARTBEAT_COMPANY_SKILLS_CACHE_TTL_MS`
+      - 若未設或空白：回傳 `10_000`
+      - `parseInt(raw, 10)`；若非 finite 或 `< 0`：回傳 `10_000`
+      - 上限 clamp：`Math.min(n, 3_600_000)`（最長 1 小時）
+    - `const CACHE_TTL_MS = resolveCompanySkillsCacheTtlMs();`（Line 40）
+
+## [Modified] paperclip-official/server/src/services/heartbeat.ts
+
+- Line 50：
+  - 新增 import：
+    - `resolveAgentsFallbackPathWithMtimeCache` from `./agents-instruction-path-cache.js`
+
+- Line 185–199：
+  - 新增 export 函式 `mapCompanyProjectsForHeartbeatContext(...)` 與其 JSDoc：
+    - 讀取 env `HEARTBEAT_COMPANY_PROJECTS_LIST_MODE`（預設 `"full"`），做 `trim().toLowerCase()`。
+    - 若模式為 `"summary"`：
+      - 對每個 project 只保留 `id/name`，並將 `description` 強制設為 `null`。
+    - 否則（full）：
+      - 以 `{ id, name, description: p.description ?? null }` 輸出，確保 `description` 一律為 `string | null`。
+
+- Line 225–244（原 resolveWorkspaceAgentsFallbackPath 之 upward walk 改造）：
+  - 將「向上尋找 `AgentSetting/agents_fallback.json` 或根目錄 `agents_fallback.json`」的 while 迴圈包進：
+    - `return resolveAgentsFallbackPathWithMtimeCache(workspaceCwd, async () => { ... });`
+  - 變動細節：
+    - 原本：每次 heartbeat 都做逐層 stat 探測。
+    - 現在：由 `agents-instruction-path-cache.ts` 以「workspaceCwd + resolved path 的 mtime」做程序內快取，若 mtime 未變則直接回傳 cached path。
+    - 保留原本 candidates 順序：
+      - `path.join(cursor, AGENT_SETTING_DIR, WORKSPACE_AGENTS_FALLBACK_FILE)`
+      - `path.join(cursor, WORKSPACE_AGENTS_FALLBACK_FILE)`
+    - 保留原本停止條件：`parent === cursor`。
+
+- Line 1631–1657（公司專案列表注入）：
+  - 將原本直接 `companyProjectRows.map(...)` 指派給 `context.paperclipCompanyProjects`
+  - 改為：
+    - 先 map 出 `{ id, name, description: p.description ?? null }`
+    - 再交由 `mapCompanyProjectsForHeartbeatContext(...)` 依 env 決定是否裁剪 description。
+
+- Line 1659–1685（新增 digest log 開關）：
+  - 新增讀取 env `HEARTBEAT_LOG_PROMPT_BUILD_DIGEST`
+  - 若值為 `"1"` / `"true"` / `"yes"`：
+    - 取出 `resolvedConfig.promptTemplate`（若非 string 則視為空字串）
+    - `logger.info({ ... }, "heartbeat prompt build digest")`
+    - 欄位包含：
+      - `runId`
+      - `agentId`
+      - `promptTemplateChars`（字元數）
+      - `skillInjectionChars`（字元數）
+      - `companyProjectsCount`（若為陣列則取 length，否則 0）
+
+- Line 1887–1889（workflow chain index/max 注入 context）：
+  - 在 adapter execute 前新增：
+    - `context.paperclipHeartbeatChainIndex = chainIndex;`
+    - `context.paperclipHeartbeatChainMax = MAX_WORKFLOW_CHAIN_STEPS_PER_HEARTBEAT;`
+
+## [Modified] paperclip-official/server/src/services/skill-injection.ts
+
+- Line 6–30：
+  - 新增並 export `buildWakeContextHaystack(context: unknown): string`（供測試使用）：
+    - 防呆：非 object 則回傳 `""`
+    - 將可用欄位擷取為字串 parts：
+      - `wakeReason`, `wakeReasonLabel`, `reason`, `source`
+      - 以及（若為 string）`wakeSource`, `chatMode`
+      - 以及（若為 string）`taskKey`
+    - 以 `\u0001` 連接並 `toLowerCase()`，形成 case-insensitive 子字串比對用 haystack。
+
+- Line 32–47：
+  - 新增函式 `passiveSkillMatchesWakeHints(frontmatter, haystack): boolean`：
+    - 取得 `frontmatter.metadata?.passiveWakeHints`
+    - 若不存在或空陣列：回傳 `true`（維持舊行為）
+    - 否則逐一檢查：
+      - `needle = h.trim().toLowerCase()`
+      - 空字串跳過
+      - `haystack.includes(needle)` 命中即回傳 `true`
+    - 全部未命中則回傳 `false`
+
+- Line 218（unified=0 顯示新增於 Line 218）：
+  - 在 `buildSkillInjectionPrompt` 內新增：
+    - `const wakeHaystack = buildWakeContextHaystack(args.context);`
+
+- Line 223（unified=0 顯示新增於 Line 223）：
+  - 在被動技能過濾鏈中新增一段：
+    - `.filter((e) => passiveSkillMatchesWakeHints(e.frontmatter, wakeHaystack))`
+  - 使 `metadata.passiveWakeHints` 的技能只在命中 wake 上下文時被動注入。
+
+## [Modified] paperclip-official/server/src/services/workflow-heartbeat-bridge.ts
+
+- Line 81–85：
+  - 新增 `continuationMinimalEnv(): boolean`：
+    - 讀 env `HEARTBEAT_WORKFLOW_CONTINUATION_MINIMAL`
+    - 回傳 `v === "1" || v === "true" || v === "yes"`
+
+- Line 90–97：
+  - 在 `buildWorkflowWorkerContinuationPromptBlock` 內新增「最小化模式」分支：
+    - 若 `continuationMinimalEnv()` 為 true：
+      - 回傳較短的提示區塊（header 為 `[Workflow worker]`）
+      - 仍保留：
+        - runId
+        - stepId
+        - step kind
+        - 「等待期間不要 POST chat；需提交 worker-step-result」指示
+      - payload 非空則附 `Payload:\n${p}\n`
+    - 若 env 未啟用：維持原本較長的 `[Paperclip workflow worker]` 版本。
+
+## [Modified] paperclip-official/tsconfig.base.json
+
+- Line 6（unified=0 顯示新增於 Line 6）：
+  - 新增 `compilerOptions.customConditions: ["development"]`
+  - 目的：允許在 NodeNext 條件匯出情境下，額外使用 `development` 條件做模組解析（以支援開發期差異化入口或條件 exports）。
+
+## [Created] paperclip-official/server/src/services/agents-instruction-path-cache.ts
+
+以下逐行列出新增檔案內容（共 45 行）：
+
+- Line 1：`import fs from "node:fs/promises";`
+- Line 3–6：定義 `CacheEntry` 型別（`path`, `mtimeMs`）。
+- Line 8：建立快取容器 `const pathCache = new Map<string, CacheEntry>();`
+- Line 10–13：新增 JSDoc，說明用途（向上搜尋 AGENTS fallback 結果以 mtime 快取，降低頻繁 heartbeat 的 stat 巡迴成本）。
+- Line 14–44：新增並 export `resolveAgentsFallbackPathWithMtimeCache(workspaceCwd, findPath)`：
+  - Line 18–28：若存在 cached：
+    - `fs.stat(cached.path)` 成功且 `isFile()` 且 `mtimeMs` 未變：直接回傳 cached path。
+    - 若 stat 失敗：刪除快取 `pathCache.delete(workspaceCwd)`。
+  - Line 30–34：執行 `findPath()`：
+    - 若找不到：刪除快取並回傳 null。
+  - Line 35–42：對 found path 做 `fs.stat`：
+    - 若為檔案：寫回 `pathCache.set(workspaceCwd, { path: found, mtimeMs: st.mtimeMs })`
+    - 若 stat 失敗：刪除快取（避免 cache 汙染）。
+  - Line 43：回傳 found。
+
+## [Created] paperclip-official/server/src/__tests__/agents-instruction-path-cache.test.ts
+
+以下逐行列出新增測試檔內容（共 27 行）：
+
+- Line 1–5：import `fs/os/path`、vitest、與 `resolveAgentsFallbackPathWithMtimeCache`。
+- Line 7：`describe("resolveAgentsFallbackPathWithMtimeCache", ...)`
+- Line 8–25：新增測試 `returns cached path without re-invoking find when mtime unchanged`
+  - Line 9–12：建立 tmp dir 與 `AGENTS.md`，寫入 `"x"`。
+  - Line 13–17：建立計數器 `calls` 與 `find` 閉包（每次被呼叫 +1，回傳 agentsPath）。
+  - Line 19–23：連續呼叫兩次 function：
+    - `expect(a).toBe(agentsPath)`
+    - `expect(b).toBe(agentsPath)`
+    - `expect(calls).toBe(1)`（驗證第二次命中快取）
+  - Line 24：清理 tmp dir。
+
+## [Created] paperclip-official/server/src/__tests__/heartbeat-company-projects-context.test.ts
+
+以下逐行列出新增測試檔內容（共 25 行）：
+
+- Line 1–2：import vitest（含 `vi`）與 `mapCompanyProjectsForHeartbeatContext`。
+- Line 4：`describe("mapCompanyProjectsForHeartbeatContext", ...)`
+- Line 5–7：`afterEach` 呼叫 `vi.unstubAllEnvs()`。
+- Line 9–15：測試 `preserves descriptions in full mode`
+  - stub env `HEARTBEAT_COMPANY_PROJECTS_LIST_MODE=full`
+  - 期望輸出保留 `description: "long desc"`。
+- Line 17–23：測試 `strips descriptions in summary mode`
+  - stub env `HEARTBEAT_COMPANY_PROJECTS_LIST_MODE=summary`
+  - 期望輸出將 `description` 變為 `null`。
+
+## [Created] paperclip-official/scripts/analyze-heartbeat-run-log.mjs
+
+以下逐行列出新增腳本內容（共 35 行）：
+
+- Line 1：shebang `#!/usr/bin/env node`
+- Line 2–7：JSDoc 說明用途與使用方法：
+  - 用於離線解析 VFactory run log（`.log`）中的 token summary 行。
+  - `@see documents/heartbeat-token-cost-optimization.md`
+- Line 9：import `fs`（sync）
+- Line 11–15：讀取 CLI 參數：
+  - 若缺少檔案路徑，輸出 `Usage: node analyze-heartbeat-run-log.mjs <run.log>` 並 exit(1)
+- Line 17–18：讀檔並切行（`\n`）
+- Line 20–22：初始化 `input/output/cacheRead` 為 `null`
+- Line 23–31：掃描前 80 行：
+  - 用 regex `/Tokens\s*:\s*input=(\d+),\s*output=(\d+)(?:,\s*cacheRead=(\d+))?/`
+  - 命中後：
+    - `input = Number(m[1])`
+    - `output = Number(m[2])`
+    - `cacheRead = m[3] != null ? Number(m[3]) : null`
+    - `break`
+- Line 33–34：輸出 JSON：
+  - `{ file, inputTokens, outputTokens, cacheReadTokens }`
+  - `console.log(JSON.stringify(out, null, 2))`
+
+## [Created] paperclip-official/documents/heartbeat-token-cost-optimization.md
+
+此新增文件較長，以下列出其主要段落與新增之關鍵逐行內容（可對照檔案原文行號）：
+
+- Line 1：標題「Heartbeat 輸入 Token：計費口徑、Log 欄位與優化開關」
+- Line 5–18：定義 adapter usage 欄位口徑（`inputTokens/outputTokens/cachedInputTokens/cacheReadTokens/cacheWriteTokens`）與內部成本對照關係。
+- Line 19–22：補充「input 仍高但 cacheRead 也很大」的可能原因（工具回傳全文導致新輸入計費）。
+- Line 23–31：環境變數表格新增與說明（均為本次程式碼變更對應的開關）：
+  - `HEARTBEAT_COMPANY_PROJECTS_LIST_MODE`
+  - `HEARTBEAT_COMPANY_SKILLS_CACHE_TTL_MS`
+  - `HEARTBEAT_LOG_PROMPT_BUILD_DIGEST`
+  - `HEARTBEAT_WORKFLOW_CONTINUATION_MINIMAL`
+- Line 32–36：說明技能 `metadata.passiveWakeHints` 的被動注入行為。
+- Line 37–40：說明 AGENTS 路徑快取策略（workspace 路徑 + mtime）。
+- Line 41–44：說明 timer 空轉時不 enqueue 的既有行為與指標 `skippedNoWork`。
+- Line 45–47：指向離線分析腳本 `scripts/analyze-heartbeat-run-log.mjs`。
+
+## [Created] paperclip-official/documents/changeLog/2026-04-01-heartbeat-token-optimization.markdown
+
+- Line 1–14：
+  - 新增一份「摘要式」ChangeLog（針對 heartbeat token 成本優化）：
+    - 列出新增技術說明文件、`passiveWakeHints`、company skill bundle TTL 可調、專案列表 summary 模式、AGENTS fallback path 快取、workflow continuation 提示最小化、context 新增 chain index/max、離線分析腳本等。
+

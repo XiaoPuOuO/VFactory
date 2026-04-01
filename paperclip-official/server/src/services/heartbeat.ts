@@ -47,6 +47,7 @@ import {
   type PaperclipWorkflowPendingWorkerContext,
 } from "./workflow-heartbeat-bridge.js";
 import { loadCompanySkillsForInjection } from "./company-skill-bundle.js";
+import { resolveAgentsFallbackPathWithMtimeCache } from "./agents-instruction-path-cache.js";
 import { agentMemoriesService } from "./agent-memories.js";
 import { issueService } from "./issues.js";
 import {
@@ -181,6 +182,21 @@ export function readContextProjectId(context: Record<string, unknown>): string |
   return readNonEmptyString(context.projectId) ?? readNonEmptyString(context.chatProjectId);
 }
 
+/** @see documents/heartbeat-token-cost-optimization.md — `HEARTBEAT_COMPANY_PROJECTS_LIST_MODE=summary` strips descriptions. */
+export function mapCompanyProjectsForHeartbeatContext(
+  rows: Array<{ id: string; name: string; description: string | null }>,
+): Array<{ id: string; name: string; description: string | null }> {
+  const mode = (process.env.HEARTBEAT_COMPANY_PROJECTS_LIST_MODE ?? "full").trim().toLowerCase();
+  if (mode === "summary") {
+    return rows.map((p) => ({ id: p.id, name: p.name, description: null }));
+  }
+  return rows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description ?? null,
+  }));
+}
+
 function withProjectGovernancePromptTemplate(
   existingTemplate: unknown,
   options?: { chatLight?: boolean },
@@ -206,25 +222,27 @@ function withProjectGovernancePromptTemplate(
 }
 
 async function resolveWorkspaceAgentsFallbackPath(workspaceCwd: string): Promise<string | null> {
-  let cursor = path.resolve(workspaceCwd);
-  while (true) {
-    const candidates = [
-      path.join(cursor, AGENT_SETTING_DIR, WORKSPACE_AGENTS_FALLBACK_FILE),
-      path.join(cursor, WORKSPACE_AGENTS_FALLBACK_FILE),
-    ];
-    for (const candidate of candidates) {
-      try {
-        const stat = await fs.stat(candidate);
-        if (stat.isFile()) return candidate;
-      } catch {
-        // continue with the next candidate
+  return resolveAgentsFallbackPathWithMtimeCache(workspaceCwd, async () => {
+    let cursor = path.resolve(workspaceCwd);
+    while (true) {
+      const candidates = [
+        path.join(cursor, AGENT_SETTING_DIR, WORKSPACE_AGENTS_FALLBACK_FILE),
+        path.join(cursor, WORKSPACE_AGENTS_FALLBACK_FILE),
+      ];
+      for (const candidate of candidates) {
+        try {
+          const stat = await fs.stat(candidate);
+          if (stat.isFile()) return candidate;
+        } catch {
+          // continue with the next candidate
+        }
       }
+      const parent = path.dirname(cursor);
+      if (parent === cursor) break;
+      cursor = parent;
     }
-    const parent = path.dirname(cursor);
-    if (parent === cursor) break;
-    cursor = parent;
-  }
-  return null;
+    return null;
+  });
 }
 
 async function applyHeartbeatInstructionFallback(
@@ -1610,11 +1628,32 @@ export function heartbeatService(db: Db, storage?: StorageService) {
       .where(and(eq(projects.companyId, agent.companyId), isNull(projects.archivedAt)))
       .orderBy(asc(projects.name), asc(projects.id));
 
-    context.paperclipCompanyProjects = companyProjectRows.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description ?? null,
-    }));
+    context.paperclipCompanyProjects = mapCompanyProjectsForHeartbeatContext(
+      companyProjectRows.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description ?? null,
+      })),
+    );
+
+    const logDigestEnv = process.env.HEARTBEAT_LOG_PROMPT_BUILD_DIGEST;
+    if (logDigestEnv === "1" || logDigestEnv === "true" || logDigestEnv === "yes") {
+      const pt =
+        typeof resolvedConfig.promptTemplate === "string" ? resolvedConfig.promptTemplate : "";
+      logger.info(
+        {
+          runId: run.id,
+          agentId: agent.id,
+          promptTemplateChars: pt.length,
+          skillInjectionChars: skillInjection?.length ?? 0,
+          companyProjectsCount: Array.isArray(context.paperclipCompanyProjects)
+            ? context.paperclipCompanyProjects.length
+            : 0,
+        },
+        "heartbeat prompt build digest",
+      );
+    }
+
     const runtimeSessionFallback = taskKey || resetTaskSession ? null : runtime.sessionId;
     const previousSessionDisplayId = truncateDisplayId(
       taskSessionForRun?.sessionDisplayId ??
@@ -1844,6 +1883,9 @@ export function heartbeatService(db: Db, storage?: StorageService) {
         resolvedConfig.promptTemplate = wfPending
           ? `${basePromptTemplate}${buildWorkflowWorkerContinuationPromptBlock(wfPending)}`
           : basePromptTemplate;
+
+        context.paperclipHeartbeatChainIndex = chainIndex;
+        context.paperclipHeartbeatChainMax = MAX_WORKFLOW_CHAIN_STEPS_PER_HEARTBEAT;
 
         adapterResult = await adapter.execute({
           runId: run.id,

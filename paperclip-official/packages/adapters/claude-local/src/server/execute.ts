@@ -447,7 +447,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     const stderrLine =
       proc.stderr
         .split(/\r?\n/)
-        .map((line) => line.trim())
+        .map((line: string) => line.trim())
         .find(Boolean) ?? "";
 
     if ((proc.exitCode ?? 0) === 0) {
