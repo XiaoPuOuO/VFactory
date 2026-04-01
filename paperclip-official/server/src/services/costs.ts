@@ -76,6 +76,8 @@ export interface CostEventExportRow {
   costCents: number;
   inputTokens: number;
   outputTokens: number;
+  cachedReadTokens: number;
+  cachedWriteTokens: number;
   provider: string;
   model: string;
   agentId: string;
@@ -94,6 +96,8 @@ export function formatCostEventsCsv(rows: CostEventExportRow[]): string {
     "costCents",
     "inputTokens",
     "outputTokens",
+    "cachedReadTokens",
+    "cachedWriteTokens",
     "provider",
     "model",
     "agentId",
@@ -113,6 +117,8 @@ export function formatCostEventsCsv(rows: CostEventExportRow[]): string {
         r.costCents,
         r.inputTokens,
         r.outputTokens,
+        r.cachedReadTokens,
+        r.cachedWriteTokens,
         r.provider,
         r.model,
         r.agentId,
@@ -600,6 +606,8 @@ export function costService(db: Db) {
           costCents: costEvents.costCents,
           inputTokens: costEvents.inputTokens,
           outputTokens: costEvents.outputTokens,
+          cachedReadTokens: costEvents.cachedReadTokens,
+          cachedWriteTokens: costEvents.cachedWriteTokens,
           provider: costEvents.provider,
           model: costEvents.model,
           agentId: costEvents.agentId,
@@ -631,6 +639,8 @@ export function costService(db: Db) {
         costCents: r.costCents,
         inputTokens: r.inputTokens,
         outputTokens: r.outputTokens,
+        cachedReadTokens: r.cachedReadTokens,
+        cachedWriteTokens: r.cachedWriteTokens,
         provider: r.provider,
         model: r.model,
         agentId: r.agentId,
@@ -658,6 +668,8 @@ export function costService(db: Db) {
           costCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
           inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
           outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+          cachedReadTokens: sql<number>`coalesce(sum(${costEvents.cachedReadTokens}), 0)::int`,
+          cachedWriteTokens: sql<number>`coalesce(sum(${costEvents.cachedWriteTokens}), 0)::int`,
         })
         .from(costEvents)
         .leftJoin(agents, eq(costEvents.agentId, agents.id))
@@ -737,6 +749,8 @@ export function costService(db: Db) {
           costCents: costCentsExpr,
           inputTokens: sql<number>`coalesce(sum(coalesce((${heartbeatRuns.usageJson} ->> 'inputTokens')::int, 0)), 0)::int`,
           outputTokens: sql<number>`coalesce(sum(coalesce((${heartbeatRuns.usageJson} ->> 'outputTokens')::int, 0)), 0)::int`,
+          cachedReadTokens: sql<number>`coalesce(sum(coalesce((${heartbeatRuns.usageJson} ->> 'cacheReadTokens')::int, 0)), 0)::int`,
+          cachedWriteTokens: sql<number>`coalesce(sum(coalesce((${heartbeatRuns.usageJson} ->> 'cacheWriteTokens')::int, 0)), 0)::int`,
         })
         .from(runProjectLinks)
         .innerJoin(heartbeatRuns, eq(runProjectLinks.runId, heartbeatRuns.id))
@@ -759,6 +773,8 @@ export function costService(db: Db) {
           costCents: sumCost,
           inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
           outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+          cachedReadTokens: sql<number>`coalesce(sum(${costEvents.cachedReadTokens}), 0)::int`,
+          cachedWriteTokens: sql<number>`coalesce(sum(${costEvents.cachedWriteTokens}), 0)::int`,
         })
         .from(costEvents)
         .where(and(...conditions))
@@ -780,6 +796,8 @@ export function costService(db: Db) {
           costCents: sumCost,
           inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
           outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+          cachedReadTokens: sql<number>`coalesce(sum(${costEvents.cachedReadTokens}), 0)::int`,
+          cachedWriteTokens: sql<number>`coalesce(sum(${costEvents.cachedWriteTokens}), 0)::int`,
         })
         .from(costEvents)
         .leftJoin(

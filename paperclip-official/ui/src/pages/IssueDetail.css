@@ -1,14 +1,18 @@
 /**
- * IssueDetail 頁面 — 語意 class，無 Tailwind
+ * IssueDetail 頁面 — Apple HIG 風格
+ * 無 Tailwind。與設計系統 CSS 變數整合。
  */
 
+/* ─── 頁面容器 ─────────────────────────────── */
 .issue-detail-page {
   max-width: 42rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.75rem;
+  padding-bottom: 4rem;
 }
 
+/* ─── 祖先麵包屑 ─────────────────────────────── */
 .issue-detail-ancestors {
   display: flex;
   align-items: center;
@@ -28,36 +32,42 @@
   height: 0.75rem;
   width: 0.75rem;
   flex-shrink: 0;
+  opacity: 0.5;
 }
 
 .issue-detail-ancestors-link {
-  transition: color 0.15s;
+  transition: color 0.15s ease;
   text-overflow: ellipsis;
   overflow: hidden;
   max-width: 200px;
   white-space: nowrap;
+  border-radius: 4px;
+  padding: 1px 4px;
 }
 
 .issue-detail-ancestors-link:hover {
   color: var(--foreground);
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
 }
 
 .issue-detail-ancestors-current {
-  color: color-mix(in oklch, var(--foreground) 60%, transparent);
+  color: color-mix(in oklch, var(--foreground) 55%, transparent);
   text-overflow: ellipsis;
   max-width: 200px;
   white-space: nowrap;
+  padding: 1px 4px;
 }
 
+/* ─── 隱藏 Banner ─────────────────────────────── */
 .issue-detail-hidden-banner {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border-radius: 0.375rem;
-  border: 1px solid color-mix(in oklch, var(--destructive) 30%, transparent);
-  background: color-mix(in oklch, var(--destructive) 10%, transparent);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklch, var(--destructive) 25%, transparent);
+  background: color-mix(in oklch, var(--destructive) 8%, transparent);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
   color: var(--destructive);
 }
 
@@ -67,17 +77,20 @@
   flex-shrink: 0;
 }
 
+/* ─── 區塊 ─────────────────────────────── */
 .issue-detail-section {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.875rem;
 }
 
+/* ─── 來源對話框卡片 ─────────────────────────────── */
 .issue-detail-source-chat {
-  border-radius: 0.5rem;
-  border: 1px solid var(--border);
-  background-color: var(--muted);
-  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+  padding: 0.75rem 1rem;
+  backdrop-filter: blur(8px);
 }
 
 .issue-detail-source-chat-header {
@@ -87,9 +100,10 @@
 }
 
 .issue-detail-source-chat-icon {
-  width: 1rem;
-  height: 1rem;
+  width: 1.125rem;
+  height: 1.125rem;
   color: var(--muted-foreground);
+  flex-shrink: 0;
 }
 
 .issue-detail-source-chat-text {
@@ -98,8 +112,9 @@
 }
 
 .issue-detail-source-chat-title {
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .issue-detail-source-chat-hint {
@@ -111,35 +126,43 @@
 .issue-detail-source-chat-button {
   margin-left: auto;
   white-space: nowrap;
+  border-radius: 8px;
 }
 
+/* ─── 頂部工具列 ─────────────────────────────── */
 .issue-detail-toolbar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
   min-width: 0;
   flex-wrap: wrap;
 }
 
 .issue-detail-identifier {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-family: ui-monospace, monospace;
   color: var(--muted-foreground);
   flex-shrink: 0;
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  border-radius: 5px;
+  padding: 1px 6px;
+  letter-spacing: 0.02em;
 }
 
+/* ─── Live Badge ─────────────────────────────── */
 .issue-detail-live-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
   border-radius: 9999px;
-  background: color-mix(in oklch, var(--chart-3) 10%, transparent);
-  border: 1px solid color-mix(in oklch, var(--chart-3) 30%, transparent);
-  padding: 0.125rem 0.5rem;
+  background: color-mix(in oklch, var(--chart-3) 12%, transparent);
+  border: 1px solid color-mix(in oklch, var(--chart-3) 28%, transparent);
+  padding: 0.1875rem 0.625rem;
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--chart-3);
   flex-shrink: 0;
+  letter-spacing: 0.04em;
 }
 
 .issue-detail-live-dot {
@@ -171,24 +194,25 @@
 
 @keyframes issue-detail-pulse {
   0%, 100% { opacity: 0.75; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(1.1); }
+  50% { opacity: 0.3; transform: scale(1.5); }
 }
 
+/* ─── 專案連結 ─────────────────────────────── */
 .issue-detail-project-link {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
   font-size: 0.75rem;
   color: var(--muted-foreground);
-  transition: color 0.15s;
-  border-radius: 0.25rem;
-  margin: 0 -0.25rem;
-  padding: 0.125rem 0.25rem;
+  transition: all 0.15s ease;
+  border-radius: 6px;
+  padding: 0.1875rem 0.375rem;
   min-width: 0;
 }
 
 .issue-detail-project-link:hover {
   color: var(--foreground);
+  background: color-mix(in oklab, var(--accent) 40%, transparent);
 }
 
 .issue-detail-project-link-icon {
@@ -209,11 +233,11 @@
   gap: 0.25rem;
   font-size: 0.75rem;
   color: var(--muted-foreground);
-  opacity: 0.5;
-  padding: 0.125rem 0.25rem;
-  margin: 0 -0.25rem;
+  opacity: 0.4;
+  padding: 0.1875rem 0.375rem;
 }
 
+/* ─── 標籤 Chips ─────────────────────────────── */
 .issue-detail-labels {
   display: none;
 }
@@ -233,7 +257,8 @@
   border: 1px solid;
   padding: 0.125rem 0.5rem;
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .issue-detail-label-more {
@@ -241,6 +266,7 @@
   color: var(--muted-foreground);
 }
 
+/* ─── 右側屬性面板 Toggle ─────────────────────── */
 .issue-detail-panel-toggle-mobile {
   margin-left: auto;
   flex-shrink: 0;
@@ -270,9 +296,10 @@
   pointer-events: none;
   width: 0;
   overflow: hidden;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s ease;
 }
 
+/* ─── More 選單 ─────────────────────────────── */
 .issue-detail-more-trigger {
   flex-shrink: 0;
 }
@@ -280,6 +307,9 @@
 .issue-detail-popover-content {
   width: 11rem;
   padding: 0.25rem;
+  border-radius: 12px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .issue-detail-delete-btn {
@@ -287,39 +317,45 @@
   align-items: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.375rem 0.5rem;
-  font-size: 0.75rem;
-  border-radius: 0.25rem;
-  transition: background 0.15s;
+  padding: 0.4375rem 0.625rem;
+  font-size: 0.8125rem;
+  border-radius: 8px;
+  transition: background 0.15s ease;
   color: var(--destructive);
   background: transparent;
   border: none;
   cursor: pointer;
   text-align: left;
+  font-weight: 500;
 }
 
 .issue-detail-delete-btn:hover {
-  background: color-mix(in oklch, var(--accent) 50%, transparent);
+  background: color-mix(in oklch, var(--destructive) 10%, transparent);
 }
 
 .issue-detail-toolbar-icon {
   height: 1rem;
   width: 1rem;
+  flex-shrink: 0;
 }
 
+/* ─── 標題與描述 ─────────────────────────────── */
 .issue-detail-title-row {
-  font-size: 1.25rem;
+  font-size: 1.3125rem;
   font-weight: 700;
   min-width: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
 }
 
 .issue-detail-description {
-  font-size: 15px;
-  line-height: 1.75rem;
-  color: var(--foreground);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: color-mix(in oklab, var(--foreground) 85%, transparent);
   min-width: 0;
 }
 
+/* ─── 附件 ─────────────────────────────── */
 .issue-detail-attachments-header {
   display: flex;
   align-items: center;
@@ -351,9 +387,15 @@
 }
 
 .issue-detail-attachment-card {
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  padding: 0.5rem;
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-radius: 10px;
+  padding: 0.625rem 0.75rem;
+  background: color-mix(in oklab, var(--muted) 20%, transparent);
+  transition: background 0.15s ease;
+}
+
+.issue-detail-attachment-card:hover {
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
 }
 
 .issue-detail-attachment-card-header {
@@ -364,10 +406,11 @@
 }
 
 .issue-detail-attachment-link {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .issue-detail-attachment-link:hover {
@@ -379,71 +422,85 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0;
+  padding: 0.25rem;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
 }
 
 .issue-detail-attachment-delete:hover {
   color: var(--destructive);
+  background: color-mix(in oklch, var(--destructive) 10%, transparent);
 }
 
 .issue-detail-attachment-meta {
   font-size: 11px;
   color: var(--muted-foreground);
+  margin-top: 0.125rem;
 }
 
 .issue-detail-attachment-img {
   margin-top: 0.5rem;
   max-height: 14rem;
-  border-radius: 0.25rem;
-  border: 1px solid var(--border);
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
   object-fit: contain;
   background: color-mix(in oklch, var(--accent) 10%, transparent);
 }
 
+/* ─── Tabs ─────────────────────────────── */
 .issue-detail-tabs-wrap {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .issue-detail-tabs-list {
   width: 100%;
   justify-content: flex-start;
-  gap: 0.25rem;
+  gap: 0.125rem;
 }
 
 .issue-detail-tab-trigger {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .issue-detail-tab-empty {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: var(--muted-foreground);
+  padding: 1.5rem 0;
+  text-align: center;
 }
 
+/* ─── Sub-issues 清單 ─────────────────────────────── */
 .issue-detail-subissues-list {
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  border-collapse: collapse;
+  border: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .issue-detail-subissues-list > * + * {
-  border-top: 1px solid var(--border);
+  border-top: 0.5px solid color-mix(in oklab, var(--border) 40%, transparent);
 }
 
 .issue-detail-subissue-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.875rem;
   font-size: 0.875rem;
-  transition: background 0.15s;
+  transition: background 0.15s ease;
 }
 
 .issue-detail-subissue-row:hover {
-  background: color-mix(in oklch, var(--accent) 20%, transparent);
+  background: color-mix(in oklab, var(--accent) 25%, transparent);
 }
 
 .issue-detail-subissue-left {
@@ -455,44 +512,73 @@
 
 .issue-detail-subissue-id {
   font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
   color: var(--muted-foreground);
   flex-shrink: 0;
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
 }
 
 .issue-detail-subissue-title {
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+  font-size: 0.875rem;
 }
 
 .issue-detail-subissue-assignee {
   color: var(--muted-foreground);
   font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
 }
 
+/* ─── Activity 清單 ─────────────────────────────── */
 .issue-detail-activity-list {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 0;
+  border: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .issue-detail-activity-row {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
   color: var(--muted-foreground);
+  padding: 0.5rem 0.875rem;
+  transition: background 0.15s ease;
+}
+
+.issue-detail-activity-row:hover {
+  background: color-mix(in oklab, var(--accent) 20%, transparent);
+}
+
+.issue-detail-activity-row + .issue-detail-activity-row {
+  border-top: 0.5px solid color-mix(in oklab, var(--border) 30%, transparent);
 }
 
 .issue-detail-activity-time {
   margin-left: auto;
   flex-shrink: 0;
+  font-size: 0.75rem;
+  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
 }
 
-/* Collapsible blocks (Linked Approvals, Cost Summary) */
+/* ─── Collapsible (Linked Approvals, Cost Summary) ─── */
 .issue-detail-collapsible {
-  border-radius: 0.5rem;
-  border: 1px solid var(--border);
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+  background: color-mix(in oklab, var(--muted) 15%, transparent);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.issue-detail-collapsible:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .issue-detail-collapsible-trigger {
@@ -500,20 +586,26 @@
   width: 100%;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.875rem;
   text-align: left;
   background: none;
   border: none;
   cursor: pointer;
   font: inherit;
   color: inherit;
+  transition: background 0.15s ease;
+}
+
+.issue-detail-collapsible-trigger:hover {
+  background: color-mix(in oklab, var(--accent) 20%, transparent);
 }
 
 .issue-detail-collapsible-chevron {
   height: 1rem;
   width: 1rem;
   color: var(--muted-foreground);
-  transition: transform 0.2s;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  flex-shrink: 0;
 }
 
 .issue-detail-collapsible-chevron.open {
@@ -522,29 +614,31 @@
 
 .issue-detail-collapsible-label {
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--muted-foreground);
+  letter-spacing: -0.01em;
 }
 
 .issue-detail-collapsible-body {
-  border-top: 1px solid var(--border);
+  border-top: 0.5px solid color-mix(in oklab, var(--border) 40%, transparent);
 }
 
 .issue-detail-collapsible-body.divide > * + * {
-  border-top: 1px solid var(--border);
+  border-top: 0.5px solid color-mix(in oklab, var(--border) 30%, transparent);
 }
 
+/* ─── 審批行 ─────────────────────────────── */
 .issue-detail-approval-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.75rem;
-  transition: background 0.15s;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  transition: background 0.15s ease;
 }
 
 .issue-detail-approval-row:hover {
-  background: color-mix(in oklch, var(--accent) 20%, transparent);
+  background: color-mix(in oklab, var(--accent) 20%, transparent);
 }
 
 .issue-detail-approval-left {
@@ -554,25 +648,32 @@
 }
 
 .issue-detail-approval-type {
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .issue-detail-approval-id {
   font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
   color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
 }
 
 .issue-detail-approval-time {
   color: var(--muted-foreground);
+  font-size: 0.75rem;
 }
 
+/* ─── Cost Summary ─────────────────────────────── */
 .issue-detail-cost-body {
-  border-top: 1px solid var(--border);
-  padding: 0.5rem 0.75rem;
+  border-top: 0.5px solid color-mix(in oklab, var(--border) 40%, transparent);
+  padding: 0.75rem 0.875rem;
 }
 
 .issue-detail-cost-empty {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: var(--muted-foreground);
 }
 
@@ -580,23 +681,27 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .issue-detail-cost-total {
-  font-weight: 500;
+  font-weight: 700;
   color: var(--foreground);
+  letter-spacing: -0.01em;
 }
 
+/* ─── Mobile Sheet ─────────────────────────────── */
 .issue-detail-sheet-content {
   max-height: 85dvh;
   padding-bottom: env(safe-area-inset-bottom);
+  border-radius: 20px 20px 0 0;
 }
 
 .issue-detail-sheet-title {
   font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .issue-detail-sheet-scroll {
@@ -608,6 +713,7 @@
   padding: 1rem 1.5rem 1.5rem;
 }
 
+/* ─── Misc ─────────────────────────────── */
 .issue-detail-file-input {
   position: absolute;
   width: 0;
@@ -619,9 +725,12 @@
 .issue-detail-loading {
   font-size: 0.875rem;
   color: var(--muted-foreground);
+  padding: 2rem 0;
+  text-align: center;
 }
 
 .issue-detail-error {
   font-size: 0.875rem;
   color: var(--destructive);
+  padding: 2rem 0;
 }

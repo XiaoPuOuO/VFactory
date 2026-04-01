@@ -10,7 +10,7 @@ import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
 import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
-import { Activity } from "lucide-react";
+import { Activity, CheckCircle2, XCircle, Clock, AlertTriangle, Bot, CalendarDays, Filter, ChevronRight, Hash } from "lucide-react";
 import "./RunQuality.css";
 
 function defaultRange(): { from: Date; to: Date } {
@@ -18,6 +18,28 @@ function defaultRange(): { from: Date; to: Date } {
   const from = new Date(to);
   from.setDate(from.getDate() - 7);
   return { from, to };
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const isSucceeded = status === "succeeded";
+  const isFailed = ["failed", "error", "terminated"].includes(status);
+  const isTimeout = status === "timed_out";
+  const isBlocked = status === "blocked";
+
+  let Icon = null;
+  let theme = "default";
+  
+  if (isSucceeded) { Icon = CheckCircle2; theme = "success"; }
+  else if (isFailed) { Icon = XCircle; theme = "danger"; }
+  else if (isTimeout) { Icon = Clock; theme = "warning"; }
+  else if (isBlocked) { Icon = AlertTriangle; theme = "warning"; }
+
+  return (
+    <span className={`rq-badge rq-badge-${theme}`}>
+      {Icon && <Icon size={12} strokeWidth={2.5} />}
+      <span className="rq-badge-text">{status}</span>
+    </span>
+  );
 }
 
 export function RunQuality() {
@@ -95,190 +117,259 @@ export function RunQuality() {
   }
 
   return (
-    <div className="run-quality-page">
-      <header className="run-quality-header">
-        <h1 className="run-quality-title">{t("pageTitle")}</h1>
-        <p className="run-quality-subtitle">{t("subtitle")}</p>
+    <div className="rq-page">
+      <header className="rq-header">
+        <div className="rq-header-content">
+          <h1 className="rq-title">{t("pageTitle")}</h1>
+          <p className="rq-subtitle">{t("subtitle")}</p>
+        </div>
       </header>
 
-      <section className="run-quality-filters">
-        <label className="run-quality-field">
-          <span>{t("from")}</span>
-          <input
-            type="datetime-local"
-            value={from.toISOString().slice(0, 16)}
-            onChange={(e) => setRange((r) => ({ ...r, from: new Date(e.target.value) }))}
-          />
-        </label>
-        <label className="run-quality-field">
-          <span>{t("to")}</span>
-          <input
-            type="datetime-local"
-            value={to.toISOString().slice(0, 16)}
-            onChange={(e) => setRange((r) => ({ ...r, to: new Date(e.target.value) }))}
-          />
-        </label>
-        <label className="run-quality-field">
-          <span>{t("agent")}</span>
-          <select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-            <option value="">{t("allAgents")}</option>
-            {(agents ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="run-quality-field">
-          <span>{t("status")}</span>
-          <input
-            type="text"
-            placeholder="succeeded,failed,..."
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          />
-        </label>
+      <section className="rq-controls">
+        <div className="rq-filter-group">
+          <div className="rq-field">
+            <label className="rq-field-label">
+              <CalendarDays size={14} /> {t("from")}
+            </label>
+            <div className="rq-input-wrapper">
+              <input
+                type="datetime-local"
+                className="rq-input rq-datetime"
+                value={from.toISOString().slice(0, 16)}
+                onChange={(e) => setRange((r) => ({ ...r, from: new Date(e.target.value) }))}
+              />
+            </div>
+          </div>
+          <div className="rq-field">
+            <label className="rq-field-label">
+              <CalendarDays size={14} /> {t("to")}
+            </label>
+            <div className="rq-input-wrapper">
+              <input
+                type="datetime-local"
+                className="rq-input rq-datetime"
+                value={to.toISOString().slice(0, 16)}
+                onChange={(e) => setRange((r) => ({ ...r, to: new Date(e.target.value) }))}
+              />
+            </div>
+          </div>
+          <div className="rq-field">
+            <label className="rq-field-label">
+              <Bot size={14} /> {t("agent")}
+            </label>
+            <div className="rq-input-wrapper">
+                <select className="rq-input rq-select" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+                <option value="">{t("allAgents")}</option>
+                {(agents ?? []).map((a) => (
+                    <option key={a.id} value={a.id}>
+                    {a.name}
+                    </option>
+                ))}
+                </select>
+            </div>
+          </div>
+          <div className="rq-field">
+            <label className="rq-field-label">
+              <Filter size={14} /> {t("status")}
+            </label>
+            <div className="rq-input-wrapper">
+                <input
+                type="text"
+                className="rq-input"
+                placeholder="succeeded,failed..."
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                />
+            </div>
+          </div>
+        </div>
       </section>
 
       {summary && (
-        <section className="run-quality-summary-cards">
-          <div className="run-quality-card">
-            <div className="run-quality-card-label">{t("totalRuns")}</div>
-            <div className="run-quality-card-value">{summary.company.totalRuns}</div>
-          </div>
-          <div className="run-quality-card">
-            <div className="run-quality-card-label">{t("succeeded")}</div>
-            <div className="run-quality-card-value">{summary.company.succeeded}</div>
-          </div>
-          <div className="run-quality-card">
-            <div className="run-quality-card-label">{t("failed")}</div>
-            <div className="run-quality-card-value">{summary.company.failed}</div>
-          </div>
-          <div className="run-quality-card">
-            <div className="run-quality-card-label">{t("avgDuration")}</div>
-            <div className="run-quality-card-value">
-              {summary.company.avgDurationMs != null
-                ? `${Math.round(summary.company.avgDurationMs / 1000)}s`
-                : "—"}
+        <section className="rq-summary-grid">
+          <div className="rq-card">
+            <div className="rq-card-icon"><Activity size={16} /></div>
+            <div className="rq-card-content">
+              <div className="rq-card-label">{t("totalRuns")}</div>
+              <div className="rq-card-value">{summary.company.totalRuns}</div>
             </div>
           </div>
-          <div className="run-quality-card">
-            <div className="run-quality-card-label">{t("tokens")}</div>
-            <div className="run-quality-card-value">{summary.company.totalTokens}</div>
+          <div className="rq-card rq-card-success">
+            <div className="rq-card-icon"><CheckCircle2 size={16} /></div>
+            <div className="rq-card-content">
+              <div className="rq-card-label">{t("succeeded")}</div>
+              <div className="rq-card-value text-success">{summary.company.succeeded}</div>
+            </div>
+          </div>
+          <div className="rq-card rq-card-danger">
+            <div className="rq-card-icon"><XCircle size={16} /></div>
+            <div className="rq-card-content">
+              <div className="rq-card-label">{t("failed")}</div>
+              <div className="rq-card-value text-danger">{summary.company.failed}</div>
+            </div>
+          </div>
+          <div className="rq-card">
+            <div className="rq-card-icon"><Clock size={16} /></div>
+            <div className="rq-card-content">
+              <div className="rq-card-label">{t("avgDuration")}</div>
+              <div className="rq-card-value">
+                {summary.company.avgDurationMs != null
+                  ? `${Math.round(summary.company.avgDurationMs / 1000)}s`
+                  : "—"}
+              </div>
+            </div>
+          </div>
+          <div className="rq-card">
+            <div className="rq-card-icon"><Hash size={16} /></div>
+            <div className="rq-card-content">
+              <div className="rq-card-label">{t("tokens")}</div>
+              <div className="rq-card-value">{summary.company.totalTokens}</div>
+            </div>
           </div>
         </section>
       )}
 
-      <section className="run-quality-section">
-        <h2 className="run-quality-section-title">{t("agentComparison")}</h2>
-        <div className="run-quality-table-wrap">
-          <table className="run-quality-table">
-            <thead>
-              <tr>
-                <th>{t("agent")}</th>
-                <th>{t("totalRuns")}</th>
-                <th>{t("succeeded")}</th>
-                <th>{t("failed")}</th>
-                <th>{t("avgDuration")}</th>
-                <th>{t("tokens")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(summary?.agents ?? []).map((row) => (
-                <tr key={row.agentId}>
-                  <td>{agentName(row.agentId)}</td>
-                  <td>{row.totalRuns}</td>
-                  <td>{row.succeeded}</td>
-                  <td>{row.failed}</td>
-                  <td>
-                    {row.avgDurationMs != null ? `${Math.round(row.avgDurationMs / 1000)}s` : "—"}
-                  </td>
-                  <td>{row.totalTokens}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="run-quality-section">
-        <h2 className="run-quality-section-title">{t("errorClusters")}</h2>
-        {clLoading && !clusters ? (
-          <p className="run-quality-muted">{t("loading")}</p>
-        ) : (
-          <div className="run-quality-table-wrap">
-            <table className="run-quality-table">
+      <div className="rq-layout-grid">
+        <section className="rq-section">
+          <div className="rq-section-header">
+            <h2 className="rq-section-title"><Bot size={18} /> {t("agentComparison")}</h2>
+          </div>
+          <div className="rq-table-container">
+            <table className="rq-table">
               <thead>
                 <tr>
-                  <th>{t("cluster")}</th>
-                  <th>{t("count")}</th>
-                  <th>{t("agents")}</th>
+                  <th>{t("agent")}</th>
+                  <th>{t("totalRuns")}</th>
+                  <th>{t("succeeded")}</th>
+                  <th>{t("failed")}</th>
+                  <th>{t("avgDuration")}</th>
+                  <th>{t("tokens")}</th>
                 </tr>
               </thead>
               <tbody>
-                {(clusters ?? []).map((c) => (
-                  <tr key={c.key}>
-                    <td>
-                      <button
-                        type="button"
-                        className="run-quality-cluster-btn"
-                        onClick={() => setClusterKey((k) => (k === c.key ? null : c.key))}
-                      >
-                        {c.errorCode ?? c.normalizedMessage ?? c.key}
-                      </button>
+                {(summary?.agents ?? []).map((row) => (
+                  <tr key={row.agentId} className="rq-tr-hoverable">
+                    <td className="rq-cell-primary">
+                      <div className="rq-agent-name">
+                        <span className="rq-avatar-placeholder">{agentName(row.agentId).charAt(0).toUpperCase()}</span>
+                        {agentName(row.agentId)}
+                      </div>
                     </td>
-                    <td>{c.count}</td>
-                    <td>{c.agentIds.length}</td>
+                    <td>{row.totalRuns}</td>
+                    <td>{row.succeeded > 0 ? <span className="text-success rq-font-medium">{row.succeeded}</span> : 0}</td>
+                    <td>{row.failed > 0 ? <span className="text-danger rq-font-medium">{row.failed}</span> : 0}</td>
+                    <td>
+                      <span className="rq-badge rq-badge-default">
+                        {row.avgDurationMs != null ? `${Math.round(row.avgDurationMs / 1000)}s` : "—"}
+                      </span>
+                    </td>
+                    <td className="rq-text-muted">{row.totalTokens}</td>
                   </tr>
                 ))}
+                {(summary?.agents ?? []).length === 0 && (
+                  <tr><td colSpan={6} className="rq-empty-row">{t("noResults")}</td></tr>
+                )}
               </tbody>
             </table>
           </div>
-        )}
-        {clusterKey && (
-          <p className="run-quality-hint">
-            {t("clusterFilterHint")}{" "}
-            <button type="button" className="run-quality-linkish" onClick={() => setClusterKey(null)}>
-              {t("clearCluster")}
-            </button>
-          </p>
-        )}
-      </section>
+        </section>
 
-      <section className="run-quality-section">
-        <h2 className="run-quality-section-title">{t("timeline")}</h2>
-        {listLoading && !listResp ? (
-          <p className="run-quality-muted">{t("loading")}</p>
-        ) : (
-          <div className="run-quality-table-wrap">
-            <table className="run-quality-table">
+        <section className="rq-section">
+          <div className="rq-section-header">
+            <h2 className="rq-section-title"><AlertTriangle size={18} /> {t("errorClusters")}</h2>
+            {clusterKey && (
+              <button type="button" className="rq-btn-clear" onClick={() => setClusterKey(null)}>
+                {t("clearCluster")}
+              </button>
+            )}
+          </div>
+          <div className="rq-table-container">
+            {clLoading && !clusters ? (
+              <div className="rq-loading-state">{t("loading")}</div>
+            ) : (
+              <table className="rq-table rq-interactive-table">
+                <thead>
+                  <tr>
+                    <th>{t("cluster")}</th>
+                    <th>{t("count")}</th>
+                    <th>{t("agents")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(clusters ?? []).map((c) => {
+                    const isActive = clusterKey === c.key;
+                    return (
+                      <tr 
+                        key={c.key} 
+                        className={`rq-tr-clickable ${isActive ? "rq-tr-active" : ""}`}
+                        onClick={() => setClusterKey((k) => (k === c.key ? null : c.key))}
+                      >
+                        <td className="rq-cell-primary rq-truncate-cell">
+                          <span className="rq-cluster-name" title={c.errorCode ?? c.normalizedMessage ?? c.key}>
+                            {c.errorCode ?? c.normalizedMessage ?? c.key}
+                          </span>
+                        </td>
+                        <td><span className="rq-badge rq-badge-danger">{c.count}</span></td>
+                        <td><span className="rq-text-muted">{c.agentIds.length}</span></td>
+                      </tr>
+                    );
+                  })}
+                  {(clusters ?? []).length === 0 && (
+                    <tr><td colSpan={3} className="rq-empty-row">{t("noResults")}</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="rq-section rq-timeline-section">
+        <div className="rq-section-header">
+          <h2 className="rq-section-title"><Activity size={18} /> {t("timeline")}</h2>
+        </div>
+        <div className="rq-table-container rq-timeline-container">
+          {listLoading && !listResp ? (
+            <div className="rq-loading-state">{t("loading")}</div>
+          ) : (
+            <table className="rq-table rq-timeline-table">
               <thead>
                 <tr>
                   <th>{t("time")}</th>
                   <th>{t("agent")}</th>
                   <th>{t("status")}</th>
                   <th>{t("source")}</th>
-                  <th />
+                  <th className="rq-cell-right"></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRuns.map((r: HeartbeatRun) => (
-                  <tr key={r.id}>
-                    <td>{new Date(r.createdAt).toLocaleString()}</td>
-                    <td>{agentName(r.agentId)}</td>
-                    <td>{r.status}</td>
-                    <td>{r.invocationSource}</td>
+                  <tr key={r.id} className="rq-tr-hoverable">
+                    <td className="rq-text-sm rq-text-muted">{new Date(r.createdAt).toLocaleString()}</td>
+                    <td className="rq-cell-primary">
+                      <div className="rq-agent-name rq-agent-name-sm">
+                        <span className="rq-avatar-placeholder rq-avatar-sm">{agentName(r.agentId).charAt(0).toUpperCase()}</span>
+                        {agentName(r.agentId)}
+                      </div>
+                    </td>
                     <td>
-                      <Link className="run-quality-link" to={`/agents/${r.agentId}/runs/${r.id}`}>
-                        {t("open")}
+                      <StatusBadge status={r.status} />
+                    </td>
+                    <td className="rq-text-sm rq-text-muted">{r.invocationSource}</td>
+                    <td className="rq-cell-right">
+                      <Link className="rq-btn-icon" to={`/agents/${r.agentId}/runs/${r.id}`} aria-label={t("open")}>
+                        <ChevronRight size={16} />
                       </Link>
                     </td>
                   </tr>
                 ))}
+                {filteredRuns.length === 0 && (
+                  <tr><td colSpan={5} className="rq-empty-row">{t("noResults")}</td></tr>
+                )}
               </tbody>
             </table>
-          </div>
-        )}
+          )}
+        </div>
       </section>
     </div>
   );

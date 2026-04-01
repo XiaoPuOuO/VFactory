@@ -1,0 +1,55 @@
+/* ui/src/components/EmptyState.css */
+.ui-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: 3rem;
+  text-align: center;
+  opacity: 0.85;
+  transition: opacity 0.3s ease;
+}
+
+.ui-empty-state:hover {
+  opacity: 1;
+}
+
+.ui-empty-state-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  padding: 1.25rem;
+  border-radius: 9999px;
+  margin-bottom: 1.5rem;
+  color: var(--muted-foreground);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.ui-empty-state-icon-wrap svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  opacity: 0.9;
+}
+
+.ui-empty-state-message {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  margin-bottom: 2rem;
+  letter-spacing: 0.02em;
+  max-width: 24rem;
+  line-height: 1.5;
+}
+
+.ui-empty-state-action {
+  border-radius: 9999px;
+  padding: 0 1.5rem;
+  font-weight: 500;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ui-empty-state-action:active {
+  transform: scale(0.97);
+}

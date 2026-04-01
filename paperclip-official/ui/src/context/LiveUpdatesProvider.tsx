@@ -489,6 +489,8 @@ function handleChatRunStatus(
     status,
     agentId,
     agentName: existing?.agentName ?? null,
+    startedAt: existing?.startedAt ?? null,
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
   };
   const next = [updated, ...prev.filter((r) => r.id !== runId)];
   queryClient.setQueryData(key, next);

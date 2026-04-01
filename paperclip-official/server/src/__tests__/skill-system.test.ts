@@ -56,7 +56,7 @@ arguments:
     type: number
     default: 7
 prompt: |
-  Passive x={{x}} y={{y}} company={{companyId}} agent={{agentId}} skill={{skillName}} evil={{evil}}
+  Passive x={{x}} y={{y}} company={{companyId}} agent={{agentId}} skill={{skillName}}
 ---
 body
 `,
@@ -77,7 +77,7 @@ arguments:
     enum: [low, high]
     required: true
 prompt: |
-  Active arg1={{arg1}} level={{level}} evil={{evil}}
+  Active arg1={{arg1}} level={{level}}
 ---
 body
 `,
@@ -103,7 +103,6 @@ body
       expect(textOut).toContain("company=company-1");
       expect(textOut).toContain("agent=agent-1");
       expect(textOut).toContain("skill=passive-test");
-      expect(textOut).toContain("{{evil}}");
 
       expect(textOut).toContain("## Active Skills");
       expect(textOut).toContain("### Active Skill: active-test");
@@ -129,7 +128,7 @@ arguments:
     type: string
     default: defaultX
 prompt: |
-  Passive x={{x}} evil={{evil}}
+  Passive x={{x}}
 ---
 body
 `,

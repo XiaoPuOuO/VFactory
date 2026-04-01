@@ -58,6 +58,9 @@ export function parseCursorJsonl(stdout: string) {
     inputTokens: 0,
     cachedInputTokens: 0,
     outputTokens: 0,
+    /** Cursor stream-json may report cache read/write separately from legacy cached_input_tokens. */
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
   };
 
   for (const rawLine of stdout.split(/\r?\n/)) {
@@ -86,6 +89,11 @@ export function parseCursorJsonl(stdout: string) {
       usage.cachedInputTokens += asNumber(
         usageObj.cached_input_tokens,
         asNumber(usageObj.cachedInputTokens, asNumber(usageObj.cache_read_input_tokens, 0)),
+      );
+      usage.cacheReadTokens += asNumber(usageObj.cacheReadTokens, asNumber(usageObj.cache_read_tokens, 0));
+      usage.cacheWriteTokens += asNumber(
+        usageObj.cacheWriteTokens,
+        asNumber(usageObj.cache_write_tokens, asNumber(usageObj.cache_write_input_tokens, 0)),
       );
       usage.outputTokens += asNumber(
         usageObj.output_tokens,
@@ -137,6 +145,7 @@ export function parseCursorJsonl(stdout: string) {
         asNumber(tokens.input_tokens, asNumber(tokens.prompt_tokens, 0)),
       );
       usage.cachedInputTokens += asNumber(cache.read, 0);
+      usage.cacheWriteTokens += asNumber(cache.write, 0);
       usage.outputTokens += asNumber(
         tokens.output,
         asNumber(tokens.output_tokens, asNumber(tokens.completion_tokens, 0)),
@@ -159,6 +168,11 @@ export function parseCursorJsonl(stdout: string) {
       usage.cachedInputTokens += asNumber(
         usageObj.cached_input_tokens,
         asNumber(usageObj.cachedInputTokens, asNumber(usageObj.cache_read_input_tokens, 0)),
+      );
+      usage.cacheReadTokens += asNumber(usageObj.cacheReadTokens, asNumber(usageObj.cache_read_tokens, 0));
+      usage.cacheWriteTokens += asNumber(
+        usageObj.cacheWriteTokens,
+        asNumber(usageObj.cache_write_tokens, asNumber(usageObj.cache_write_input_tokens, 0)),
       );
       usage.outputTokens += asNumber(
         usageObj.output_tokens,

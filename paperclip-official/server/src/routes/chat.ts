@@ -161,6 +161,8 @@ export function chatRoutes(db: Db, chatInstance?: ChatServiceInstance) {
         status: heartbeatRuns.status,
         agentId: heartbeatRuns.agentId,
         agentName: agentsTable.name,
+        startedAt: heartbeatRuns.startedAt,
+        createdAt: heartbeatRuns.createdAt,
       })
       .from(heartbeatRuns)
       .innerJoin(agentsTable, eq(heartbeatRuns.agentId, agentsTable.id))

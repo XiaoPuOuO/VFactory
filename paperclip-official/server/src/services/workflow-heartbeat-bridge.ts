@@ -2,7 +2,7 @@
  * 將「同一 agent 上等待 worker 的 workflow run」掛進 heartbeat context，
  * 讓 adapter／提示詞可於單次 session 內呼叫 worker-step-result API 接續步驟（見 ADR）。
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { workflowRuns, type WorkflowPendingWorker } from "@paperclipai/db";
 
@@ -22,6 +22,8 @@ export async function attachWorkflowPendingWorkerContext(
 ): Promise<void> {
   delete context.paperclipWorkflowPendingWorker;
   delete context.paperclipWorkflowSuppressChat;
+  const rawRoomId = context.roomId;
+  const chatRoomId = typeof rawRoomId === "string" && rawRoomId.trim().length > 0 ? rawRoomId : null;
   const [row] = await db
     .select({
       id: workflowRuns.id,
@@ -29,7 +31,13 @@ export async function attachWorkflowPendingWorkerContext(
       pendingWorker: workflowRuns.pendingWorker,
     })
     .from(workflowRuns)
-    .where(and(eq(workflowRuns.agentId, agentId), eq(workflowRuns.status, "waiting_worker")))
+    .where(
+      and(
+        eq(workflowRuns.agentId, agentId),
+        eq(workflowRuns.status, "waiting_worker"),
+        chatRoomId ? eq(workflowRuns.chatRoomId, chatRoomId) : isNull(workflowRuns.chatRoomId),
+      ),
+    )
     .orderBy(desc(workflowRuns.updatedAt))
     .limit(1);
   if (!row?.pendingWorker) return;

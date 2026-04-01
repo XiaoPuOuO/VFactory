@@ -487,6 +487,8 @@ export function ChatRoom() {
                 <ChatTypingBubble
                   key={run.id}
                   agentName={run.agentName ?? undefined}
+                  startedAt={run.startedAt}
+                  createdAt={run.createdAt}
                   bubbleStyle={
                     theme === "dark"
                       ? { backgroundColor: "#e5e7eb", color: "#111827" }
@@ -520,6 +522,8 @@ export function ChatRoom() {
                 <ChatTypingBubble
                   key={run.id}
                   agentName={run.agentName ?? undefined}
+                  startedAt={run.startedAt}
+                  createdAt={run.createdAt}
                   bubbleStyle={
                     theme === "dark"
                       ? { backgroundColor: "#e5e7eb", color: "#111827" }
@@ -755,13 +759,39 @@ export function ChatRoom() {
 /** AI 輸入中／思考中氣泡：頭貼在左、名稱在氣泡上方靠左，版面參考 LINE。 */
 function ChatTypingBubble({
   agentName,
+  startedAt,
+  createdAt,
   bubbleStyle,
 }: {
   agentName?: string;
+  startedAt?: string | null;
+  createdAt?: string;
   bubbleStyle: React.CSSProperties;
 }) {
   const { t } = useTranslation();
   const displayName = agentName?.trim() || "";
+  const [durationStr, setDurationStr] = useState("");
+
+  useEffect(() => {
+    const startTimeStr = startedAt || createdAt;
+    if (!startTimeStr) {
+      setDurationStr("");
+      return;
+    }
+    const start = new Date(startTimeStr).getTime();
+    const update = () => {
+      const now = Date.now();
+      const diff = Math.max(0, now - start);
+      const secs = Math.floor(diff / 1000);
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      setDurationStr(m > 0 ? `${m}m ${s}s` : `${s}s`);
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [startedAt, createdAt]);
+
   return (
     <div className="chat-bubble-row">
       {displayName && (
@@ -778,7 +808,7 @@ function ChatTypingBubble({
           </span>
         )}
         <div className="chat-typing-bubble" style={bubbleStyle}>
-          <span>{t("chat.typing")}</span>
+          <span>{durationStr ? `${t("chat.working", { defaultValue: "工作中" })}：${durationStr}` : t("chat.typing")}</span>
           <span className="chat-typing-dot" aria-hidden />
           <span className="chat-typing-dot" aria-hidden />
           <span className="chat-typing-dot" aria-hidden />

@@ -10,6 +10,8 @@ export interface ChatActiveRun {
   status: string;
   agentId: string;
   agentName: string | null;
+  startedAt: string | null;
+  createdAt: string;
 }
 import { api } from "./client";
 

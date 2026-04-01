@@ -2,6 +2,8 @@ import { Plus } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+import "./EmptyState.css";
+
 interface EmptyStateProps {
   icon: LucideIcon;
   message: string;
@@ -17,8 +19,8 @@ export function EmptyState({ icon: Icon, message, action, onAction }: EmptyState
       </div>
       <p className="ui-empty-state-message">{message}</p>
       {action && onAction && (
-        <Button onClick={onAction}>
-          <Plus />
+        <Button onClick={onAction} variant="outline" className="ui-empty-state-action">
+          <Plus className="mr-2 h-4 w-4" />
           {action}
         </Button>
       )}

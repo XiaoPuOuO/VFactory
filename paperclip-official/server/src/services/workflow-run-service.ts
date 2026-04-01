@@ -122,6 +122,13 @@ function stepRequiresApprovalBefore(step: SkillFlowStep): boolean {
   return "require_approval_before" in step && step.require_approval_before === true;
 }
 
+/** 需人工審批閘門：explicit require_approval_before，或技能標記 dangerous（高風險不可自動略過）。 */
+function stepRequiresHumanApprovalGate(step: SkillFlowStep): boolean {
+  if (stepRequiresApprovalBefore(step)) return true;
+  if ("dangerous" in step && step.dangerous === true) return true;
+  return false;
+}
+
 /** Prompt 步驟完成後推進 loop 內層索引（與 submitPromptResult 行為一致）。 */
 function advanceLoopExecAfterPromptComplete(
   ctx: Record<string, unknown>,
@@ -390,7 +397,7 @@ export function createWorkflowRunService(db: Db, storage: StorageService) {
         }
         const apprLoop = readWorkflowApprovalState(ctx);
         if (
-          stepRequiresApprovalBefore(inner) &&
+          stepRequiresHumanApprovalGate(inner) &&
           !apprLoop.gatePassed[stepIdLoop] &&
           !apprLoop.retry[stepIdLoop]
         ) {
@@ -554,7 +561,7 @@ export function createWorkflowRunService(db: Db, storage: StorageService) {
         }
         const apprGraph = readWorkflowApprovalState(ctx);
         if (
-          stepRequiresApprovalBefore(next) &&
+          stepRequiresHumanApprovalGate(next) &&
           !apprGraph.gatePassed[stepIdGraph] &&
           !apprGraph.retry[stepIdGraph]
         ) {

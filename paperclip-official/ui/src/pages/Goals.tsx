@@ -53,7 +53,7 @@ export function Goals() {
       {goals && goals.length > 0 && (
         <>
           <div className="goals-header">
-            <Button size="sm" variant="outline" onClick={() => openNewGoal()}>
+            <Button size="sm" variant="outline" className="goals-new-btn" onClick={() => openNewGoal()}>
               <Plus className="goals-btn-icon" />
               {t("newGoal")}
             </Button>

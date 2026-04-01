@@ -13,6 +13,8 @@ export interface CostByProject {
   costCents: number;
   inputTokens: number;
   outputTokens: number;
+  cachedReadTokens: number;
+  cachedWriteTokens: number;
 }
 
 function dateParams(from?: string, to?: string): string {

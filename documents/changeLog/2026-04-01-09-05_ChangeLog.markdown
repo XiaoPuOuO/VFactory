@@ -1,0 +1,200 @@
+# Change Log：2026-04-01 09:05（台北時間）
+
+> **說明：** 本檔以繁體中文歸檔本次工作樹相對於 `HEAD` 的變更意義與檔案級摘要。**逐行、逐符號的完整差異**請以 `git diff` 或提交後的 `git show <commit>` 為準（本次變更量大，不於此重複貼上數千行 diff）。
+
+---
+
+## 總覽
+
+- **成本與權杖：** `cost_events`、`agent_runtime_state` 與共享型別、成本服務、UI／API 串接支援 **快取讀取／快取寫入** 權杖；**Cursor** 本地 Adapter 解析 stream-json 中多種 usage 欄位（含 `cached_input_tokens`、`cache_read_tokens` 等）。
+- **可觀測性與治理：** 新增 **Prometheus** 輔助模組、HTTP 請求指標中介層、服務日誌／Roadmap／平台告警相關路由與服務；工作流與技能型別擴充（含 **dangerous** 語意與測試調整）。
+- **前端：** 成本圖表、Agent 詳情、聊天室、留言串、目標樹、多頁版面與樣式（Governance、RunQuality、Issue 列表等）大量調整；部分元件抽出獨立 CSS；i18n 字串更新。
+- **文件：** 根目錄與多語 **README** 對齊上述能力（提示快取計帳、`observabilityHttpMetrics`、`telemetry`、專案結構等）。
+
+---
+
+## [Modified] 已追蹤檔案（摘要）
+
+### `README.md`、`documents/MultiLanguage/README.zh_TW.md`、`documents/MultiLanguage/README.zh_CN.md`
+
+- 補充 **提示快取權杖**（`cachedReadTokens`／`cachedWriteTokens`）在成本、CSV、圖表與 Cursor 用量對應之說明。
+- 可觀測性：標註 **`observability-http`**、`server/src/telemetry/`、**`observabilityHttpMetrics`** 與架構圖「運維」列。
+- 安全列補充 **`dangerous-action-registry`**、**`planning-priority`**。
+- **Cost Charts** 列與 **`cursor-local`** 表格列補充快取權杖／欄位解析說明。
+- 專案結構樹新增 `middleware/`、`telemetry/`、`lib/` 與 **`AgentSetting/promptTemplate/`**。
+
+### `paperclip-official/.env.example`
+
+- 新增 **`PAPERCLIP_ALERT_WEBHOOK_SECRET=`** 範例列（供平台告警 webhook 與文件敘述對齊）。
+
+### `paperclip-official/package.json`、`paperclip-official/server/package.json`、`paperclip-official/pnpm-lock.yaml`
+
+- 依賴或腳本版本調整（以 lockfile 與實際 diff 為準）。
+
+### `paperclip-official/packages/adapter-utils/src/types.ts`
+
+- 型別擴充以配合 Adapter／用量欄位傳遞（與 cursor 解析與 heartbeat 一致化）。
+
+### `paperclip-official/packages/adapters/cursor-local/src/server/parse.ts`
+
+- `usage` 物件新增 **`cacheReadTokens`**、**`cacheWriteTokens`**。
+- 解析 **`result.usage`** 時合併 **`cached_input_tokens`**、**`cache_read_input_tokens`**、**`cacheReadTokens`**、**`cache_write_tokens`** 等多種鍵名，並累加輸入／輸出／快取相關計數。
+
+### `paperclip-official/packages/db/src/migrations/meta/_journal.json`
+
+- 登錄新 migration 條目（與下列 SQL 檔對應）。
+
+### `paperclip-official/packages/db/src/schema/cost_events.ts`、`agent_runtime_state.ts`、`index.ts`
+
+- **`cost_events`** 增加快取讀寫欄位對應之 schema。
+- **`agent_runtime_state`** 增加／調整與快取權杖彙總相關欄位。
+- **`index`** 匯出新／變更之表定義。
+
+### `paperclip-official/packages/db/src/schema/issue_comments.ts`、`issue_read_states.ts`
+
+- 留言與已讀狀態之 schema 調整（欄位型別、索引或關聯細節請見 diff）。
+
+### `paperclip-official/packages/shared/src/types/cost.ts`
+
+- **`CostEvent`**、**`CostByAgent`**、**`CostByBillingCode`**、**`CostByRequestDepth`** 等介面新增 **`cachedReadTokens`**、**`cachedWriteTokens`**。
+
+### `paperclip-official/packages/shared/src/types/skill.ts`、`validators/skill.ts`
+
+- 技能／工作流相關型別與 Zod 驗證規則擴充（例如 dangerous 或其他步驟屬性；以 diff 為準）。
+
+### `paperclip-official/server/src/__tests__/cursor-local-adapter.test.ts`
+
+- 新增／更新測試案例：涵蓋 **`cached_input_tokens`**、stream-json **`usage`** 與輸出字串中快取權杖顯示等。
+
+### `paperclip-official/server/src/__tests__/skill-system.test.ts`
+
+- 配合技能驗證或行為變更之斷言調整。
+
+### `paperclip-official/server/src/app.ts`、`index.ts`
+
+- 掛載新路由（**service-logs**、**roadmap**、**platform-alerts** 等）、**可觀測性中介層**、**`/metrics`** 或初始化 **telemetry** 相關邏輯（以 diff 為準）。
+
+### `paperclip-official/server/src/redaction.ts`
+
+- 敏感鍵遮蔽清單或規則微調。
+
+### `paperclip-official/server/src/routes/chat.ts`
+
+- 聊天 API 小幅擴充（型別、查詢參數或事件；以 diff 為準）。
+
+### `paperclip-official/server/src/services/costs.ts`
+
+- 匯出 CSV 標頭與列新增 **`cachedReadTokens`**、**`cachedWriteTokens`**。
+- 查詢與聚合 **`select`**／**`sum`** 納入新欄位；部分由 **`heartbeatRuns.usageJson`** 之 **`cacheReadTokens`**／**`cacheWriteTokens`** 彙總。
+
+### `paperclip-official/server/src/services/heartbeat.ts`
+
+- 寫入 **`cost_events`** 與更新 **`agent_runtime_state`** 時帶入 **快取讀寫** 與 **cachedInput** 相關計數。
+- 與 **Prometheus** 計數器（例如 heartbeat 失敗）整合之 **`import`**／呼叫。
+- 用量正規化邏輯擴充（**`cacheReadTokens`**、**`cacheWriteTokens`** 等）。
+
+### `paperclip-official/server/src/services/workflow-heartbeat-bridge.ts`、`workflow-run-service.ts`
+
+- 與工作流執行或 dangerous／優先序相關之銜接調整。
+
+### `paperclip-official/ui/src/api/chat.ts`、`costs.ts`
+
+- 前端 API 型別或請求參數對齊後端（含成本快取欄位若適用）。
+
+### `paperclip-official/ui/src/components/CommentThread.tsx`、`EmptyState.tsx`、`GoalTree.tsx`
+
+- 留言串互動與版面重構；空狀態與目標樹元件行為／標記調整；部分樣式移至獨立 **`.css`**。
+
+### `paperclip-official/ui/src/components/CostCharts.tsx`
+
+- 圖表資料序列或圖例支援 **快取讀寫權杖** 展示。
+
+### `paperclip-official/ui/src/context/LiveUpdatesProvider.tsx`
+
+- 即時更新訂閱或事件型別小擴充。
+
+### `paperclip-official/ui/src/locales/en.json`、`zh-TW.json`
+
+- 新增或修改翻譯鍵（成本、UI 文案等）。
+
+### `paperclip-official/ui/src/pages/AgentDetail.tsx`、`ChatRoom.tsx`、`Costs.tsx`、`Goals.tsx`
+
+- Agent 詳情頁大範圍功能或顯示調整；聊天室；成本頁與目標頁對齊新資料欄位或 UX。
+
+### `paperclip-official/ui/src/pages/CompanySkills.css`、`Goals.css`、`Governance.css`、`Governance.tsx`、`IssueDetail.css`、`RunQuality.css`、`RunQuality.tsx`
+
+- 公司技能／目標／治理／Run 品質等頁之版面、色彩、間距與元件結構重構。
+
+### `paperclip-official/ui/src/styles/chat.css`、`issues-list.css`
+
+- 全域聊天與 Issue 列表樣式強化（捲動、間距、狀態列等）。
+
+---
+
+## [Created] 本次新增（原未追蹤）檔案
+
+### `.github/workflows/paperclip-ci.yml`
+
+- 根目錄 **GitHub Actions**：於 **`paperclip-official/**`** 變更時執行 typecheck、測試、build、**`security:audit`** 等。
+
+### `paperclip-official/AgentSetting/promptTemplate/*.md`
+
+- 多個 **Markdown** 提示詞／工具說明範本（Claude、Gemini、GPT、o4-mini、canvas、搜尋、Python 等），供代理設定參考。
+
+### `paperclip-official/documents/ai-company-open-questions.md`
+
+- AI 公司／部署面向之開放問題彙整（無密鑰）。
+
+### `paperclip-official/documents/runbooks/diagnostician-alert-issue.md`
+
+- 告警轉 Issue 之診斷 runbook。
+
+### `paperclip-official/packages/db/src/migrations/0047_safe_tempest.sql`、`0056_ai_company_observability_roadmap.sql`、`0057_cost_events_cached_tokens.sql`、`0058_agent_runtime_state_cached_tokens.sql`
+
+- 資料庫結構演進：含可觀測性／roadmap 相關與 **成本／執行時狀態之快取權杖** 欄位。
+
+### `paperclip-official/packages/db/src/migrations/meta/0047_snapshot.json`
+
+- Drizzle **snapshot** 與 migration 對齊。
+
+### `paperclip-official/packages/db/src/schema/application_log_entries.ts`、`roadmap_human_overrides.ts`、`roadmap_versions.ts`
+
+- **應用程式服務日誌**表、**Roadmap 版本**與**人工覆寫**表之 Drizzle 定義。
+
+### `paperclip-official/scripts/deploy-with-rollback.sh`
+
+- **Symlink** 部署、可選健康檢查與失敗回滾之腳本。
+
+### `paperclip-official/server/src/lib/dangerous-action-registry.ts`、`planning-priority.ts`
+
+- 危險動作登錄與規劃優先序之伺服器端輔助邏輯。
+
+### `paperclip-official/server/src/middleware/observability-http.ts`
+
+- **`observabilityHttpMetrics`**：於 **`res.finish`** 記錄方法、路由樣板、狀態碼與耗時，交給 **Prometheus** 輔助函式。
+
+### `paperclip-official/server/src/routes/platform-alerts.ts`、`roadmap.ts`、`service-logs.ts`
+
+- 平台告警 webhook、公司 **Roadmap** REST、**服務日誌** 查詢／寫入路由。
+
+### `paperclip-official/server/src/services/application-logs.ts`、`roadmap.ts`
+
+- 應用程式日誌持久化與 **Roadmap** 業務服務實作。
+
+### `paperclip-official/server/src/telemetry/prometheus.ts`
+
+- **Prometheus** 指標註冊與 **`observeHttpRequest`** 等輔助函式。
+
+### `paperclip-official/ui/src/components/CommentThread.css`、`EmptyState.css`、`GoalTree.css`
+
+- 對應元件之 **Vanilla CSS** 分離檔案。
+
+---
+
+## 敏感檔案檢查紀錄
+
+- 已掃描待提交路徑：**未**包含真實 **`.env`**、私鑰或 **`node_modules`**；僅 **`paperclip-official/.env.example`** 範例檔，可安全納版控。
+
+---
+
+*本 ChangeLog 與本次 `git commit` 一併留存。*

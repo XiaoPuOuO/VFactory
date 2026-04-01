@@ -8,6 +8,8 @@ const CHART_COLORS = {
   input: "var(--chart-1)",
   output: "var(--chart-2)",
   spend: "var(--chart-3)",
+  cachedRead: "var(--chart-4)",
+  cachedWrite: "var(--chart-5)",
 };
 
 /**
@@ -37,7 +39,7 @@ export function TokenUsageByAgentChart({
 
   const withTotal = data.map((row) => ({
     ...row,
-    totalTokens: row.inputTokens + row.outputTokens,
+    totalTokens: row.inputTokens + row.outputTokens + row.cachedReadTokens + row.cachedWriteTokens,
   }));
   const sorted = [...withTotal].sort((a, b) => b.totalTokens - a.totalTokens);
   const maxTotal = Math.max(...sorted.map((r) => r.totalTokens), 1);
@@ -51,6 +53,8 @@ export function TokenUsageByAgentChart({
         {sorted.map((row) => {
           const inPct = (row.inputTokens / maxTotal) * 100;
           const outPct = (row.outputTokens / maxTotal) * 100;
+          const crPct = (row.cachedReadTokens / maxTotal) * 100;
+          const cwPct = (row.cachedWriteTokens / maxTotal) * 100;
           const label = (row.agentName ?? row.agentId).slice(0, 20);
           const name = row.agentName ?? row.agentId;
           const inOut = t("inOutTok", {
@@ -90,6 +94,26 @@ export function TokenUsageByAgentChart({
                   }}
                   aria-hidden="true"
                   title={`out: ${formatTokens(row.outputTokens)}`}
+                />
+                <div
+                  className="ui-cost-chart-bar-segment"
+                  style={{
+                    width: `${crPct}%`,
+                    minWidth: row.cachedReadTokens > 0 ? 2 : 0,
+                    backgroundColor: CHART_COLORS.cachedRead,
+                  }}
+                  aria-hidden="true"
+                  title={`cached read: ${formatTokens(row.cachedReadTokens)}`}
+                />
+                <div
+                  className="ui-cost-chart-bar-segment"
+                  style={{
+                    width: `${cwPct}%`,
+                    minWidth: row.cachedWriteTokens > 0 ? 2 : 0,
+                    backgroundColor: CHART_COLORS.cachedWrite,
+                  }}
+                  aria-hidden="true"
+                  title={`cached write: ${formatTokens(row.cachedWriteTokens)}`}
                 />
               </div>
               <span className="ui-cost-chart-value">
@@ -147,7 +171,7 @@ export function TokenUsageByProjectChart({
 
   const withTotal = data.map((row) => ({
     ...row,
-    totalTokens: row.inputTokens + row.outputTokens,
+    totalTokens: row.inputTokens + row.outputTokens + row.cachedReadTokens + row.cachedWriteTokens,
   }));
   const sorted = [...withTotal].sort((a, b) => b.totalTokens - a.totalTokens);
   const maxTotal = Math.max(...sorted.map((r) => r.totalTokens), 1);
@@ -161,6 +185,8 @@ export function TokenUsageByProjectChart({
         {sorted.map((row) => {
           const inPct = (row.inputTokens / maxTotal) * 100;
           const outPct = (row.outputTokens / maxTotal) * 100;
+          const crPct = (row.cachedReadTokens / maxTotal) * 100;
+          const cwPct = (row.cachedWriteTokens / maxTotal) * 100;
           const label = (row.projectName ?? row.projectId ?? t("unattributed")).slice(0, 20);
           const name = row.projectName ?? row.projectId ?? t("unattributed");
           const inOut = t("inOutTok", {
@@ -200,6 +226,26 @@ export function TokenUsageByProjectChart({
                   }}
                   aria-hidden="true"
                   title={`out: ${formatTokens(row.outputTokens)}`}
+                />
+                <div
+                  className="ui-cost-chart-bar-segment"
+                  style={{
+                    width: `${crPct}%`,
+                    minWidth: row.cachedReadTokens > 0 ? 2 : 0,
+                    backgroundColor: CHART_COLORS.cachedRead,
+                  }}
+                  aria-hidden="true"
+                  title={`cached read: ${formatTokens(row.cachedReadTokens)}`}
+                />
+                <div
+                  className="ui-cost-chart-bar-segment"
+                  style={{
+                    width: `${cwPct}%`,
+                    minWidth: row.cachedWriteTokens > 0 ? 2 : 0,
+                    backgroundColor: CHART_COLORS.cachedWrite,
+                  }}
+                  aria-hidden="true"
+                  title={`cached write: ${formatTokens(row.cachedWriteTokens)}`}
                 />
               </div>
               <span className="ui-cost-chart-value">

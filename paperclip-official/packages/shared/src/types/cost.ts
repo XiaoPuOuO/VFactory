@@ -10,6 +10,8 @@ export interface CostEvent {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cachedReadTokens: number;
+  cachedWriteTokens: number;
   costCents: number;
   occurredAt: Date;
   createdAt: Date;
@@ -91,6 +93,8 @@ export interface CostByAgent {
   costCents: number;
   inputTokens: number;
   outputTokens: number;
+  cachedReadTokens: number;
+  cachedWriteTokens: number;
   apiRunCount: number;
   subscriptionRunCount: number;
   subscriptionInputTokens: number;
@@ -103,6 +107,8 @@ export interface CostByBillingCode {
   costCents: number;
   inputTokens: number;
   outputTokens: number;
+  cachedReadTokens: number;
+  cachedWriteTokens: number;
 }
 
 /**
@@ -114,4 +120,6 @@ export interface CostByRequestDepth {
   costCents: number;
   inputTokens: number;
   outputTokens: number;
+  cachedReadTokens: number;
+  cachedWriteTokens: number;
 }

@@ -58,6 +58,7 @@ import {
   ArrowLeft,
   Search,
   Brain,
+  Download,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AgentIcon, AgentIconPicker } from "../components/AgentIconPicker";
@@ -201,23 +202,37 @@ function usageNumber(usage: Record<string, unknown> | null, ...keys: string[]) {
 function runMetrics(run: HeartbeatRun) {
   const usage = (run.usageJson ?? null) as Record<string, unknown> | null;
   const result = (run.resultJson ?? null) as Record<string, unknown> | null;
-  const input = usageNumber(usage, "inputTokens", "input_tokens");
-  const output = usageNumber(usage, "outputTokens", "output_tokens");
-  const cached = usageNumber(
+  const input = usageNumber(usage, "inputTokens", "input_tokens", "promptTokens", "prompt_tokens");
+  const output = usageNumber(usage, "outputTokens", "output_tokens", "completionTokens", "completion_tokens");
+  const cachedRead = usageNumber(
     usage,
+    "cacheReadTokens",
+    "cached_read_tokens",
+    "cache_read_input_tokens",
     "cachedInputTokens",
     "cached_input_tokens",
-    "cache_read_input_tokens",
+    "promptTokensDetails_cachedTokens",
+  );
+  const cachedWrite = usageNumber(
+    usage,
+    "cacheWriteTokens",
+    "cached_write_tokens",
+    "cache_write_input_tokens",
   );
   const cost =
     usageNumber(usage, "costUsd", "cost_usd", "total_cost_usd") ||
     usageNumber(result, "total_cost_usd", "cost_usd", "costUsd");
+  /** Non-cached + explicit cache buckets (Cursor may report 0 input when prompt is all cache). */
+  const promptSideTokens = input + cachedRead + cachedWrite;
   return {
     input,
     output,
-    cached,
+    cached: cachedRead + cachedWrite,
+    cachedRead,
+    cachedWrite,
     cost,
-    totalTokens: input + output,
+    promptSideTokens,
+    totalTokens: promptSideTokens + output,
   };
 }
 
@@ -1287,6 +1302,7 @@ function RunsTab({
 function RunDetail({ run: initialRun, agentRouteId, adapterType }: { run: HeartbeatRun; agentRouteId: string; adapterType: string }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { t } = useTranslation("agents");
   const { data: hydratedRun } = useQuery({
     queryKey: queryKeys.runDetail(initialRun.id),
     queryFn: () => heartbeatsApi.get(initialRun.id),
@@ -1477,6 +1493,18 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType }: { run: Heartb
                   {retryRun.isPending ? "Retrying…" : "Retry"}
                 </Button>
               )}
+              {run.status !== "running" && run.status !== "queued" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-6 px-2"
+                  title={t("agents:exportLog")}
+                  onClick={() => exportRunLog({ run })}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1" />
+                  {t("agents:exportLog")}
+                </Button>
+              )}
             </div>
             {resumeRun.isError && (
               <div className="text-xs text-destructive">
@@ -1571,16 +1599,27 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType }: { run: Heartb
           {hasMetrics && (
             <div className="border-t sm:border-t-0 sm:border-l border-border p-4 grid grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-3 content-center tabular-nums">
               <div>
-                <div className="text-xs text-muted-foreground">Input</div>
-                <div className="text-sm font-medium font-mono">{formatTokens(metrics.input)}</div>
+                <div className="text-xs text-muted-foreground">{t("input")}</div>
+                <div className="text-sm font-medium font-mono">
+                  {formatTokens(metrics.input)}
+                  {metrics.input === 0 && metrics.cached > 0 ? (
+                    <span className="block text-[11px] text-muted-foreground font-normal mt-0.5 leading-snug">
+                      {t("runInputZeroCachedHint", { total: formatTokens(metrics.promptSideTokens) })}
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Output</div>
                 <div className="text-sm font-medium font-mono">{formatTokens(metrics.output)}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Cached</div>
-                <div className="text-sm font-medium font-mono">{formatTokens(metrics.cached)}</div>
+                <div className="text-xs text-muted-foreground">Cached Read</div>
+                <div className="text-sm font-medium font-mono">{formatTokens(metrics.cachedRead)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Cached Write</div>
+                <div className="text-sm font-medium font-mono">{formatTokens(metrics.cachedWrite)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Cost</div>
@@ -1696,7 +1735,157 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType }: { run: Heartb
 
 /* ---- Log Viewer ---- */
 
+/**
+ * 將執行紀錄的完整資料組合成純文字 .log 格式並觸發下載。
+ * 如果提供 data（events, logLines），則直接使用現有資料。
+ * 如果未提供，則透過 API 完整抓取所有事件與日誌分頁。
+ */
+async function exportRunLog({
+  run,
+  data,
+}: {
+  run: HeartbeatRun;
+  data?: {
+    events: HeartbeatRunEvent[];
+    logLines: Array<{ ts: string; stream: "stdout" | "stderr" | "system"; chunk: string }>;
+  };
+}) {
+  let events = data?.events ?? [];
+  let logLines = data?.logLines ?? [];
+
+  // 如果沒有現成資料，則從 API 抓取
+  if (!data) {
+    try {
+      // 1. 抓取事件 (HeartbeatRunEvent[])
+      events = await heartbeatsApi.events(run.id);
+
+      // 2. 抓取日誌 (支援分頁)
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const logResp = await heartbeatsApi.log(run.id, offset, 256000);
+        if (logResp.content) {
+          // 日誌格式為 raw string，我們將其解析為 logLines 格式 (暫時轉為 system stream 以便顯示)
+          const lines = logResp.content.split("\n").filter(Boolean);
+          for (const line of lines) {
+            const ts = run.startedAt ? (typeof run.startedAt === "string" ? run.startedAt : new Date(run.startedAt).toISOString()) : new Date().toISOString();
+            logLines.push({ ts, stream: "system", chunk: line });
+          }
+        }
+        if (logResp.nextOffset && logResp.nextOffset > offset) {
+          offset = logResp.nextOffset;
+        } else {
+          hasMore = false;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch logs for export:", err);
+      alert("Failed to fetch logs for export. Please try again.");
+      return;
+    }
+  }
+
+  const sections: string[] = [];
+
+  // ─── Section 1: 執行 Metadata ────────────────────────────────────────────
+  const metadataLines: string[] = [
+    "=== RUN METADATA ===",
+    `Run ID   : ${run.id}`,
+    `Agent ID : ${run.agentId}`,
+    `Status   : ${run.status}`,
+    `Source   : ${run.invocationSource ?? "—"}`,
+  ];
+  if (run.startedAt) {
+    metadataLines.push(`Started  : ${new Date(run.startedAt).toISOString()}`);
+  }
+  if (run.finishedAt) {
+    metadataLines.push(`Finished : ${new Date(run.finishedAt).toISOString()}`);
+    if (run.startedAt) {
+      const durationMs = new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime();
+      const durationSec = Math.round(durationMs / 1000);
+      metadataLines.push(`Duration : ${durationSec >= 60 ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s` : `${durationSec}s`}`);
+    }
+  }
+  if (run.error) {
+    metadataLines.push(`Error    : ${run.error}`);
+  }
+  if (run.errorCode) {
+    metadataLines.push(`ErrorCode: ${run.errorCode}`);
+  }
+  if (run.exitCode !== null && run.exitCode !== undefined) {
+    metadataLines.push(`ExitCode : ${run.exitCode}`);
+  }
+  if (run.signal) {
+    metadataLines.push(`Signal   : ${run.signal}`);
+  }
+  const usage = (run.usageJson ?? null) as Record<string, unknown> | null;
+  if (usage) {
+    const usageRec = asRecord(usage);
+    const inputTokens = (usageRec?.inputTokens as number) ?? (usageRec?.input_tokens as number) ?? 0;
+    const outputTokens = (usageRec?.outputTokens as number) ?? (usageRec?.output_tokens as number) ?? 0;
+    const u = usage as Record<string, unknown>;
+    const cacheRead = usageNumber(
+      u,
+      "cacheReadTokens",
+      "cached_read_tokens",
+      "cache_read_input_tokens",
+      "cachedInputTokens",
+      "cached_input_tokens",
+    );
+    const cacheWrite = usageNumber(u, "cacheWriteTokens", "cached_write_tokens", "cache_write_input_tokens");
+    const costUsd = (usageRec?.costUsd as number) ?? (usageRec?.cost_usd as number) ?? 0;
+    if (inputTokens > 0 || outputTokens > 0 || cacheRead > 0 || cacheWrite > 0) {
+      const parts = [`input=${inputTokens}`, `output=${outputTokens}`];
+      if (cacheRead > 0) parts.push(`cacheRead=${cacheRead}`);
+      if (cacheWrite > 0) parts.push(`cacheWrite=${cacheWrite}`);
+      metadataLines.push(`Tokens   : ${parts.join(", ")}`);
+    }
+    if (costUsd > 0) {
+      metadataLines.push(`Cost     : $${costUsd.toFixed(4)}`);
+    }
+  }
+  sections.push(metadataLines.join("\n"));
+
+  // ─── Section 2: Transcript ──────────────────────────────────────────────
+  if (logLines.length > 0) {
+    const transcriptHeader = "=== TRANSCRIPT ===";
+    const transcriptBody = logLines
+      .map(({ ts, stream, chunk }) => {
+        const timeStr = ts ? `[${new Date(ts).toISOString()}] ` : "";
+        const streamLabel = stream === "stdout" ? "OUT" : stream === "stderr" ? "ERR" : "SYS";
+        return `${timeStr}[${streamLabel}] ${chunk}`;
+      })
+      .join("\n");
+    sections.push(`${transcriptHeader}\n${transcriptBody}`);
+  }
+
+  // ─── Section 3: Events ──────────────────────────────────────────────────
+  if (events.length > 0) {
+    const eventsHeader = "=== STRUCTURED EVENTS ===";
+    const eventsBody = events
+      .map((evt) => {
+        const timeStr = new Date(evt.createdAt).toISOString();
+        const msg = evt.message || (evt.payload ? JSON.stringify(evt.payload) : "");
+        return `[${timeStr}] ${evt.eventType}: ${msg}`;
+      })
+      .join("\n");
+    sections.push(`${eventsHeader}\n${eventsBody}`);
+  }
+
+  const fullContent = `# VFactory Run Log\n# Run ID : ${run.id}\n\n${sections.join("\n\n")}\n`;
+  const blob = new Blob([fullContent], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `run-${run.id.slice(0, 8)}.log`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: string }) {
+  const { t } = useTranslation("agents");
   const [events, setEvents] = useState<HeartbeatRunEvent[]>([]);
   const [logLines, setLogLines] = useState<Array<{ ts: string; stream: "stdout" | "stderr" | "system"; chunk: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -2191,6 +2380,16 @@ function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: strin
               Live
             </span>
           )}
+          <Button
+            id="run-log-export-btn"
+            variant="ghost"
+            size="xs"
+            title={t("agents:exportLog")}
+            onClick={() => exportRunLog({ run, data: { events, logLines } })}
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t("agents:exportLog")}</span>
+          </Button>
         </div>
       </div>
       <div className="max-h-[38rem] overflow-y-auto rounded-2xl border border-border/70 bg-background/40 p-3 sm:p-4">

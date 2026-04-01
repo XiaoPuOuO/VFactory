@@ -24,12 +24,15 @@ Paperclip 将 AI 代码智能体（Claude、Codex、Gemini、Cursor 等）转化
 | Instance Sidebar | 可折叠、可调整宽度的实例级导航侧边栏 |
 | Instance Settings UI | 完整的实例管理设置面板 |
 | Agent Tree & Model Filtering | 按模型、状态或层级筛选智能体列表 |
-| Cost Charts | 按智能体、项目和计费代码的交互式成本明细图表 |
+| Cost Charts | 按智能体、项目和计费代码的交互式成本明细图表；**提示缓存令牌**（`cachedReadTokens`／`cachedWriteTokens`）写入 `cost_events` 并纳入汇总、CSV 与图表 |
 | Execution Labels | 在 Run 上显示当前执行状态的视觉标签 |
 | Issue / 子任务唤醒 | 子任务完成或 Issue 更新时，自动唤醒父智能体 |
 | 可调整宽度侧边栏 | 整个 UI 中可拖拽调整的侧边栏面板 |
 | 公司工作流 | 可视化流程编辑、运行记录、Worker 审批与可选的 LLM 提示步骤；侧栏与路由为 `/company/workflows`（旧路径 `/company/skills` 会重定向） |
 | `browser-use` 子模块 | 不再以整包源码纳入主仓库 —— 用子模块提交锁定上游版本；在 `browser-use-service` 内以 `-e ../../browser-use` 安装 |
+| 可观测性 | 公司范围 **服务日志** API + 数据库（`application_log_entries`）；**Prometheus** 格式 **`GET /metrics`**（可选 scrape token），并由 Express **`observability-http`** 中间件将各路径延迟与状态码写入 **`server/src/telemetry/`**；**平台告警** webhook 可由外部监控创建 Issue |
+| CI／交付 | 根目录 **GitHub Actions**（仅 `paperclip-official/` 变更时触发）执行 typecheck、测试、build、`security:audit`；**`deploy-with-rollback.sh`** 支持 symlink 部署、健康检查与回滚 |
+| Roadmap／覆盖 | **版本化 Roadmap** 与 **human override** 数据表 + REST API；可选 **materialize** 将 Markdown 列表行转为 backlog Issue；自主决策优先级规则；可选 **Watchdog** 在 reap orphan run 时创建 escalation Issue |
 
 ---
 
@@ -67,10 +70,13 @@ Paperclip 将 AI 代码智能体（Claude、Codex、Gemini、Cursor 等）转化
 │  issues · agents · chat · company-skills · workflow-runs   heartbeat（Run 编排）             │
 │  approvals · costs · goals       agent-memories（跨对话记忆）      │
 │  schedules · projects            browser-use-gateway（HMAC 代理） │
+│  service-logs · roadmap ·        应用日志 · 指标                   │
+│  platform-alerts（webhook）      （Prometheus 文本／告警→Issue）   │
 │  plugins · secrets               realtime（WebSocket 广播）       │
 │  instance/* · scim               cost / budget 强制执行           │
 │                                                                   │
 │  Auth: Better Auth · Agent JWT · SCIM 配置                        │
+│  运维: GET /api/health · GET /metrics（可选）· HTTP 指标中间件 · CI 于 .github │
 │  DB:   PostgreSQL + Drizzle ORM（本地开发可用 embedded-postgres）  │
 └──────┬──────────────────────────────────────┬────────────────────┘
        │  adapter spawn / heartbeat           │  HMAC-signed HTTP
@@ -114,7 +120,7 @@ Issue 是工作的基本单位，每个 Issue 可以：
 |---|---|---|
 | `claude-local` | Anthropic Claude Code CLI | stdio / process spawn |
 | `codex-local` | OpenAI Codex CLI | stdio / process spawn |
-| `cursor-local` | Cursor IDE agent | stdio / process spawn |
+| `cursor-local` | Cursor IDE agent | stdio / process spawn（stream-json 会解析 **`cached_input_tokens`** 及分立的 **cache 读／写** 字段，若上游提供） |
 | `gemini-local` | Google Gemini CLI | stdio / process spawn |
 | `opencode-local` | OpenCode agent | stdio / process spawn |
 | `pi-local` | Pi agent | stdio / process spawn |
@@ -187,6 +193,25 @@ Issue 是工作的基本单位，每个 Issue 可以：
 
 ---
 
+### 可观测性、CI/CD 与 Roadmap 治理（本 Fork）
+
+除 Pino **stdout／本地文件** 外，本 Fork 另提供**平台级**能力：
+
+| 方面 | 说明 |
+|---|---|
+| **服务日志** | 结构化数据存于 PostgreSQL（`application_log_entries`）；经公司范围 **service-logs** 路由查询／写入（需 RBAC）。与 **`activity_log`（审计）** 及原始 Pino 文件不同。 |
+| **指标** | **`GET /metrics`** 输出 Prometheus 文本（经 `observabilityHttpMetrics` 记录各路径 HTTP 耗时／状态、5xx、调度／heartbeat tick 错误等）。设置 `PAPERCLIP_METRICS_ENABLED=true`；可选 `PAPERCLIP_METRICS_SCRAPE_TOKEN` 以 Bearer 保护。 |
+| **告警→Issue** | **`POST /api/webhooks/platform-alerts`**，请求头 **`X-Paperclip-Alert-Token`** 须与 **`PAPERCLIP_ALERT_WEBHOOK_SECRET`** 一致（body 经 Zod 校验）。可对接 Alertmanager 或云监控（按文档调整 payload）。 |
+| **CI** | 根目录 **`.github/workflows/paperclip-ci.yml`** 在 `paperclip-official/**` 变更时执行：`pnpm -r typecheck`、`pnpm test:run`、`pnpm build`、`pnpm run security:audit`（生产依赖、默认 critical 阈值，可在 `package.json` 调整）。 |
+| **部署／回滚** | **`paperclip-official/scripts/deploy-with-rollback.sh`**：解压 artifact、切换 **`current`** symlink、可选 **`PAPERCLIP_HEALTH_URL`**；失败回退上一版；可选 **`PAPERCLIP_ACTIVITY_URL`** POST 审计。 |
+| **Roadmap** | **`roadmap_versions`**／**`roadmap_human_overrides`** 与 API（**`/api/companies/:companyId/roadmap/...`**）。**`POST .../versions/:versionId/materialize`** 将 `-`／`*` Markdown 行转为 backlog Issue（有上限）。 |
+| **安全** | 工作流／技能步骤可标 **`dangerous`** —— 仍需人工审批。服务端另有 **`dangerous-action-registry`** 与 **`planning-priority`** 以统一把关与规划优先级。**`redaction.ts`** 强化敏感键脱敏。 |
+| **Watchdog** | 若 **`PAPERCLIP_WATCHDOG_ESCALATION_ISSUES=true`**，reap 孤儿 heartbeat run 时可受影响公司创建高优先级 Issue。 |
+
+延伸阅读（勿将密钥写入版本库）：**`paperclip-official/documents/runbooks/diagnostician-alert-issue.md`**、**`paperclip-official/documents/ai-company-open-questions.md`**。
+
+---
+
 ### Costs — 支出可视化
 
 每个智能体发出的每个 LLM 调用都被记录为成本事件。
@@ -197,6 +222,8 @@ Issue 是工作的基本单位，每个 Issue 可以：
 - 按计费代码
 - 公司整体汇总
 - UI 中的交互式时间序列图表
+
+**提示缓存入账：** 成本行与汇总包含 **缓存读取** 与 **缓存写入** 令牌数（migration 扩展 `cost_events` 与 `agent_runtime_state`）。**`cursor-local`** 等 Adapter 会将 Cursor `result.usage` 映射到 heartbeat 用量，使缓存命中与输入／输出令牌一并在 UI 与导出中可见。
 
 **预算强制执行：**
 - 为每个公司或智能体定义预算策略
@@ -315,6 +342,7 @@ CLI 是管理 Paperclip 实例的运维人员的主要工具。
 | 测试 | Vitest（单元）、Playwright（E2E） |
 | 浏览器自动化 | Python ≥ 3.11、FastAPI、browser-use、Playwright/Chromium |
 | CI 打包 | pnpm workspaces、TypeScript 项目引用 |
+| 仓库 CI | GitHub Actions：`.github/workflows/paperclip-ci.yml`（仅 `paperclip-official/`） |
 
 ---
 
@@ -408,6 +436,9 @@ pnpm paperclipai doctor
 ```
 Paperclip/
 ├── README.md                             ← 英文主 README
+├── .github/
+│   └── workflows/
+│       └── paperclip-ci.yml              ← paperclip-official 的 CI（路径过滤）
 ├── browser-use/                          ← Git 子模块：上游 browser-use（以 gitlink 锁定提交）
 ├── documents/
 │   ├── MultiLanguage/
@@ -415,7 +446,13 @@ Paperclip/
 │   │   └── README.zh_CN.md               ← 本文件（简体中文）
 │   └── changeLog/                        ← 自动化变更记录
 └── paperclip-official/
-    ├── documents/adr/                    ← 架构决策记录（选读）
+    ├── documents/
+    │   ├── adr/                          ← 架构决策记录（选读）
+    │   ├── runbooks/                     ← 例：告警诊断 runbook
+    │   └── ai-company-open-questions.md  ← 环境／部署开放问题（参考）
+    ├── scripts/
+    │   ├── release-preflight.sh          ← 发布闸门（typecheck、test、build）
+    │   └── deploy-with-rollback.sh       ← Symlink 部署＋健康检查＋回滚（可选）
     ├── browser-use-service/              ← Python 浏览器自动化服务
     │   ├── app.py                        ← FastAPI + HMAC 认证 + browser-use
     │   └── requirements.txt              ← 可编辑安装：../../browser-use
@@ -427,6 +464,9 @@ Paperclip/
     │   └── src/
     │       ├── app.ts                    ← Express 应用组装
     │       ├── routes/                   ← REST 路由处理器
+    │       ├── middleware/               ← 例：可观测性 HTTP 指标
+    │       ├── telemetry/                ← Prometheus 辅助模块
+    │       ├── lib/                      ← 例：dangerous-action-registry、planning-priority
     │       └── services/                 ← 业务逻辑（heartbeat、记忆、成本等）
     ├── ui/                               ← React 前端
     │   └── src/
@@ -446,6 +486,7 @@ Paperclip/
     │   ├── shared/                       ← 跨包共享的 Zod 类型
     │   └── adapter-utils/                ← 共享 Adapter 工具函数
     └── AgentSetting/                     ← 智能体规则、技能、提示词
+        └── promptTemplate/               ← 可选的版本化提示模板（Markdown）
 ```
 
 ---

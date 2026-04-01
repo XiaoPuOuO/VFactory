@@ -9,7 +9,8 @@
 .issues-page {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
+  padding-bottom: 2rem;
 }
 
 /* ---------------------------------------------------------------------------
@@ -20,6 +21,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding: 0.75rem 0.5rem;
+  margin-inline: -0.5rem;
+  background: color-mix(in oklab, var(--background) 75%, transparent);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
 }
 
 @media (min-width: 640px) {
@@ -58,17 +68,27 @@
 .issues-search-wrap {
   position: relative;
   width: 12rem;
+  transition: width 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.issues-search-wrap:focus-within {
+  width: 14rem;
 }
 
 @media (min-width: 640px) {
   .issues-search-wrap {
     width: 16rem;
   }
+  .issues-search-wrap:focus-within {
+    width: 18rem;
+  }
 }
 
 @media (min-width: 768px) {
   .issues-search-wrap {
     width: 20rem;
+  }
+  .issues-search-wrap:focus-within {
+    width: 24rem;
   }
 }
 
@@ -84,8 +104,19 @@
 }
 
 .issues-search-input {
-  padding-left: 1.75rem;
-  font-size: 0.75rem;
+  padding-left: 2rem;
+  font-size: 0.875rem;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  border: none;
+  box-shadow: none;
+  transition: all 0.2s ease;
+  height: 2rem;
+}
+.issues-search-input:focus {
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
 }
 
 @media (min-width: 640px) {
@@ -98,19 +129,21 @@
 .issues-view-toggle {
   display: flex;
   align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  overflow: hidden;
-  margin-right: 0.25rem;
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+  border-radius: 8px;
+  padding: 2px;
+  margin-right: 0.5rem;
 }
 
 .issues-view-toggle-btn {
-  padding: 0.375rem;
-  background: none;
+  padding: 0.25rem 0.75rem;
+  background: transparent;
   border: none;
+  border-radius: 6px;
   cursor: pointer;
   color: var(--muted-foreground);
-  transition: color 0.15s, background-color 0.15s;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 .issues-view-toggle-btn:hover {
@@ -118,8 +151,9 @@
 }
 
 .issues-view-toggle-btn.active {
-  background: var(--accent);
+  background: var(--background);
   color: var(--foreground);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04), 0 3px 6px rgba(0, 0, 0, 0.04);
 }
 
 .issues-view-toggle-btn svg {
@@ -242,16 +276,21 @@
    群組（依狀態/優先級/負責人分組時）
    --------------------------------------------------------------------------- */
 .issues-group {
-  margin-bottom: 0;
+  margin-bottom: 1.25rem;
 }
 
 .issues-group-header {
   display: flex;
   align-items: center;
-  padding-top: 0.375rem;
-  padding-bottom: 0.375rem;
-  padding-left: 0.25rem;
-  padding-right: 0.75rem;
+  padding: 0.625rem 1rem;
+  margin-bottom: 0;
+  position: sticky;
+  top: 3.5rem;
+  z-index: 30;
+  background: color-mix(in oklab, var(--background) 70%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-radius: 0;
 }
 
 .issues-group-trigger {
@@ -297,8 +336,11 @@
 
 /* 列表容器：邊框 + 分隔線 */
 .issues-list {
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklab, var(--border) 20%, transparent);
+  border-radius: 12px;
   overflow: hidden;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 16px rgba(0, 0, 0, 0.02);
 }
 
 /* ---------------------------------------------------------------------------
@@ -307,16 +349,15 @@
 .issues-row {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  padding-top: 0.625rem;
-  padding-bottom: 0.625rem;
-  padding-left: 0.5rem;
-  padding-right: 0.75rem;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
   font-size: 0.875rem;
   text-decoration: none;
   color: inherit;
-  border-bottom: 1px solid var(--border);
-  transition: background-color 0.15s;
+  border-bottom: 0.5px solid color-mix(in oklab, var(--border) 40%, transparent);
+  transition: background-color 0.15s ease;
+  background: transparent;
+  position: relative;
 }
 
 .issues-row:last-child {
@@ -324,7 +365,10 @@
 }
 
 .issues-row:hover {
-  background: color-mix(in oklab, var(--accent) 50%, transparent);
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.issues-row:active {
+  background: color-mix(in oklab, var(--accent) 60%, transparent);
 }
 
 @media (min-width: 640px) {

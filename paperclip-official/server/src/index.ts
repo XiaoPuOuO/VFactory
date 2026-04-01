@@ -19,6 +19,7 @@ import detectPort from "detect-port";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { logger } from "./middleware/logger.js";
+import { incHeartbeatTimerErrors, incScheduleTickErrors } from "./telemetry/prometheus.js";
 import { setupLiveEventsWebSocketServer } from "./realtime/live-events-ws.js";
 import { heartbeatService, scheduleService, reconcilePersistedRuntimeServicesOnStartup } from "./services/index.js";
 import { createStorageServiceFromConfig } from "./storage/index.js";
@@ -461,6 +462,7 @@ export async function startServer(): Promise<StartedServer> {
           }
         })
         .catch((err) => {
+          incHeartbeatTimerErrors();
           logger.error({ err }, "heartbeat timer tick failed");
         });
 
@@ -484,6 +486,7 @@ export async function startServer(): Promise<StartedServer> {
           }
         })
         .catch((err) => {
+          incScheduleTickErrors();
           logger.error({ err }, "schedule tick failed");
         });
     }, config.scheduleSchedulerIntervalMs);

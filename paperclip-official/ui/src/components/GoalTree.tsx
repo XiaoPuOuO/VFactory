@@ -4,6 +4,7 @@ import { StatusBadge } from "./StatusBadge";
 import { ChevronRight } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useState } from "react";
+import "./GoalTree.css";
 
 interface GoalTreeProps {
   goals: Goal[];
@@ -29,7 +30,7 @@ function GoalNode({ goal, children, allGoals, depth, goalLink, onSelect }: GoalN
     <>
       {hasChildren ? (
         <button
-          className="p-0.5"
+          className="goal-node-expander"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -37,28 +38,26 @@ function GoalNode({ goal, children, allGoals, depth, goalLink, onSelect }: GoalN
           }}
         >
           <ChevronRight
-            className={cn("h-3 w-3 transition-transform", expanded && "rotate-90")}
+            className={cn("goal-node-chevron", expanded && "expanded")}
           />
         </button>
       ) : (
-        <span className="w-4" />
+        <span className="goal-node-icon-placeholder" />
       )}
-      <span className="text-xs text-muted-foreground capitalize">{goal.level}</span>
-      <span className="flex-1 truncate">{goal.title}</span>
+      <span className="goal-node-level">{goal.level}</span>
+      <span className="goal-node-title">{goal.title}</span>
       <StatusBadge status={goal.status} />
     </>
   );
 
-  const classes = cn(
-    "flex items-center gap-2 px-3 py-1.5 text-sm transition-colors cursor-pointer hover:bg-accent/50",
-  );
+  const classes = "goal-node-row";
 
   return (
-    <div>
+    <div className="goal-node-container">
       {link ? (
         <Link
           to={link}
-          className={cn(classes, "no-underline text-inherit")}
+          className={classes}
           style={{ paddingLeft: `${depth * 16 + 12}px` }}
         >
           {inner}
@@ -73,7 +72,7 @@ function GoalNode({ goal, children, allGoals, depth, goalLink, onSelect }: GoalN
         </div>
       )}
       {hasChildren && expanded && (
-        <div>
+        <div className="goal-node-children">
           {children.map((child) => (
             <GoalNode
               key={child.id}
@@ -96,11 +95,11 @@ export function GoalTree({ goals, goalLink, onSelect }: GoalTreeProps) {
   const roots = goals.filter((g) => !g.parentId || !goalIds.has(g.parentId));
 
   if (goals.length === 0) {
-    return <p className="text-sm text-muted-foreground">No goals.</p>;
+    return <p className="goal-tree-empty">No goals.</p>;
   }
 
   return (
-    <div className="border border-border py-1">
+    <div className="goal-tree-wrapper">
       {roots.map((goal) => (
         <GoalNode
           key={goal.id}

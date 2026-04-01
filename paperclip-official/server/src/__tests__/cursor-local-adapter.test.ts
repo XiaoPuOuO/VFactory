@@ -35,6 +35,8 @@ describe("cursor parser", () => {
       inputTokens: 100,
       cachedInputTokens: 25,
       outputTokens: 40,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
     });
     expect(parsed.costUsd).toBeCloseTo(0.001, 6);
     expect(parsed.errorMessage).toBe("model access denied");
@@ -54,8 +56,33 @@ describe("cursor parser", () => {
       inputTokens: 3,
       cachedInputTokens: 1,
       outputTokens: 2,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
     });
     expect(parsed.costUsd).toBeCloseTo(0.0001, 6);
+  });
+
+  it("parses Cursor result usage with cacheReadTokens and cacheWriteTokens (stream-json)", () => {
+    const stdout = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      session_id: "sess_x",
+      usage: {
+        inputTokens: 0,
+        outputTokens: 2070,
+        cacheReadTokens: 355840,
+        cacheWriteTokens: 63914,
+      },
+    });
+
+    const parsed = parseCursorJsonl(stdout);
+    expect(parsed.usage).toEqual({
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 2070,
+      cacheReadTokens: 355840,
+      cacheWriteTokens: 63914,
+    });
   });
 });
 

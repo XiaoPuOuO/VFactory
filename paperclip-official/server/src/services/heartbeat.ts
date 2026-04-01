@@ -15,9 +15,12 @@ import {
   issues,
   projects,
   projectWorkspaces,
+  workflowRuns,
 } from "@paperclipai/db";
 import { conflict, notFound } from "../errors.js";
 import { logger } from "../middleware/logger.js";
+import { incHeartbeatRunFailure } from "../telemetry/prometheus.js";
+import { recordApplicationLog } from "./application-logs.js";
 import { publishLiveEvent } from "./live-events.js";
 import { getRunLogStore, type RunLogHandle } from "./run-log-store.js";
 import { getServerAdapter, runningProcesses } from "../adapters/index.js";
@@ -972,6 +975,10 @@ export function heartbeatService(db: Db, storage?: StorageService) {
       });
 
       // Scheduled automation runs are the primary "batch" channel; failures are actionable and should notify owners automatically.
+      if (updated.status === "failed" || updated.status === "timed_out") {
+        incHeartbeatRunFailure(updated.invocationSource ?? "unknown");
+      }
+
       if (
         (updated.status === "failed" || updated.status === "timed_out") &&
         updated.invocationSource === "automation" &&
@@ -1169,6 +1176,7 @@ export function heartbeatService(db: Db, storage?: StorageService) {
       .where(inArray(heartbeatRuns.status, ["queued", "running"]));
 
     const reaped: string[] = [];
+    const reapedByCompany = new Map<string, string[]>();
 
     for (const run of activeRuns) {
       if (runningProcesses.has(run.id)) continue;
@@ -1202,10 +1210,42 @@ export function heartbeatService(db: Db, storage?: StorageService) {
       await startNextQueuedRunForAgent(run.agentId);
       runningProcesses.delete(run.id);
       reaped.push(run.id);
+      const list = reapedByCompany.get(run.companyId) ?? [];
+      list.push(run.id);
+      reapedByCompany.set(run.companyId, list);
     }
 
     if (reaped.length > 0) {
       logger.warn({ reapedCount: reaped.length, runIds: reaped }, "reaped orphaned heartbeat runs");
+      if (process.env.PAPERCLIP_WATCHDOG_ESCALATION_ISSUES === "true" && reapedByCompany.size > 0) {
+        const issuesApi = issueService(db);
+        for (const [companyId, runIds] of reapedByCompany) {
+          try {
+            await issuesApi.create(companyId, {
+              title: `[Watchdog] Orphaned heartbeat runs reaped (${runIds.length})`,
+              description: [
+                "Server reaped queued/running runs that had no live process (e.g. after restart).",
+                "",
+                "Run ids:",
+                ...runIds.map((id) => `- \`${id}\``),
+              ].join("\n"),
+              status: "todo",
+              priority: "high",
+              executionLabel: `watchdog:reap:${Date.now()}:${companyId.slice(0, 8)}`,
+            });
+          } catch (err) {
+            logger.warn({ err, companyId }, "watchdog escalation issue create failed");
+          }
+        }
+      }
+      void recordApplicationLog(db, {
+        level: "error",
+        message: `Reaped ${reaped.length} orphaned heartbeat run(s) (process lost)`,
+        context: { runIds: reaped },
+        companyId: null,
+      }).catch((err) => {
+        logger.warn({ err }, "application log write failed after reap");
+      });
     }
     return { reaped: reaped.length, runIds: reaped };
   }
@@ -1219,12 +1259,11 @@ export function heartbeatService(db: Db, storage?: StorageService) {
     await ensureRuntimeState(agent);
     const usage = result.usage;
     const runUsage = (run.usageJson ?? {}) as Record<string, unknown>;
-    const inputTokens =
-      (usage?.inputTokens ?? 0) || (Number(runUsage.inputTokens) || 0);
-    const outputTokens =
-      (usage?.outputTokens ?? 0) || (Number(runUsage.outputTokens) || 0);
-    const cachedInputTokens =
-      (usage?.cachedInputTokens ?? 0) || (Number(runUsage.cachedInputTokens) || 0);
+    const inputTokens = usage?.inputTokens ?? (Number(runUsage.inputTokens) || 0);
+    const outputTokens = usage?.outputTokens ?? (Number(runUsage.outputTokens) || 0);
+    const cachedInputTokens = usage?.cachedInputTokens ?? (Number(runUsage.cachedInputTokens) || 0);
+    const cachedReadTokens = usage?.cacheReadTokens ?? (Number(runUsage.cacheReadTokens) || 0);
+    const cachedWriteTokens = usage?.cacheWriteTokens ?? (Number(runUsage.cacheWriteTokens) || 0);
     const costUsdFromRun =
       typeof runUsage.costUsd === "number"
         ? runUsage.costUsd
@@ -1233,7 +1272,12 @@ export function heartbeatService(db: Db, storage?: StorageService) {
       0,
       Math.round((result.costUsd ?? costUsdFromRun ?? 0) * 100),
     );
-    const hasTokenUsage = inputTokens > 0 || outputTokens > 0 || cachedInputTokens > 0;
+    const hasTokenUsage =
+      inputTokens > 0 ||
+      outputTokens > 0 ||
+      cachedInputTokens > 0 ||
+      cachedReadTokens > 0 ||
+      cachedWriteTokens > 0;
 
     await db
       .update(agentRuntimeState)
@@ -1246,6 +1290,8 @@ export function heartbeatService(db: Db, storage?: StorageService) {
         totalInputTokens: sql`${agentRuntimeState.totalInputTokens} + ${inputTokens}`,
         totalOutputTokens: sql`${agentRuntimeState.totalOutputTokens} + ${outputTokens}`,
         totalCachedInputTokens: sql`${agentRuntimeState.totalCachedInputTokens} + ${cachedInputTokens}`,
+        totalCacheReadTokens: sql`${agentRuntimeState.totalCacheReadTokens} + ${cachedReadTokens}`,
+        totalCacheWriteTokens: sql`${agentRuntimeState.totalCacheWriteTokens} + ${cachedWriteTokens}`,
         totalCostCents: sql`${agentRuntimeState.totalCostCents} + ${additionalCostCents}`,
         updatedAt: new Date(),
       })
@@ -1259,6 +1305,8 @@ export function heartbeatService(db: Db, storage?: StorageService) {
         model: result.model ?? "unknown",
         inputTokens,
         outputTokens,
+        cachedReadTokens,
+        cachedWriteTokens,
         costCents: additionalCostCents,
         occurredAt: new Date(),
       });
@@ -1778,6 +1826,9 @@ export function heartbeatService(db: Db, storage?: StorageService) {
       let adapterResult: AdapterExecutionResult | null = null;
       let lastWorkflowPendingKey: string | null = null;
 
+      const accumulatedUsage: Record<string, number> = {};
+      let accumulatedCostUsd = 0;
+
       for (let chainIndex = 0; chainIndex < MAX_WORKFLOW_CHAIN_STEPS_PER_HEARTBEAT; chainIndex += 1) {
         await attachWorkflowPendingWorkerContext(db, agent.id, context);
         const wfPending = context.paperclipWorkflowPendingWorker as PaperclipWorkflowPendingWorkerContext | undefined;
@@ -1805,6 +1856,54 @@ export function heartbeatService(db: Db, storage?: StorageService) {
           authToken: authToken ?? undefined,
         });
 
+        // Accumulate usage and cost
+        if (adapterResult.usage) {
+          const u = adapterResult.usage as unknown as Record<string, unknown>;
+          for (const [key, val] of Object.entries(u)) {
+            if (typeof val === "number") {
+              // Normalize keys to camelCase to ensure UI usageNumber picks them up consistently
+              const camelKey = key.replace(/_([a-z])/g, (_, g) => g.toUpperCase());
+              accumulatedUsage[camelKey] = (accumulatedUsage[camelKey] ?? 0) + val;
+            }
+          }
+          // Ensure standard keys exist even if reported as snake_case or prompt_tokens by some adapters
+          if (!u.inputTokens) {
+            const inputVal = (u.input_tokens ?? u.prompt_tokens ?? u.promptTokens) as number | undefined;
+            if (typeof inputVal === "number") {
+              accumulatedUsage.inputTokens = (accumulatedUsage.inputTokens ?? 0) + inputVal;
+            }
+          }
+          if (!u.outputTokens) {
+            const outputVal = (u.output_tokens ?? u.completion_tokens ?? u.completionTokens) as number | undefined;
+            if (typeof outputVal === "number") {
+              accumulatedUsage.outputTokens = (accumulatedUsage.outputTokens ?? 0) + outputVal;
+            }
+          }
+        }
+        if (adapterResult.costUsd != null) {
+          accumulatedCostUsd += adapterResult.costUsd;
+        }
+
+        const currentUsageJson = {
+          ...accumulatedUsage,
+          ...(accumulatedCostUsd > 0 ? { costUsd: accumulatedCostUsd } : {}),
+          ...(adapterResult.billingType ? { billingType: adapterResult.billingType } : {}),
+        };
+
+        // Update run status with current accumulated usage for live UI feedback
+        await db
+          .update(heartbeatRuns)
+          .set({
+            usageJson: currentUsageJson,
+            updatedAt: new Date(),
+          })
+          .where(eq(heartbeatRuns.id, run.id));
+
+        // Update agent-level runtime state and record cost event for this specific step
+        await updateRuntimeState(agent, run, adapterResult, {
+          legacySessionId: runtimeForAdapter.sessionId,
+        });
+
         const chainedSessionState = resolveNextSessionState({
           codec: sessionCodec,
           adapterResult,
@@ -1820,7 +1919,12 @@ export function heartbeatService(db: Db, storage?: StorageService) {
         };
 
         // 若本次執行已失敗/超時/清 session，停止嘗試鏈式推進，交由外層照既有邏輯結算 outcome。
-        if (adapterResult.timedOut || (adapterResult.exitCode ?? 0) !== 0 || adapterResult.errorMessage || adapterResult.clearSession) {
+        if (
+          adapterResult.timedOut ||
+          (adapterResult.exitCode ?? 0) !== 0 ||
+          adapterResult.errorMessage ||
+          adapterResult.clearSession
+        ) {
           break;
         }
         // worker-step-result 可能稍晚於 adapter 回傳；短暫輪詢 DB 再進入下一輪，避免誤判同一步而提前結束鏈。
@@ -1838,6 +1942,23 @@ export function heartbeatService(db: Db, storage?: StorageService) {
           onLog,
           onMeta: onAdapterMeta,
           authToken: authToken ?? undefined,
+        });
+
+        // Accumulate and update state for fallback execution
+        if (adapterResult.usage) {
+          const u = adapterResult.usage as unknown as Record<string, unknown>;
+          for (const [key, val] of Object.entries(u)) {
+            if (typeof val === "number") {
+              const camelKey = key.replace(/_([a-z])/g, (_, g) => g.toUpperCase());
+              accumulatedUsage[camelKey] = (accumulatedUsage[camelKey] ?? 0) + val;
+            }
+          }
+        }
+        if (adapterResult.costUsd != null) {
+          accumulatedCostUsd += adapterResult.costUsd;
+        }
+        await updateRuntimeState(agent, run, adapterResult, {
+          legacySessionId: runtimeForAdapter.sessionId,
         });
       }
       const adapterManagedRuntimeServices = adapterResult.runtimeServices
@@ -1922,14 +2043,11 @@ export function heartbeatService(db: Db, storage?: StorageService) {
               ? "timed_out"
               : "failed";
 
-      const usageJson =
-        adapterResult.usage || adapterResult.costUsd != null
-          ? ({
-              ...(adapterResult.usage ?? {}),
-              ...(adapterResult.costUsd != null ? { costUsd: adapterResult.costUsd } : {}),
-              ...(adapterResult.billingType ? { billingType: adapterResult.billingType } : {}),
-            } as Record<string, unknown>)
-          : null;
+      const usageJson = {
+        ...accumulatedUsage,
+        ...(accumulatedCostUsd > 0 ? { costUsd: accumulatedCostUsd } : {}),
+        ...(adapterResult.billingType ? { billingType: adapterResult.billingType } : {}),
+      };
 
       await setRunStatus(run.id, status, {
         finishedAt: new Date(),
@@ -1977,14 +2095,12 @@ export function heartbeatService(db: Db, storage?: StorageService) {
           },
         });
         await releaseIssueExecutionAndPromote(finalizedRun);
-      }
 
-      if (finalizedRun) {
-        await updateRuntimeState(agent, finalizedRun, adapterResult, {
-          legacySessionId: nextSessionState.legacySessionId,
-        });
         if (taskKey) {
-          if (adapterResult.clearSession || (!nextSessionState.params && !nextSessionState.displayId)) {
+          if (
+            adapterResult.clearSession ||
+            (!nextSessionState.params && !nextSessionState.displayId)
+          ) {
             await clearTaskSessions(agent.companyId, agent.id, {
               taskKey,
               adapterType: agent.adapterType,
@@ -3366,6 +3482,32 @@ export function heartbeatService(db: Db, storage?: StorageService) {
       runningProcesses.delete(run.id);
       await finalizeAgentStatus(run.agentId, "cancelled");
       await startNextQueuedRunForAgent(run.agentId);
+
+      // Cancel any workflow runs associated with this agent in the same scope (chat room)
+      const context = parseObject(run.contextSnapshot);
+      const roomId = readNonEmptyString(context.roomId);
+      if (roomId) {
+        await db
+          .update(workflowRuns)
+          .set({ status: "cancelled", updatedAt: new Date() })
+          .where(
+            and(
+              eq(workflowRuns.companyId, run.companyId),
+              eq(workflowRuns.agentId, run.agentId),
+              eq(workflowRuns.chatRoomId, roomId),
+              inArray(workflowRuns.status, [
+                "pending",
+                "running",
+                "waiting_prompt",
+                "waiting_checkpoint",
+                "waiting_approval",
+                "waiting_worker",
+                "waiting_child",
+              ]),
+            ),
+          );
+      }
+
       return cancelled;
     },
 
@@ -3394,6 +3536,25 @@ export function heartbeatService(db: Db, storage?: StorageService) {
         }
         await releaseIssueExecutionAndPromote(run);
       }
+
+      // Also cancel any active workflow runs ownership by this agent
+      await db
+        .update(workflowRuns)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(
+          and(
+            eq(workflowRuns.agentId, agentId),
+            inArray(workflowRuns.status, [
+              "pending",
+              "running",
+              "waiting_prompt",
+              "waiting_checkpoint",
+              "waiting_approval",
+              "waiting_worker",
+              "waiting_child",
+            ]),
+          ),
+        );
 
       return runs.length;
     },

@@ -1,0 +1,55 @@
+# paperclip-official：與 scripts/release-preflight.sh 對齊的 PR／push 驗證閘門
+name: Paperclip (paperclip-official) CI
+
+on:
+  push:
+    paths:
+      - "paperclip-official/**"
+      - ".github/workflows/paperclip-ci.yml"
+  pull_request:
+    paths:
+      - "paperclip-official/**"
+      - ".github/workflows/paperclip-ci.yml"
+
+concurrency:
+  group: paperclip-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: paperclip-official
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: paperclip-official/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Unit tests
+        run: pnpm test:run
+
+      - name: Build
+        run: pnpm build
+
+      - name: Production dependency audit
+        run: pnpm run security:audit

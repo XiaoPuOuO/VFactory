@@ -189,17 +189,25 @@ export function Costs() {
   /** 總 token 數量（供 KPI 卡片使用） */
   const totalTokens = useMemo(() => {
     if (!data) return 0;
-    return data.byAgent.reduce((acc, row) => acc + row.inputTokens + row.outputTokens, 0);
+    return data.byAgent.reduce(
+      (acc, row) =>
+        acc + row.inputTokens + row.outputTokens + row.cachedReadTokens + row.cachedWriteTokens,
+      0
+    );
   }, [data]);
 
   const totalTokenSummary = useMemo(() => {
     if (!data) return "";
     const totalInput = data.byAgent.reduce((acc, row) => acc + row.inputTokens, 0);
     const totalOutput = data.byAgent.reduce((acc, row) => acc + row.outputTokens, 0);
+    const totalCR = data.byAgent.reduce((acc, row) => acc + row.cachedReadTokens, 0);
+    const totalCW = data.byAgent.reduce((acc, row) => acc + row.cachedWriteTokens, 0);
     return t("totalTokensInRange", {
       range: t(PRESET_KEYS[preset]),
       input: formatTokens(totalInput),
       output: formatTokens(totalOutput),
+      cr: formatTokens(totalCR),
+      cw: formatTokens(totalCW),
     });
   }, [data, preset, t]);
 
@@ -489,6 +497,8 @@ export function Costs() {
                                   {t("inOutTok", {
                                     in: formatTokens(row.inputTokens),
                                     out: formatTokens(row.outputTokens),
+                                    cr: formatTokens(row.cachedReadTokens),
+                                    cw: formatTokens(row.cachedWriteTokens),
                                   })}
                                 </span>
                               </div>
@@ -522,6 +532,8 @@ export function Costs() {
                                   {t("inOutTok", {
                                     in: formatTokens(row.inputTokens),
                                     out: formatTokens(row.outputTokens),
+                                    cr: formatTokens(row.cachedReadTokens),
+                                    cw: formatTokens(row.cachedWriteTokens),
                                   })}
                                 </span>
                               </div>

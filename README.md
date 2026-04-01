@@ -24,12 +24,15 @@ This repository is a **custom fork** of the upstream Paperclip project. It prese
 | Instance Sidebar | Collapsible, resizable sidebar for instance-level navigation |
 | Instance Settings UI | Full settings panel for instance administration |
 | Agent Tree & Model Filtering | Filter the agent list by model, status, or hierarchy |
-| Cost Charts | Interactive cost breakdown charts per agent, project, and billing code |
+| Cost Charts | Interactive cost breakdown charts per agent, project, and billing code; **prompt cache tokens** (`cachedReadTokens` / `cachedWriteTokens`) stored on `cost_events`, rolled into aggregations, CSV export, and charts |
 | Execution Labels | Visual labels on runs showing current execution state |
 | Issue / Sub-task Wake-up | When a sub-task completes or an issue is updated, the parent agent is automatically woken up |
 | Resizable Sidebar | Drag-to-resize sidebar panels across the UI |
 | Company workflows | Visual flow editor, run history, worker approvals, and optional LLM-backed prompt steps; UI and routes live under `/company/workflows` (legacy `/company/skills` redirects here) |
 | `browser-use` as Git submodule | Upstream library is not vendored as a flat copy — pin the submodule commit in git, and install it with `-e ../../browser-use` from `browser-use-service` |
+| Observability | Company-scoped **service logs** API + DB storage (`application_log_entries`); **Prometheus** metrics at `GET /metrics` (optional scrape token), with Express **`observability-http`** middleware recording per-route latency and status into `server/src/telemetry/`; **platform alert** webhook creates Issues from external monitoring |
+| CI / delivery | Root **GitHub Actions** workflow (path-filtered to `paperclip-official/`) runs typecheck, tests, build, and `security:audit`; **`deploy-with-rollback.sh`** script for symlink-based artifact deploy with health check + rollback |
+| Roadmap & overrides | **Versioned roadmap** and **human override** tables + REST API; optional **materialize** endpoint turns markdown list lines into backlog Issues; planning-priority rules for autonomy; optional **watchdog** escalation Issues when reaping stuck runs |
 
 ---
 
@@ -64,13 +67,16 @@ Most AI agent tooling falls into one of these traps:
 │                                                                   │
 │  Routes                         Services                          │
 │  ─────────────────────          ──────────────────────────────    │
-│  issues · agents · chat · company-skills · workflow-runs   heartbeat (run orchestration)     │
+│  issues · agents · chat · company-skills · workflow-runs   heartbeat (run orchestration)       │
 │  approvals · costs · goals      agent-memories (cross-chat)       │
 │  schedules · projects           browser-use-gateway (HMAC proxy)  │
+│  service-logs · roadmap ·       application logs · metrics          │
+│  platform-alerts (webhook)      (Prometheus text / alerts→Issue)  │
 │  plugins · secrets              realtime (WebSocket broadcast)    │
 │  instance/* · scim              cost / budget enforcement         │
 │                                                                   │
 │  Auth: Better Auth · Agent JWT · SCIM provisioning                │
+│  Ops:  GET /api/health · GET /metrics (optional) · HTTP metrics middleware · CI in .github  │
 │  DB:   PostgreSQL + Drizzle ORM (embedded-postgres for local dev) │
 └──────┬──────────────────────────────────────┬────────────────────┘
        │  adapter spawn / heartbeat           │  HMAC-signed HTTP
@@ -114,7 +120,7 @@ Each agent is backed by one of the following adapter types. The adapter determin
 |---|---|---|
 | `claude-local` | Anthropic Claude Code CLI | stdio / process spawn |
 | `codex-local` | OpenAI Codex CLI | stdio / process spawn |
-| `cursor-local` | Cursor IDE agent | stdio / process spawn |
+| `cursor-local` | Cursor IDE agent | stdio / process spawn (stream-json usage parsing includes **`cached_input_tokens`** and separate **cache read / write** fields where present) |
 | `gemini-local` | Google Gemini CLI | stdio / process spawn |
 | `opencode-local` | OpenCode agent | stdio / process spawn |
 | `pi-local` | Pi agent | stdio / process spawn |
@@ -189,6 +195,25 @@ Before an agent's proposed changes are accepted, they can be routed through an a
 
 ---
 
+### Observability, CI/CD, and roadmap governance (this fork)
+
+Beyond Pino **stdout / local file** logging, this fork adds **platform-grade** hooks for running Paperclip like a product:
+
+| Area | What to know |
+|---|---|
+| **Service logs** | Structured rows in PostgreSQL (`application_log_entries`); list/query and ingest via company-scoped **service-logs** routes (RBAC applies). Distinct from **`activity_log`** (audit) and from raw Pino files. |
+| **Metrics** | **`GET /metrics`** exposes Prometheus text (per-route HTTP latency sum/count via `observabilityHttpMetrics`, 5xx, schedule/heartbeat tick errors, heartbeat run failures, etc.). Set `PAPERCLIP_METRICS_ENABLED=true`; optional `PAPERCLIP_METRICS_SCRAPE_TOKEN` for Bearer protection. |
+| **Alerts → Issues** | **`POST /api/webhooks/platform-alerts`** with header **`X-Paperclip-Alert-Token`** equal to **`PAPERCLIP_ALERT_WEBHOOK_SECRET`** (JSON body validated with Zod). Creates an Issue and audit activity — wire external Alertmanager or cloud monitors to this shape. |
+| **CI** | **`.github/workflows/paperclip-ci.yml`** (repo root) runs when `paperclip-official/**` changes: `pnpm install`, `pnpm -r typecheck`, `pnpm test:run`, `pnpm build`, `pnpm run security:audit` (production deps, critical threshold — adjust in `package.json` if you need stricter gates). |
+| **Deploy / rollback** | **`paperclip-official/scripts/deploy-with-rollback.sh`**: extract artifact, flip **`current`** symlink, optional **`PAPERCLIP_HEALTH_URL`** check; on failure, restore previous target; optional **`PAPERCLIP_ACTIVITY_URL`** for rollback audit POST. |
+| **Roadmap** | **`roadmap_versions`** / **`roadmap_human_overrides`** + API under **`/api/companies/:companyId/roadmap/...`**. **`POST .../versions/:versionId/materialize`** turns `-` / `*` markdown lines into backlog Issues (capped). |
+| **Safety** | Workflow / skill steps can be marked **`dangerous`** — they still require human approval. Server helpers include **`dangerous-action-registry`** and **`planning-priority`** for consistent gating and planning order. **`redaction.ts`** masks sensitive keys in payloads. |
+| **Watchdog** | If **`PAPERCLIP_WATCHDOG_ESCALATION_ISSUES=true`**, reaping orphaned heartbeat runs can open a high-priority Issue per affected company. |
+
+Further reading (no secrets in repo): **`paperclip-official/documents/runbooks/diagnostician-alert-issue.md`**, **`paperclip-official/documents/ai-company-open-questions.md`**.
+
+---
+
 ### Costs — Spending Visibility
 
 Every LLM call made by every agent is recorded as a cost event.
@@ -199,6 +224,8 @@ Every LLM call made by every agent is recorded as a cost event.
 - By billing code
 - Company-wide rollup
 - Interactive time-series charts in the UI
+
+**Prompt cache accounting:** Cost rows and rollups include **cached read** and **cached write** token counts (migrations extend `cost_events` and `agent_runtime_state`). Adapters such as **`cursor-local`** map Cursor `result.usage` fields into heartbeat usage so cache hits are visible next to input/output tokens in the UI and exports.
 
 **Budget enforcement:**
 - Define budget policies per company or agent
@@ -317,6 +344,7 @@ The CLI is the primary tool for operators managing a Paperclip instance.
 | Testing | Vitest (unit), Playwright (E2E) |
 | Browser automation | Python ≥ 3.11, FastAPI, browser-use, Playwright/Chromium |
 | CI packaging | pnpm workspaces, TypeScript project references |
+| Repo CI | GitHub Actions: `.github/workflows/paperclip-ci.yml` (scoped to `paperclip-official/`) |
 
 ---
 
@@ -410,6 +438,9 @@ With `PAPERCLIP_BROWSER_USE_DEBUG=true`, a visible Chromium window should appear
 ```
 Paperclip/
 ├── README.md                             ← This file (English)
+├── .github/
+│   └── workflows/
+│       └── paperclip-ci.yml              ← CI for paperclip-official (path filter)
 ├── browser-use/                          ← Git submodule: upstream browser-use (pinned commit)
 ├── documents/
 │   ├── MultiLanguage/
@@ -417,7 +448,13 @@ Paperclip/
 │   │   └── README.zh_CN.md               ← Simplified Chinese
 │   └── changeLog/                        ← Automated change logs
 └── paperclip-official/
-    ├── documents/adr/                    ← Architecture decision records (optional)
+    ├── documents/
+    │   ├── adr/                          ← Architecture decision records (optional)
+    │   ├── runbooks/                     ← e.g. diagnostician alert playbook
+    │   └── ai-company-open-questions.md  ← Env / deployment open questions (reference)
+    ├── scripts/
+    │   ├── release-preflight.sh          ← Release gate (typecheck, test, build)
+    │   └── deploy-with-rollback.sh       ← Symlink deploy + health + rollback (optional)
     ├── browser-use-service/              ← Python browser automation service
     │   ├── app.py                        ← FastAPI app + HMAC auth + browser-use
     │   └── requirements.txt              ← editable install: ../../browser-use
@@ -429,6 +466,9 @@ Paperclip/
     │   └── src/
     │       ├── app.ts                    ← Express app assembly
     │       ├── routes/                   ← REST route handlers
+    │       ├── middleware/               ← e.g. observability HTTP metrics
+    │       ├── telemetry/                ← Prometheus helpers
+    │       ├── lib/                      ← e.g. dangerous-action-registry, planning-priority
     │       └── services/                 ← Business logic (heartbeat, memories, costs, …)
     ├── ui/                               ← React frontend
     │   └── src/
@@ -448,6 +488,7 @@ Paperclip/
     │   ├── shared/                       ← Zod types shared across packages
     │   └── adapter-utils/                ← Shared adapter utilities
     └── AgentSetting/                     ← Agent rules, skills, prompts
+        └── promptTemplate/               ← Optional versioned prompt templates (Markdown)
 ```
 
 ---

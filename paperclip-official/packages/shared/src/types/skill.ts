@@ -98,6 +98,10 @@ export type SkillFlowPromptStep = {
    * 若為 true：此步驟開始執行前需人工 Allow（對話／面板）；Deny 附 reason 則重試同一步、不終止 run。
    */
   require_approval_before?: boolean;
+  /**
+   * 標記為高風險時，即使未設 require_approval_before，仍強制進入人工審批（與 dangerous_action_registry 策略一致）。
+   */
+  dangerous?: boolean;
   depends_on?: string[];
 };
 
@@ -143,6 +147,8 @@ export type SkillFlowActionStep = {
   params: Record<string, string>;
   /** 見 {@link SkillFlowPromptStep.require_approval_before} */
   require_approval_before?: boolean;
+  /** 見 {@link SkillFlowPromptStep.dangerous} */
+  dangerous?: boolean;
   depends_on?: string[];
 };
 
@@ -183,6 +189,8 @@ export type SkillFlowInvokeWorkflowStep = {
   output?: string;
   /** 見 {@link SkillFlowPromptStep.require_approval_before} */
   require_approval_before?: boolean;
+  /** 見 {@link SkillFlowPromptStep.dangerous} */
+  dangerous?: boolean;
   depends_on?: string[];
 };
 

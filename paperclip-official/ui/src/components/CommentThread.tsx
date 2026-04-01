@@ -10,6 +10,7 @@ import { MarkdownEditor, type MarkdownEditorRef, type MentionOption } from "./Ma
 import { StatusBadge } from "./StatusBadge";
 import { AgentIcon } from "./AgentIconPicker";
 import { formatDateTime } from "../lib/utils";
+import "./CommentThread.css";
 
 interface CommentWithRunMeta extends IssueComment {
   runId?: string | null;
@@ -92,12 +93,13 @@ function parseReassignment(target: string): CommentReassignment | null {
   return null;
 }
 
+/** 複製 Markdown 按鈕，hover 後才顯示 */
 function CopyMarkdownButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       type="button"
-      className="text-muted-foreground hover:text-foreground transition-colors"
+      className="comment-card-copy-btn"
       title="Copy as markdown"
       onClick={() => {
         navigator.clipboard.writeText(text).then(() => {
@@ -106,7 +108,7 @@ function CopyMarkdownButton({ text }: { text: string }) {
         });
       }}
     >
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied ? <Check /> : <Copy />}
     </button>
   );
 }
@@ -125,32 +127,32 @@ const TimelineList = memo(function TimelineList({
   highlightCommentId?: string | null;
 }) {
   if (timeline.length === 0) {
-    return <p className="text-sm text-muted-foreground">No comments or runs yet.</p>;
+    return <p className="comment-timeline-empty">No comments or runs yet.</p>;
   }
 
   return (
-    <div className="space-y-3">
+    <div className="comment-timeline">
       {timeline.map((item) => {
         if (item.kind === "run") {
           const run = item.run;
           return (
-            <div key={`run:${run.runId}`} className="border border-border bg-accent/20 p-3 overflow-hidden min-w-0 rounded-sm">
-              <div className="flex items-center justify-between mb-2">
-                <Link to={`/agents/${run.agentId}`} className="hover:underline">
+            <div key={`run:${run.runId}`} className="comment-run-card">
+              <div className="comment-run-card-header">
+                <Link to={`/agents/${run.agentId}`} className="comment-card-author-link">
                   <Identity
                     name={agentMap?.get(run.agentId)?.name ?? run.agentId.slice(0, 8)}
                     size="sm"
                   />
                 </Link>
-                <span className="text-xs text-muted-foreground">
+                <span className="comment-run-card-time">
                   {formatDateTime(run.startedAt ?? run.createdAt)}
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground">Run</span>
+              <div className="comment-run-card-body">
+                <span className="comment-run-label">Run</span>
                 <Link
                   to={`/agents/${run.agentId}/runs/${run.runId}`}
-                  className="inline-flex items-center rounded-md border border-border bg-accent/40 px-2 py-1 font-mono text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+                  className="comment-run-id-link"
                 >
                   {run.runId.slice(0, 8)}
                 </Link>
@@ -166,11 +168,11 @@ const TimelineList = memo(function TimelineList({
           <div
             key={comment.id}
             id={`comment-${comment.id}`}
-            className={`border p-3 overflow-hidden min-w-0 rounded-sm transition-colors duration-1000 ${isHighlighted ? "border-primary/50 bg-primary/5" : "border-border"}`}
+            className={["comment-card", isHighlighted ? "highlighted" : ""].filter(Boolean).join(" ")}
           >
-            <div className="flex items-center justify-between mb-1">
+            <div className="comment-card-header">
               {comment.authorAgentId ? (
-                <Link to={`/agents/${comment.authorAgentId}`} className="hover:underline">
+                <Link to={`/agents/${comment.authorAgentId}`} className="comment-card-author-link">
                   <Identity
                     name={agentMap?.get(comment.authorAgentId)?.name ?? comment.authorAgentId.slice(0, 8)}
                     size="sm"
@@ -179,28 +181,30 @@ const TimelineList = memo(function TimelineList({
               ) : (
                 <Identity name="You" size="sm" />
               )}
-              <span className="flex items-center gap-1.5">
+              <span className="comment-card-meta">
                 <a
                   href={`#comment-${comment.id}`}
-                  className="text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors"
+                  className="comment-card-time"
                 >
                   {formatDateTime(comment.createdAt)}
                 </a>
                 <CopyMarkdownButton text={comment.body} />
               </span>
             </div>
-            <MarkdownBody className="text-sm">{comment.body}</MarkdownBody>
+            <div className="comment-card-body">
+              <MarkdownBody>{comment.body}</MarkdownBody>
+            </div>
             {comment.runId && (
-              <div className="mt-2 pt-2 border-t border-border/60">
+              <div className="comment-card-run-footer">
                 {comment.runAgentId ? (
                   <Link
                     to={`/agents/${comment.runAgentId}/runs/${comment.runId}`}
-                    className="inline-flex items-center rounded-md border border-border bg-accent/30 px-2 py-1 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                    className="comment-card-run-link"
                   >
                     run {comment.runId.slice(0, 8)}
                   </Link>
                 ) : (
-                  <span className="inline-flex items-center rounded-md border border-border bg-accent/30 px-2 py-1 text-[10px] font-mono text-muted-foreground">
+                  <span className="comment-card-run-span">
                     run {comment.runId.slice(0, 8)}
                   </span>
                 )}
@@ -348,56 +352,65 @@ export function CommentThread({
   const canSubmit = !submitting && !!body.trim();
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-sm font-semibold">Comments &amp; Runs ({timeline.length})</h3>
+    <div className="comment-thread">
+      {/* 標頭：Comments & Runs (n) */}
+      <div className="comment-thread-header">
+        <span className="comment-thread-title">Comments & Runs</span>
+        <span className="comment-thread-count">{timeline.length}</span>
+      </div>
 
       <TimelineList timeline={timeline} agentMap={agentMap} highlightCommentId={highlightCommentId} />
 
       {liveRunSlot}
 
-      <div className="space-y-2">
-        <MarkdownEditor
-          ref={editorRef}
-          value={body}
-          onChange={setBody}
-          placeholder="Leave a comment..."
-          mentions={mentions}
-          onSubmit={handleSubmit}
-          imageUploadHandler={imageUploadHandler}
-          contentClassName="min-h-[60px] text-sm"
-        />
-        <div className="flex items-center justify-end gap-3">
-          {onAttachImage && (
-            <div className="mr-auto flex items-center gap-3">
-              <input
-                ref={attachInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                onChange={handleAttachFile}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => attachInputRef.current?.click()}
-                disabled={attaching}
-                title="Attach image"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-          {isClosed && (
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={reopen}
-                onChange={(e) => setReopen(e.target.checked)}
-                className="rounded border-border"
-              />
-              Re-open
-            </label>
-          )}
+      {/* 留言輸入框 */}
+      <div className="comment-composer">
+        <div className="comment-composer-editor">
+          <MarkdownEditor
+            ref={editorRef}
+            value={body}
+            onChange={setBody}
+            placeholder="Leave a comment..."
+            mentions={mentions}
+            onSubmit={handleSubmit}
+            imageUploadHandler={imageUploadHandler}
+            contentClassName="min-h-[60px] text-sm"
+          />
+        </div>
+        <div className="comment-composer-footer">
+          <div className="comment-composer-left">
+            {onAttachImage && (
+              <>
+                <input
+                  ref={attachInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="comment-card-copy-btn"
+                  style={{ display: "none" }}
+                  onChange={handleAttachFile}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => attachInputRef.current?.click()}
+                  disabled={attaching}
+                  title="Attach image"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            {isClosed && (
+              <label className="comment-composer-reopen">
+                <input
+                  type="checkbox"
+                  checked={reopen}
+                  onChange={(e) => setReopen(e.target.checked)}
+                />
+                Re-open
+              </label>
+            )}
+          </div>
           {enableReassign && reassignOptions.length > 0 && (
             <InlineEntitySelector
               value={reassignTarget}
@@ -409,7 +422,7 @@ export function CommentThread({
               onChange={setReassignTarget}
               className="text-xs h-8"
               renderTriggerValue={(option) => {
-                if (!option) return <span className="text-muted-foreground">Assignee</span>;
+                if (!option) return <span className="comment-run-label">Assignee</span>;
                 const agentId = option.id.startsWith("agent:") ? option.id.slice("agent:".length) : null;
                 const agent = agentId ? agentMap?.get(agentId) : null;
                 return (

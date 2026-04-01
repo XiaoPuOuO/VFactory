@@ -6,6 +6,8 @@ import type { Db } from "@paperclipai/db";
 import type { DeploymentExposure, DeploymentMode } from "@paperclipai/shared";
 import type { StorageService } from "./storage/types.js";
 import { httpLogger, errorHandler } from "./middleware/index.js";
+import { observabilityHttpMetrics } from "./middleware/observability-http.js";
+import { renderMetricsText } from "./telemetry/prometheus.js";
 import { csrfSessionGuard } from "./middleware/csrf-session-guard.js";
 import { tenantResolutionMiddleware } from "./middleware/tenant-resolution.js";
 import { actorMiddleware } from "./middleware/auth.js";
@@ -42,6 +44,9 @@ import { browserUseToolRoutes } from "./routes/browser-use-tools.js";
 import { instanceGroupsRoutes } from "./routes/instance-groups.js";
 import { instanceUsersRoutes } from "./routes/instance-users.js";
 import { instanceSettingsRoutes } from "./routes/instance-settings.js";
+import { platformAlertRoutes } from "./routes/platform-alerts.js";
+import { serviceLogRoutes } from "./routes/service-logs.js";
+import { roadmapRoutes } from "./routes/roadmap.js";
 import { applyUiBranding } from "./ui-branding.js";
 import { registerPluginRuntime } from "./plugins/runtime.js";
 import { pluginRoutes } from "./routes/plugins.js";
@@ -83,6 +88,24 @@ export async function createApp(
   const app = express();
 
   app.use(httpLogger);
+  app.use(observabilityHttpMetrics());
+
+  app.get("/metrics", async (req, res) => {
+    if (process.env.PAPERCLIP_METRICS_ENABLED === "false") {
+      res.status(404).end();
+      return;
+    }
+    const token = process.env.PAPERCLIP_METRICS_SCRAPE_TOKEN?.trim();
+    if (token) {
+      const auth = req.header("authorization");
+      if (auth !== `Bearer ${token}`) {
+        res.status(401).end();
+        return;
+      }
+    }
+    res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+    res.end(await renderMetricsText());
+  });
   const privateHostnameGateEnabled =
     opts.deploymentMode === "authenticated" && opts.deploymentExposure === "private";
   const privateHostnameAllowSet = resolvePrivateHostnameAllowSet({
@@ -147,6 +170,11 @@ export async function createApp(
   // Mount API routes
   const api = Router();
   const openApiTargets: Array<{ mountPath: string; router: Router }> = [];
+
+  const platformAlertsRouter = platformAlertRoutes(db);
+  openApiTargets.push({ mountPath: "/webhooks", router: platformAlertsRouter });
+  api.use(platformAlertsRouter);
+
   api.use(boardMutationGuard());
   api.use(csrfSessionGuard());
   const tenantRouter = tenantCurrentRoutes(db);
@@ -257,6 +285,14 @@ export async function createApp(
   const activityRouter = activityRoutes(db);
   openApiTargets.push({ mountPath: "", router: activityRouter });
   api.use(activityRouter);
+
+  const serviceLogsRouter = serviceLogRoutes(db);
+  openApiTargets.push({ mountPath: "", router: serviceLogsRouter });
+  api.use(serviceLogsRouter);
+
+  const roadmapRouter = roadmapRoutes(db);
+  openApiTargets.push({ mountPath: "", router: roadmapRouter });
+  api.use(roadmapRouter);
 
   const dashboardRouter = dashboardRoutes(db);
   openApiTargets.push({ mountPath: "", router: dashboardRouter });

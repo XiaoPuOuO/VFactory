@@ -17,9 +17,9 @@ import { PageSkeleton } from "../components/PageSkeleton";
 import "./Governance.css";
 
 function scopeLabelKey(type: string): string {
-  if (type === "hire_agent") return "governance.scopeHireAgent";
-  if (type === "approve_ceo_strategy") return "governance.scopeCeoStrategy";
-  return "governance.scopeGeneric";
+  if (type === "hire_agent") return "scopeHireAgent";
+  if (type === "approve_ceo_strategy") return "scopeCeoStrategy";
+  return "scopeGeneric";
 }
 
 function GovernanceApprovalBlock({
@@ -182,81 +182,110 @@ export function Governance() {
       {error && <p className="governance-error">{(error as Error).message}</p>}
       {actionError && <p className="governance-error">{actionError}</p>}
 
-      <section className="governance-section" aria-labelledby="governance-policy-heading">
-        <h2 id="governance-policy-heading" className="governance-section-title">
-          {t("policySection")}
-        </h2>
-        <div className="governance-policy-card">
-          <p className="governance-policy-desc">{t("policySectionDesc")}</p>
-          <label className="governance-policy-row">
-            <input
-              type="checkbox"
-              checked={policyEnabled}
-              onChange={(e) => setPolicyEnabled(e.target.checked)}
-            />
-            <span>{t("policyEnableAuto")}</span>
-          </label>
-          <label className="governance-policy-field">
-            <span className="governance-policy-label">{t("policyMaxBudgetCents")}</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="governance-policy-input"
-              value={policyMaxCents}
-              onChange={(e) => setPolicyMaxCents(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="0"
-            />
-          </label>
-          <Button
-            type="button"
-            size="sm"
-            disabled={saveHirePolicyMutation.isPending}
-            onClick={() => saveHirePolicyMutation.mutate()}
-          >
-            {t("policySave")}
-          </Button>
-        </div>
-      </section>
+      <div className="governance-dashboard-top-row">
+        <section className="governance-section" aria-labelledby="governance-policy-heading">
+          <header className="governance-section-header">
+            <h2 id="governance-policy-heading" className="governance-section-title">
+              {t("policySection")}
+            </h2>
+          </header>
+          <div className="governance-glass-card governance-policy-card">
+            <p className="governance-policy-desc">{t("policySectionDesc")}</p>
+            
+            <div className="governance-policy-controls">
+              <label className="governance-toggle-wrapper">
+                <input
+                  type="checkbox"
+                  className="governance-toggle-input"
+                  checked={policyEnabled}
+                  onChange={(e) => setPolicyEnabled(e.target.checked)}
+                />
+                <div className="governance-toggle-slider"></div>
+                <span className="governance-toggle-label">{t("policyEnableAuto")}</span>
+              </label>
 
-      {dashboard && (
-        <section className="governance-section" aria-labelledby="governance-budget-heading">
-          <h2 id="governance-budget-heading" className="governance-section-title">
-            {t("budgetSection")}
-          </h2>
-          <div className="governance-budget-card">
-            <div className="governance-budget-card-title">{t("budgetSectionTitle")}</div>
-            <p className="governance-budget-card-desc">
-              {showBudgetHint
-                ? [
-                    dashboard.governance.agentsPausedByBudgetCount > 0
-                      ? t("budgetPausedCount", {
-                          count: dashboard.governance.agentsPausedByBudgetCount,
-                        })
-                      : null,
-                    dashboard.governance.recentBreaches.length > 0
-                      ? t("budgetBreachesCount", {
-                          count: dashboard.governance.recentBreaches.length,
-                        })
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")
-                : t("budgetSectionHealthy")}
-            </p>
-            <div className="governance-budget-links">
-              <Link to="/dashboard">{t("linkDashboard")}</Link>
-              <Link to="/costs">{t("linkCosts")}</Link>
+              <label className="governance-policy-field">
+                <span className="governance-policy-label">{t("policyMaxBudgetCents")}</span>
+                <div className="governance-input-wrapper">
+                  <span className="governance-input-prefix">$</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="governance-policy-input"
+                    value={policyMaxCents}
+                    onChange={(e) => setPolicyMaxCents(e.target.value.replace(/[^\d]/g, ""))}
+                    placeholder="0"
+                  />
+                  <span className="governance-input-suffix">USD</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="governance-card-actions">
+              <Button
+                type="button"
+                className="governance-hig-button"
+                disabled={saveHirePolicyMutation.isPending}
+                onClick={() => saveHirePolicyMutation.mutate()}
+              >
+                {t("policySave")}
+              </Button>
             </div>
           </div>
         </section>
-      )}
+
+        {dashboard && (
+          <section className="governance-section" aria-labelledby="governance-budget-heading">
+            <header className="governance-section-header">
+              <h2 id="governance-budget-heading" className="governance-section-title">
+                {t("budgetSection")}
+              </h2>
+            </header>
+            <div className="governance-glass-card governance-budget-card">
+              <div className="governance-budget-card-title">{t("budgetSectionTitle")}</div>
+              
+              <div className="governance-budget-status">
+                <div className="governance-budget-indicator"></div>
+                <p className="governance-budget-card-desc">
+                  {showBudgetHint
+                    ? [
+                        dashboard.governance.agentsPausedByBudgetCount > 0
+                          ? t("budgetPausedCount", {
+                              count: dashboard.governance.agentsPausedByBudgetCount,
+                            })
+                          : null,
+                        dashboard.governance.recentBreaches.length > 0
+                          ? t("budgetBreachesCount", {
+                              count: dashboard.governance.recentBreaches.length,
+                            })
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : t("budgetSectionHealthy")}
+                </p>
+              </div>
+
+              <div className="governance-budget-links">
+                <Link to="/dashboard" className="governance-hig-link">{t("linkDashboard")}</Link>
+                <Link to="/costs" className="governance-hig-link">{t("linkCosts")}</Link>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
 
       <section className="governance-section" aria-labelledby="governance-pending-heading">
-        <h2 id="governance-pending-heading" className="governance-section-title">
-          {t("pendingSection")}
-        </h2>
+        <header className="governance-section-header">
+          <h2 id="governance-pending-heading" className="governance-section-title">
+            {t("pendingSection")}
+          </h2>
+          <span className="governance-badge">{data?.pendingApprovals.length || 0}</span>
+        </header>
         {!data || data.pendingApprovals.length === 0 ? (
-          <p className="governance-empty">{t("noPending")}</p>
+          <div className="governance-glass-card governance-empty-card">
+            <p className="governance-empty">{t("noPending")}</p>
+          </div>
         ) : (
           <div className="governance-grid">
             {data.pendingApprovals.map((approval) => (
@@ -275,11 +304,16 @@ export function Governance() {
       </section>
 
       <section className="governance-section" aria-labelledby="governance-enacted-heading">
-        <h2 id="governance-enacted-heading" className="governance-section-title">
-          {t("enactedSection")}
-        </h2>
+        <header className="governance-section-header">
+          <h2 id="governance-enacted-heading" className="governance-section-title">
+            {t("enactedSection")}
+          </h2>
+          <span className="governance-badge">{data?.recentEnacted.length || 0}</span>
+        </header>
         {!data || data.recentEnacted.length === 0 ? (
-          <p className="governance-empty">{t("noEnacted")}</p>
+           <div className="governance-glass-card governance-empty-card">
+            <p className="governance-empty">{t("noEnacted")}</p>
+           </div>
         ) : (
           <div className="governance-grid">
             {data.recentEnacted.map((approval) => (
@@ -298,7 +332,7 @@ export function Governance() {
       </section>
 
       <div className="governance-footer-actions">
-        <Link to="/approvals/pending">{t("viewAllApprovals")}</Link>
+        <Link to="/approvals/pending" className="governance-hig-link">{t("viewAllApprovals")} &rarr;</Link>
       </div>
     </div>
   );

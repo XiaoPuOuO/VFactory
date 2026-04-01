@@ -906,6 +906,7 @@
     "output": "輸出",
     "cached": "快取",
     "inputTokens": "輸入 token",
+    "runInputZeroCachedHint": "提示端合計 {{total}}（提供者回報非快取輸入為 0）",
     "outputTokens": "輸出 token",
     "cachedTokens": "快取 token",
     "totalCost": "總成本",
@@ -1049,7 +1050,8 @@
     "showingMemoriesCount": "顯示 {{count}} / {{limit}} 筆記憶",
     "viewAllMemories": "檢視全部記憶",
     "memoryExpand": "展開",
-    "memoryCollapse": "收合"
+    "memoryCollapse": "收合",
+    "exportLog": "匯出 Log"
   },
   "issues": {
     "issues": "議題",
@@ -1095,11 +1097,13 @@
     "topOfProjects": "前 {{top}} 名，共 {{total}} 個專案",
     "inputTokens": "輸入 token",
     "outputTokens": "輸出 token",
-    "inOutTok": "輸入 {{in}}／輸出 {{out}} token",
+    "cachedReadTokens": "緩存讀取",
+    "cachedWriteTokens": "緩存寫入",
+    "inOutTok": "輸入 {{in}}／輸出 {{out}}／緩存讀 {{cr}}／緩存寫 {{cw}}",
     "apiRunsCount": "API 執行：{{count}}",
     "subscriptionRunsDetail": "訂閱執行：{{count}}（入 {{in}}／出 {{out}} tok）",
     "totalTokensConsumed": "總消耗 Token",
-    "totalTokensInRange": "{{range}}總計消耗 輸入 {{input}}／輸出 {{output}} token",
+    "totalTokensInRange": "{{range}}總計消耗：輸入 {{input}}／輸出 {{output}}／緩存讀 {{cr}}／緩存寫 {{cw}}",
     "breachHistory": "上限觸發紀錄",
     "noBreachesYet": "所選期間內尚無上限觸發紀錄。",
     "breachType": "類型",

@@ -1,175 +1,428 @@
-.run-quality-page {
-  max-width: 1120px;
+/* RunQuality.css - Apple HIG & Glassmorphism Design */
+
+.rq-page {
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 1.5rem 1.25rem 3rem;
-}
-
-.run-quality-header {
-  margin-bottom: 1.5rem;
-}
-
-.run-quality-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin: 0 0 0.35rem;
+  padding: 2rem 1.5rem 4rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--foreground);
 }
 
-.run-quality-subtitle {
-  margin: 0;
-  font-size: 0.9rem;
-  color: var(--muted-foreground);
-}
+.text-success { color: #34c759; }
+.text-danger { color: #ff3b30; }
 
-.run-quality-filters {
+.rq-header {
+  margin-bottom: 2rem;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.25rem;
-  margin-bottom: 1.25rem;
   align-items: flex-end;
+  justify-content: space-between;
 }
 
-.run-quality-field {
+.rq-header-content {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--foreground);
 }
 
-.run-quality-field input,
-.run-quality-field select {
-  min-width: 12rem;
-  padding: 0.45rem 0.55rem;
-  border-radius: 8px;
-  border: 1px solid var(--input);
-  color: var(--foreground);
-  background: transparent;
-  box-shadow: 0 1px 2px 0 color-mix(in oklab, var(--foreground) 0.04, transparent);
-  outline: none;
-  transition: color 0.15s, box-shadow 0.15s, border-color 0.15s;
+.rq-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 0;
+  background: linear-gradient(135deg, var(--foreground) 0%, color-mix(in srgb, var(--foreground) 70%, transparent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.dark .run-quality-field input,
-.dark .run-quality-field select {
-  background: color-mix(in oklab, var(--input) 30%, transparent);
-}
-
-.run-quality-field input:focus-visible,
-.run-quality-field select:focus-visible {
-  border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
-}
-
-.run-quality-summary-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.run-quality-card {
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  padding: 0.75rem 0.9rem;
-  background: var(--card);
-  color: var(--card-foreground);
-}
-
-.run-quality-card-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.rq-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
   color: var(--muted-foreground);
-  margin-bottom: 0.35rem;
+  font-weight: 400;
 }
 
-.run-quality-card-value {
-  font-size: 1.35rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--card-foreground);
-}
-
-.run-quality-section {
+/* Controls / Filters */
+.rq-controls {
   margin-bottom: 2rem;
+  background: color-mix(in srgb, var(--card) 40%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-radius: 16px;
+  padding: 1rem;
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.05), 0 0 1px 0 rgba(0, 0, 0, 0.1);
 }
 
-.run-quality-section-title {
-  font-size: 1rem;
+.rq-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-end;
+}
+
+.rq-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 200px;
+}
+
+.rq-field-label {
+  font-size: 0.8rem;
   font-weight: 600;
-  margin: 0 0 0.65rem;
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rq-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.rq-input {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--input) 20%, transparent);
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.rq-input:hover {
+  background: color-mix(in srgb, var(--input) 40%, transparent);
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.rq-input:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent), inset 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.rq-datetime::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.rq-datetime::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* Summary Cards (Glassmorphism) */
+.rq-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.rq-card {
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--card) 60%, transparent), color-mix(in srgb, var(--card) 30%, transparent));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  padding: 1.25rem;
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.04), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  cursor: default;
+}
+
+.rq-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.1), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+.rq-card-icon {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rq-card-success .rq-card-icon {
+  background: color-mix(in srgb, #34c759 15%, transparent);
+  color: #34c759;
+}
+
+.rq-card-danger .rq-card-icon {
+  background: color-mix(in srgb, #ff3b30 15%, transparent);
+  color: #ff3b30;
+}
+
+.rq-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.rq-card-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.rq-card-value {
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--foreground);
 }
 
-.run-quality-table-wrap {
-  overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--card-foreground);
+/* Layout for Tables */
+.rq-layout-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
 }
 
-.run-quality-table {
+@media (max-width: 900px) {
+  .rq-layout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rq-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.rq-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.25rem;
+}
+
+.rq-section-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Finder-like Tables */
+.rq-table-container {
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  background: color-mix(in srgb, var(--card) 40%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.04);
+}
+
+.rq-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-.run-quality-table th,
-.run-quality-table td {
-  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
   text-align: left;
-  border-bottom: 1px solid var(--border);
-  color: var(--card-foreground);
 }
 
-.run-quality-table th {
-  font-size: 0.72rem;
+.rq-table th {
+  padding: 0.85rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted-foreground);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  background: color-mix(in srgb, var(--background) 20%, transparent);
 }
 
-.run-quality-muted {
-  font-size: 0.9rem;
-  color: var(--muted-foreground);
+.rq-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
 }
 
-.run-quality-link {
-  color: var(--primary);
-  text-decoration: none;
+.rq-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
-.run-quality-link:hover {
-  text-decoration: underline;
+.rq-tr-hoverable {
+  transition: background 0.15s ease;
 }
 
-.run-quality-cluster-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  color: inherit;
+.rq-tr-hoverable:hover {
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+
+.rq-tr-clickable {
   cursor: pointer;
-  text-align: left;
-  font: inherit;
-  text-decoration: underline;
-  text-decoration-style: dotted;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 
-.run-quality-hint {
+.rq-tr-clickable:hover {
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.rq-tr-active {
+  background: color-mix(in srgb, var(--primary) 10%, transparent) !important;
+}
+
+.rq-empty-row {
+  text-align: center !important;
+  color: var(--muted-foreground);
+  padding: 2.5rem !important;
+}
+
+/* Badges & Micro-Components */
+.rq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.rq-badge-default {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
+.rq-badge-success {
+  background: color-mix(in srgb, #34c759 12%, transparent);
+  color: #34c759;
+  border: 1px solid color-mix(in srgb, #34c759 20%, transparent);
+}
+
+.rq-badge-warning {
+  background: color-mix(in srgb, #ff9500 12%, transparent);
+  color: #ff9500;
+  border: 1px solid color-mix(in srgb, #ff9500 20%, transparent);
+}
+
+.rq-badge-danger {
+  background: color-mix(in srgb, #ff3b30 12%, transparent);
+  color: #ff3b30;
+  border: 1px solid color-mix(in srgb, #ff3b30 20%, transparent);
+}
+
+/* Timeline specific */
+.rq-timeline-section {
+  margin-top: 1rem;
+}
+
+.rq-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--muted-foreground);
+  transition: all 0.2s;
+}
+
+.rq-btn-icon:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
+.rq-cell-right {
+  text-align: right !important;
+  width: 50px;
+}
+
+.rq-text-sm {
   font-size: 0.85rem;
-  margin-top: 0.5rem;
+}
+
+.rq-text-muted {
   color: var(--muted-foreground);
 }
 
-.run-quality-linkish {
-  background: none;
-  border: none;
-  padding: 0;
+.rq-font-medium {
+  font-weight: 500;
+}
+
+/* Avatar / Agent Info */
+.rq-agent-name {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 500;
+}
+
+.rq-avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
   color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.rq-avatar-sm {
+  width: 24px;
+  height: 24px;
+  font-size: 0.7rem;
+  border-radius: 6px;
+}
+
+.rq-truncate-cell {
+  max-width: 200px;
+}
+
+.rq-cluster-name {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.rq-btn-clear {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  border: none;
+  padding: 0.35rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--foreground);
   cursor: pointer;
-  font: inherit;
-  text-decoration: underline;
+  transition: all 0.2s;
+}
+
+.rq-btn-clear:hover {
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.rq-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  color: var(--muted-foreground);
+  font-size: 0.95rem;
 }

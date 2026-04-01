@@ -105,6 +105,7 @@ const skillFlowPromptStepSchema = z
     output: contextOutputKeySchema.optional(),
     require_human_input: z.boolean().optional(),
     require_approval_before: requireApprovalBeforeSchema,
+    dangerous: z.boolean().optional(),
     depends_on: dependsOnSchema,
   })
   .strict();
@@ -147,6 +148,7 @@ const skillFlowActionStepSchema = z
     action: workflowBuiltinActionSchema,
     params: z.record(z.string(), z.string()).default({}),
     require_approval_before: requireApprovalBeforeSchema,
+    dangerous: z.boolean().optional(),
     depends_on: dependsOnSchema,
   })
   .strict();
@@ -173,6 +175,7 @@ const skillFlowInvokeWorkflowStepSchema = z
     args: z.array(z.string().max(16_000)).max(32).optional(),
     output: contextOutputKeySchema.optional(),
     require_approval_before: requireApprovalBeforeSchema,
+    dangerous: z.boolean().optional(),
     depends_on: dependsOnSchema,
   })
   .strict();

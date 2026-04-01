@@ -12,7 +12,7 @@ export const costEvents = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     agentId: uuid("agent_id").notNull().references(() => agents.id),
-    issueId: uuid("issue_id").references(() => issues.id),
+    issueId: uuid("issue_id").references(() => issues.id, { onDelete: "set null" }),
     projectId: uuid("project_id").references(() => projects.id),
     goalId: uuid("goal_id").references(() => goals.id),
     billingCode: text("billing_code"),
@@ -20,6 +20,8 @@ export const costEvents = pgTable(
     model: text("model").notNull(),
     inputTokens: integer("input_tokens").notNull().default(0),
     outputTokens: integer("output_tokens").notNull().default(0),
+    cachedReadTokens: integer("cached_read_tokens").notNull().default(0),
+    cachedWriteTokens: integer("cached_write_tokens").notNull().default(0),
     costCents: integer("cost_cents").notNull(),
     /** Dedupe key for safe retries (optional). */
     idempotencyKey: text("idempotency_key"),

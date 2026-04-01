@@ -24,12 +24,15 @@ Paperclip 將 AI 程式碼代理人（Claude、Codex、Gemini、Cursor 等）轉
 | Instance Sidebar | 可折疊、可調整寬度的實例層級導覽側邊欄 |
 | Instance Settings UI | 完整的實例管理設定面板 |
 | Agent Tree & Model Filtering | 依模型、狀態或層級篩選代理人列表 |
-| Cost Charts | 依代理人、專案和計費代碼的互動式成本明細圖表 |
+| Cost Charts | 依代理人、專案和計費代碼的互動式成本明細圖表；**提示快取權杖**（`cachedReadTokens`／`cachedWriteTokens`）寫入 `cost_events` 並納入彙總、CSV 與圖表 |
 | Execution Labels | 在 Run 上顯示當前執行狀態的視覺標籤 |
 | Issue / 子任務喚醒 | 子任務完成或 Issue 更新時，自動喚醒父代理人 |
 | 可調整寬度側邊欄 | 整個 UI 中可拖曳調整的側邊欄面板 |
 | 公司工作流程 | 視覺化流程編輯、執行紀錄、Worker 審核與可選的 LLM Prompt 步驟；側欄與路由為 `/company/workflows`（舊路徑 `/company/skills` 會轉址） |
 | `browser-use` 子模組 | 不再以整包原始碼納入主倉庫 —— 以子模組提交鎖定上游版本；於 `browser-use-service` 內以 `-e ../../browser-use` 安裝 |
+| 可觀測性 | 公司範圍 **服務日誌** API + DB（`application_log_entries`）；**Prometheus** 格式 **`GET /metrics`**（可選 scrape token），並由 Express **`observability-http`** 中介層將各路徑延遲與狀態碼寫入 **`server/src/telemetry/`**；**平台告警** webhook 可自外部監控建立 Issue |
+| CI／交付 | 根目錄 **GitHub Actions**（僅 `paperclip-official/` 變更時觸發）執行 typecheck、測試、build、`security:audit`；**`deploy-with-rollback.sh`** 支援 symlink 部署、健康檢查與回滾 |
+| Roadmap／覆寫 | **版本化 Roadmap** 與 **human override** 資料表 + REST API；可選 **materialize** 將 Markdown 清單列轉為 backlog Issue；自主決策優先序規則；可選 **Watchdog** 於 reap orphan run 時建立 escalation Issue |
 
 ---
 
@@ -67,10 +70,13 @@ Paperclip 將 AI 程式碼代理人（Claude、Codex、Gemini、Cursor 等）轉
 │  issues · agents · chat · company-skills · workflow-runs   heartbeat（Run 編排）             │
 │  approvals · costs · goals       agent-memories（跨對話記憶）      │
 │  schedules · projects            browser-use-gateway（HMAC 代理） │
+│  service-logs · roadmap ·        應用程式日誌 · 指標               │
+│  platform-alerts（webhook）      （Prometheus 文字／告警→Issue）   │
 │  plugins · secrets               realtime（WebSocket 廣播）       │
 │  instance/* · scim               cost / budget 強制執行           │
 │                                                                   │
 │  Auth: Better Auth · Agent JWT · SCIM 配置                        │
+│  運維: GET /api/health · GET /metrics（選用）· HTTP 指標中介層 · CI 於 .github │
 │  DB:   PostgreSQL + Drizzle ORM（本機開發可用 embedded-postgres）  │
 └──────┬──────────────────────────────────────┬────────────────────┘
        │  adapter spawn / heartbeat           │  HMAC-signed HTTP
@@ -114,7 +120,7 @@ Issue 是工作的基本單位，每個 Issue 可以：
 |---|---|---|
 | `claude-local` | Anthropic Claude Code CLI | stdio / process spawn |
 | `codex-local` | OpenAI Codex CLI | stdio / process spawn |
-| `cursor-local` | Cursor IDE agent | stdio / process spawn |
+| `cursor-local` | Cursor IDE agent | stdio / process spawn（stream-json 會解析 **`cached_input_tokens`** 及分立的 **cache 讀／寫** 欄位，若上游有提供） |
 | `gemini-local` | Google Gemini CLI | stdio / process spawn |
 | `opencode-local` | OpenCode agent | stdio / process spawn |
 | `pi-local` | Pi agent | stdio / process spawn |
@@ -187,6 +193,25 @@ Issue 是工作的基本單位，每個 Issue 可以：
 
 ---
 
+### 可觀測性、CI/CD 與 Roadmap 治理（本 Fork）
+
+除 Pino **stdout／本機檔案** 外，本 Fork 另提供**平台級**能力：
+
+| 面向 | 說明 |
+|---|---|
+| **服務日誌** | 結構化資料存於 PostgreSQL（`application_log_entries`）；經公司範圍 **service-logs** 路由查詢／寫入（需 RBAC）。與 **`activity_log`（稽核）** 及原始 Pino 檔案不同。 |
+| **指標** | **`GET /metrics`** 輸出 Prometheus 文字（經 `observabilityHttpMetrics` 記錄各路徑 HTTP 耗時／狀態、5xx、排程／heartbeat tick 錯誤等）。設定 `PAPERCLIP_METRICS_ENABLED=true`；可選 `PAPERCLIP_METRICS_SCRAPE_TOKEN` 以 Bearer 保護。 |
+| **告警→Issue** | **`POST /api/webhooks/platform-alerts`**，標頭 **`X-Paperclip-Alert-Token`** 須與 **`PAPERCLIP_ALERT_WEBHOOK_SECRET`** 一致（body 經 Zod 驗證）。可接 Alertmanager 或雲端監控（依文件調整 payload）。 |
+| **CI** | 根目錄 **`.github/workflows/paperclip-ci.yml`** 於 `paperclip-official/**` 變更時執行：`pnpm -r typecheck`、`pnpm test:run`、`pnpm build`、`pnpm run security:audit`（生產依賴、預設 critical 閾值，可於 `package.json` 調整）。 |
+| **部署／回滾** | **`paperclip-official/scripts/deploy-with-rollback.sh`**：解壓 artifact、切換 **`current`** symlink、可選 **`PAPERCLIP_HEALTH_URL`**；失敗還原上一版；可選 **`PAPERCLIP_ACTIVITY_URL`** POST 稽核。 |
+| **Roadmap** | **`roadmap_versions`**／**`roadmap_human_overrides`** 與 API（**`/api/companies/:companyId/roadmap/...`**）。**`POST .../versions/:versionId/materialize`** 將 `-`／`*` Markdown 列轉為 backlog Issue（有上限）。 |
+| **安全** | Workflow／技能步驟可標 **`dangerous`** —— 仍須人工審批。伺服器端另有 **`dangerous-action-registry`** 與 **`planning-priority`** 協助一致的把關與規劃優先序。**`redaction.ts`** 強化敏感鍵遮蔽。 |
+| **Watchdog** | 若 **`PAPERCLIP_WATCHDOG_ESCALATION_ISSUES=true`**，reap 孤兒 heartbeat run 時可為受影響公司建立高優先 Issue。 |
+
+延伸閱讀（勿將密鑰寫入版本庫）：**`paperclip-official/documents/runbooks/diagnostician-alert-issue.md`**、**`paperclip-official/documents/ai-company-open-questions.md`**。
+
+---
+
 ### Costs — 支出可視化
 
 每個代理人發出的每個 LLM 呼叫都被記錄為成本事件。
@@ -197,6 +222,8 @@ Issue 是工作的基本單位，每個 Issue 可以：
 - 依計費代碼
 - 公司整體彙整
 - UI 中的互動式時間序列圖表
+
+**提示快取計帳：** 成本列與彙總包含 **快取讀取** 與 **快取寫入** 權杖數（migration 擴充 `cost_events` 與 `agent_runtime_state`）。**`cursor-local`** 等 Adapter 會將 Cursor `result.usage` 對應到 heartbeat 用量，使快取命中與輸入／輸出權杖一併呈現於 UI 與匯出。
 
 **預算強制執行：**
 - 為每個公司或代理人定義預算政策
@@ -315,6 +342,7 @@ CLI 是管理 Paperclip 實例的運維人員的主要工具。
 | 測試 | Vitest（單元）、Playwright（E2E） |
 | 瀏覽器自動化 | Python ≥ 3.11、FastAPI、browser-use、Playwright/Chromium |
 | CI 封裝 | pnpm workspaces、TypeScript 專案參考 |
+| 倉庫 CI | GitHub Actions：`.github/workflows/paperclip-ci.yml`（僅 `paperclip-official/`） |
 
 ---
 
@@ -408,6 +436,9 @@ pnpm paperclipai doctor
 ```
 Paperclip/
 ├── README.md                             ← 英文主 README
+├── .github/
+│   └── workflows/
+│       └── paperclip-ci.yml              ← paperclip-official 的 CI（路徑過濾）
 ├── browser-use/                          ← Git 子模組：上游 browser-use（提交由 gitlink 鎖定）
 ├── documents/
 │   ├── MultiLanguage/
@@ -415,7 +446,13 @@ Paperclip/
 │   │   └── README.zh_CN.md               ← 簡體中文
 │   └── changeLog/                        ← 自動化變更紀錄
 └── paperclip-official/
-    ├── documents/adr/                    ← 架構決策紀錄（選讀）
+    ├── documents/
+    │   ├── adr/                          ← 架構決策紀錄（選讀）
+    │   ├── runbooks/                     ← 例：告警診斷 runbook
+    │   └── ai-company-open-questions.md  ← 環境／部署開放問題（參考）
+    ├── scripts/
+    │   ├── release-preflight.sh          ← 發布閘門（typecheck、test、build）
+    │   └── deploy-with-rollback.sh       ← Symlink 部署＋健康檢查＋回滾（選用）
     ├── browser-use-service/              ← Python 瀏覽器自動化服務
     │   ├── app.py                        ← FastAPI + HMAC 驗證 + browser-use
     │   └── requirements.txt              ← 可編輯安裝：../../browser-use
@@ -427,6 +464,9 @@ Paperclip/
     │   └── src/
     │       ├── app.ts                    ← Express 應用程式組裝
     │       ├── routes/                   ← REST 路由處理器
+    │       ├── middleware/               ← 例：可觀測性 HTTP 指標
+    │       ├── telemetry/                ← Prometheus 輔助模組
+    │       ├── lib/                      ← 例：dangerous-action-registry、planning-priority
     │       └── services/                 ← 業務邏輯（heartbeat、記憶、成本等）
     ├── ui/                               ← React 前端
     │   └── src/
@@ -446,6 +486,7 @@ Paperclip/
     │   ├── shared/                       ← 跨套件共用的 Zod 型別
     │   └── adapter-utils/                ← 共用 Adapter 工具函式
     └── AgentSetting/                     ← 代理人規則、技能、提示詞
+        └── promptTemplate/               ← 選用之版本化提示詞範本（Markdown）
 ```
 
 ---

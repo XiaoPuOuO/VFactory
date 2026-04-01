@@ -907,6 +907,7 @@
     "output": "Output",
     "cached": "Cached",
     "inputTokens": "Input tokens",
+    "runInputZeroCachedHint": "Prompt-side total {{total}} (provider reports 0 non-cached input)",
     "outputTokens": "Output tokens",
     "cachedTokens": "Cached tokens",
     "totalCost": "Total cost",
@@ -1050,7 +1051,8 @@
     "showingMemoriesCount": "Showing {{count}} / {{limit}} memories",
     "viewAllMemories": "View all memories",
     "memoryExpand": "Show more",
-    "memoryCollapse": "Collapse"
+    "memoryCollapse": "Collapse",
+    "exportLog": "Export Log"
   },
   "issues": {
     "issues": "Issues",

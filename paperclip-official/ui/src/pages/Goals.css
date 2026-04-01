@@ -5,17 +5,64 @@
 .goals-page {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  animation: goalsFadeIn 0.4s ease-out forwards;
+}
+
+@keyframes goalsFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .goals-header {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+/* 新增目標按鈕：Apple HIG 與毛玻璃質感 */
+.goals-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px; /* Apple-esque border radius */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  cursor: pointer;
+}
+
+.goals-new-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.goals-new-btn:active {
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 .goals-btn-icon {
   width: 0.875rem;
   height: 0.875rem;
-  margin-right: 0.375rem;
+  transition: transform 0.3s ease;
+}
+
+.goals-new-btn:hover .goals-btn-icon {
+  transform: rotate(90deg);
 }

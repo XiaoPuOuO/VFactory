@@ -15,6 +15,8 @@ export const agentRuntimeState = pgTable(
     totalInputTokens: bigint("total_input_tokens", { mode: "number" }).notNull().default(0),
     totalOutputTokens: bigint("total_output_tokens", { mode: "number" }).notNull().default(0),
     totalCachedInputTokens: bigint("total_cached_input_tokens", { mode: "number" }).notNull().default(0),
+    totalCacheReadTokens: bigint("total_cache_read_tokens", { mode: "number" }).notNull().default(0),
+    totalCacheWriteTokens: bigint("total_cache_write_tokens", { mode: "number" }).notNull().default(0),
     totalCostCents: bigint("total_cost_cents", { mode: "number" }).notNull().default(0),
     lastError: text("last_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
