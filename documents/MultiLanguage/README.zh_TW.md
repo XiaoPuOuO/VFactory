@@ -2,7 +2,7 @@
 
 > **Language / 語言：** [English](../../README.md) · [简体中文](README.zh_CN.md)
 
-一個**可自行部署、生產就緒的 AI 程式碼代理人控制平面** —— fork 自 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)，並擴充了**公司層級工作流程**（類 SOP 自動化）、瀏覽器自動化、跨對話持久記憶、更豐富的成本分析，以及多項 UX 改進。上游 [`browser-use`](https://github.com/browser-use/browser-use) 函式庫以 **Git 子模組**置於倉庫根目錄（`browser-use/`），選用的 Python 微服務透過 **可編輯安裝（`-e`）** 與該子模組對齊。
+一個**可自行部署、生產就緒的 AI 程式碼代理人控制平面** —— fork 自 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)，並擴充了**公司層級工作流程**（類 SOP 自動化）、瀏覽器自動化、跨對話持久記憶、更豐富的成本分析，以及多項 UX 改進。**browser-use** 函式庫以 **Git 子模組**置於倉庫根目錄（`browser-use/`）；子模組遠端為 **[XiaoPuOuO/browser-use](https://github.com/XiaoPuOuO/browser-use)**（含少量下游補丁之 fork）。**官方上游**專案仍為 **[browser-use/browser-use](https://github.com/browser-use/browser-use)**（issue、發行版與授權歸屬）。選用的 Python 微服務以 **可編輯安裝（`-e`）** 對齊該子模組目錄。
 
 ---
 
@@ -141,7 +141,7 @@ Issue 是工作的基本單位，每個 Issue 可以：
 
 ### Browser-Use — AI 原生瀏覽器自動化
 
-**Browser-Use 微服務**（Python / FastAPI）封裝了 [`browser-use`](https://github.com/browser-use/browser-use) 函式庫，並以已簽章的內部 REST API 方式暴露出來。任何代理人都可取得瀏覽器 Session 並執行真實互動。
+**Browser-Use 微服務**（Python / FastAPI）封裝 **`browser-use/` 子模組**內的程式（見上段 fork 與上游說明），並以已簽章的內部 REST API 方式暴露出來。任何代理人都可取得瀏覽器 Session 並執行真實互動。若為函式庫本身的**上游**問題或功能建議，請至官方 **[browser-use/browser-use](https://github.com/browser-use/browser-use)** 追蹤，除非變更僅適用本 fork。
 
 **可用操作**（皆為 `POST`，並以簽章的 JSON 信封承載參數）：
 
@@ -496,6 +496,7 @@ Paperclip/
 | 元件 | 上游 | 授權 |
 |---|---|---|
 | Paperclip | [paperclipai/paperclip](https://github.com/paperclipai/paperclip) | MIT — Copyright (c) 2025 Paperclip AI |
-| Browser-Use | [browser-use/browser-use](https://github.com/browser-use/browser-use) | MIT — Copyright (c) 2024 Gregor Zunic |
+| Browser-Use（官方上游） | [browser-use/browser-use](https://github.com/browser-use/browser-use) | MIT — Copyright (c) 2024 Gregor Zunic |
+| Browser-Use（本倉庫子模組） | [XiaoPuOuO/browser-use](https://github.com/XiaoPuOuO/browser-use) | 同 MIT；含少量下游補丁之 fork |
 
 完整授權文字：`paperclip-official/LICENSE`。

@@ -2,7 +2,7 @@
 
 > **Language / 語言：** [繁體中文](documents/MultiLanguage/README.zh_TW.md) · [简体中文](documents/MultiLanguage/README.zh_CN.md)
 
-A **self-hosted, production-ready control plane for AI coding agents** — forked from [paperclipai/paperclip](https://github.com/paperclipai/paperclip) and extended with **company-level workflows** (SOP-style automation), browser automation, persistent cross-chat memory, richer cost analytics, and several UX improvements. The upstream [`browser-use`](https://github.com/browser-use/browser-use) library is included as a **Git submodule** at repo root (`browser-use/`), and the optional Python microservice installs it in **editable** mode so it tracks that submodule.
+A **self-hosted, production-ready control plane for AI coding agents** — forked from [paperclipai/paperclip](https://github.com/paperclipai/paperclip) and extended with **company-level workflows** (SOP-style automation), browser automation, persistent cross-chat memory, richer cost analytics, and several UX improvements. The **browser-use** library is included as a **Git submodule** at repo root (`browser-use/`). The submodule remote is **[XiaoPuOuO/browser-use](https://github.com/XiaoPuOuO/browser-use)** (a fork with small downstream patches). **Canonical upstream** for the project remains **[browser-use/browser-use](https://github.com/browser-use/browser-use)** (issues, releases, and licensing attribution). The optional Python microservice installs the submodule in **editable** mode so it tracks that checkout.
 
 ---
 
@@ -143,7 +143,7 @@ The server's heartbeat service orchestrates the full execution lifecycle — pro
 
 ### Browser-Use — AI-Native Browser Automation
 
-The **Browser-Use microservice** (Python / FastAPI) wraps the [`browser-use`](https://github.com/browser-use/browser-use) library and exposes it as a signed internal REST API. Any agent can acquire a browser session and perform real interactions.
+The **Browser-Use microservice** (Python / FastAPI) wraps the **browser-use** code from the **`browser-use/` submodule** (see fork vs upstream above) and exposes it as a signed internal REST API. Any agent can acquire a browser session and perform real interactions. For **upstream** bugs or features in the library itself, use the **canonical** [browser-use/browser-use](https://github.com/browser-use/browser-use) tracker unless the change is specific to this fork.
 
 **Available operations** (all routes use `POST` and a signed JSON body envelope):
 
@@ -498,6 +498,7 @@ Paperclip/
 | Component | Upstream | License |
 |---|---|---|
 | Paperclip | [paperclipai/paperclip](https://github.com/paperclipai/paperclip) | MIT — Copyright (c) 2025 Paperclip AI |
-| Browser-Use | [browser-use/browser-use](https://github.com/browser-use/browser-use) | MIT — Copyright (c) 2024 Gregor Zunic |
+| Browser-Use (canonical) | [browser-use/browser-use](https://github.com/browser-use/browser-use) | MIT — Copyright (c) 2024 Gregor Zunic |
+| Browser-Use (submodule in this repo) | [XiaoPuOuO/browser-use](https://github.com/XiaoPuOuO/browser-use) | Same MIT; fork with minimal downstream patches |
 
 Full license text: `paperclip-official/LICENSE`.

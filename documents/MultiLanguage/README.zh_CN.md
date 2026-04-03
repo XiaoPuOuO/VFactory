@@ -2,7 +2,7 @@
 
 > **Language / 语言：** [English](../../README.md) · [繁體中文](README.zh_TW.md)
 
-一个**可自行部署、生产就绪的 AI 代码智能体控制平面** —— fork 自 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)，并扩展了**公司级工作流**（类 SOP 自动化）、浏览器自动化、跨对话持久记忆、更丰富的成本分析，以及多项 UX 改进。上游 [`browser-use`](https://github.com/browser-use/browser-use) 库以 **Git 子模块**置于仓库根目录（`browser-use/`），可选的 Python 微服务通过 **可编辑安装（`-e`）** 与该子模块对齐。
+一个**可自行部署、生产就绪的 AI 代码智能体控制平面** —— fork 自 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)，并扩展了**公司级工作流**（类 SOP 自动化）、浏览器自动化、跨对话持久记忆、更丰富的成本分析，以及多项 UX 改进。**browser-use** 库以 **Git 子模块**置于仓库根目录（`browser-use/`）；子模块远程为 **[XiaoPuOuO/browser-use](https://github.com/XiaoPuOuO/browser-use)**（含少量下游补丁的 fork）。**官方上游**项目仍为 **[browser-use/browser-use](https://github.com/browser-use/browser-use)**（issue、发行版与许可归属）。可选的 Python 微服务通过 **可编辑安装（`-e`）** 与该子模块目录对齐。
 
 ---
 
@@ -141,7 +141,7 @@ Issue 是工作的基本单位，每个 Issue 可以：
 
 ### Browser-Use — AI 原生浏览器自动化
 
-**Browser-Use 微服务**（Python / FastAPI）封装了 [`browser-use`](https://github.com/browser-use/browser-use) 库，并以已签名的内部 REST API 方式暴露出来。任何智能体都可获取浏览器 Session 并执行真实交互。
+**Browser-Use 微服务**（Python / FastAPI）封装 **`browser-use/` 子模块**中的代码（见上文 fork 与上游说明），并以已签名的内部 REST API 方式暴露出来。任何智能体都可获取浏览器 Session 并执行真实交互。若为库本身的**上游**缺陷或功能需求，请至官方 **[browser-use/browser-use](https://github.com/browser-use/browser-use)** 跟踪，除非变更仅适用于本 fork。
 
 **可用操作**（均为 `POST`，并使用签名的 JSON 信封传参）：
 
@@ -496,6 +496,7 @@ Paperclip/
 | 组件 | 上游 | 许可证 |
 |---|---|---|
 | Paperclip | [paperclipai/paperclip](https://github.com/paperclipai/paperclip) | MIT — Copyright (c) 2025 Paperclip AI |
-| Browser-Use | [browser-use/browser-use](https://github.com/browser-use/browser-use) | MIT — Copyright (c) 2024 Gregor Zunic |
+| Browser-Use（官方上游） | [browser-use/browser-use](https://github.com/browser-use/browser-use) | MIT — Copyright (c) 2024 Gregor Zunic |
+| Browser-Use（本仓库子模块） | [XiaoPuOuO/browser-use](https://github.com/XiaoPuOuO/browser-use) | 同 MIT；含少量下游补丁的 fork |
 
 完整许可证文本：`paperclip-official/LICENSE`。
