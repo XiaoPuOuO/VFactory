@@ -28,6 +28,7 @@ describe("local disk storage provider", () => {
     const service = createStorageService(createLocalDiskStorageProvider(root));
     const content = Buffer.from("hello image bytes", "utf8");
     const stored = await service.putFile({
+      tenantId: "tenant-1",
       companyId: "company-1",
       namespace: "issues/issue-1",
       originalFilename: "demo.png",
@@ -35,7 +36,7 @@ describe("local disk storage provider", () => {
       body: content,
     });
 
-    const fetched = await service.getObject("company-1", stored.objectKey);
+    const fetched = await service.getObject("company-1", stored.objectKey, "tenant-1");
     const fetchedBody = await readStreamToBuffer(fetched.stream);
 
     expect(fetchedBody.toString("utf8")).toBe("hello image bytes");
@@ -48,6 +49,7 @@ describe("local disk storage provider", () => {
 
     const service = createStorageService(createLocalDiskStorageProvider(root));
     const stored = await service.putFile({
+      tenantId: "tenant-a",
       companyId: "company-a",
       namespace: "issues/issue-1",
       originalFilename: "demo.png",
@@ -55,7 +57,7 @@ describe("local disk storage provider", () => {
       body: Buffer.from("hello", "utf8"),
     });
 
-    await expect(service.getObject("company-b", stored.objectKey)).rejects.toMatchObject({ status: 403 });
+    await expect(service.getObject("company-b", stored.objectKey, "tenant-a")).rejects.toMatchObject({ status: 403 });
   });
 
   it("delete is idempotent", async () => {
@@ -64,6 +66,7 @@ describe("local disk storage provider", () => {
 
     const service = createStorageService(createLocalDiskStorageProvider(root));
     const stored = await service.putFile({
+      tenantId: "tenant-1",
       companyId: "company-1",
       namespace: "issues/issue-1",
       originalFilename: "demo.png",
@@ -71,8 +74,8 @@ describe("local disk storage provider", () => {
       body: Buffer.from("hello", "utf8"),
     });
 
-    await service.deleteObject("company-1", stored.objectKey);
-    await service.deleteObject("company-1", stored.objectKey);
-    await expect(service.getObject("company-1", stored.objectKey)).rejects.toMatchObject({ status: 404 });
+    await service.deleteObject("company-1", stored.objectKey, "tenant-1");
+    await service.deleteObject("company-1", stored.objectKey, "tenant-1");
+    await expect(service.getObject("company-1", stored.objectKey, "tenant-1")).rejects.toMatchObject({ status: 404 });
   });
 });

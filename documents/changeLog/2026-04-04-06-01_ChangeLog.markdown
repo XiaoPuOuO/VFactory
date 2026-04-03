@@ -1,0 +1,2472 @@
+# Change Log: 2026-04-04 06:01
+
+## 注意事項與排除項目
+
+- **未納入本次暫存與提交**：`paperclip-official/browser-use-service/__pycache__/app.cpython-314.pyc`（Python 編譯位元組檔，二進位產物）、`paperclip-official/browser-use-service/debug.log`（本機除錯日誌）。二者目前仍被 Git 追蹤；本次提交刻意不暫存並還原工作區至 HEAD，避免將日誌與快取檔寫入版本庫。建議後續在 `browser-use-service` 增補 `.gitignore` 並對已追蹤路徑執行 `git rm --cached`。
+- **子模組 `browser-use`**：內含未提交變更（`browser_use/mcp/server.py` 新增 `_last_llm_usage`／`_last_llm_model`／`_last_llm_provider` 並於 `browser_extract_content` 流程寫入；`browser_use/tools/service.py` 於結構化與一般擷取回傳的 `metadata` 附帶 `llm_usage`）。**父儲存庫本次不更新子模組 commit 指標**，請於子模組內另行提交後再在父層更新。
+
+## 變更總覽（繁體中文摘要）
+
+本次於 `paperclip-official` 為主軸：**訂閱／計費（含方案、公司訂閱、Webhook、發票嘗試）**、**實例方案與權限（`admin.pricing`）**、**Browser Use 服務回傳 LLM usage 供控制平面計費**、**Landing／導覽／i18n 與成本圖表等 UI 調整**，並新增多份 BYOK／計費規格文件。伺服器新增 `stripe` 依賴與計費相關路由、服務與測試。
+
+## [新增] 文件 `paperclip-official/documents/`
+
+- `billing-saas.md`：SaaS 計費相關說明。
+- `byok-addons-catalog.md`、`byok-billing-engine-backlog.md`、`byok-charge-boundary-and-gtm.md`、`byok-feature-billing-matrix.md`、`byok-gtm-land-expand.md`、`byok-hosted-inference-addon.md`、`byok-integration-premium-packs.md`、`byok-revenue-model-spec.md`、`byok-tier-matrix.md`：BYOK 方案矩陣、加購目錄、計費引擎待辦、收費邊界與 GTM 等規格補充。
+
+## [新增] 資料庫遷移 `packages/db/src/migrations/`
+
+- `0059_billing_plans_subscriptions.sql`：計費方案與訂閱相關結構。
+- `0060_byok_plan_entitlements_meta.sql`：BYOK 方案權益後設。
+- `0061_plans_catalog_visibility.sql`：方案目錄可見性。
+- `0062_grant_admin_pricing_to_setting_groups.sql`：對設定群組授與 `admin.pricing` 等。
+- `meta/_journal.json`：登錄上述遷移條目（idx 48–51）。
+
+## [新增] Drizzle schema `packages/db/src/schema/`
+
+- `plans.ts`、`company_subscriptions.ts`、`billing_webhook_events.ts`、`billing_invoice_attempts.ts`：方案、公司訂閱、Webhook 事件、發票嘗試紀錄。
+- `index.ts`：匯出上述模組與相關型別／列舉。
+
+## [新增] 共用套件 `packages/shared/`
+
+- `types/billing.ts`：`PlanSummary`、`CompanyBillingStatus`、`InstancePlanRow`、`BillingCheckoutRequest` 等型別。
+- `validators/billing.ts`、`validators/instance-plans.ts`：結帳與實例方案 Zod schema。
+- `index.ts`、`validators/index.ts`：重新匯出計費與實例方案驗證與型別。
+
+## [修改] `packages/shared/src/instance-permissions.ts`
+
+- 註冊並固定權限鍵 **`admin.pricing`**（標籤鍵 `instance.permissionKey_admin_pricing`），供定價／方案管理授權使用。
+
+## [修改] `pnpm-lock.yaml`、`server/package.json`
+
+- 新增 **`stripe`** 套件（伺服器依賴），鎖檔同步更新解析與 snapshots。
+
+## [新增] 伺服器計費模組 `server/src/billing/`
+
+- `ports.ts`、`factory.ts`、`facade.ts`：計費連接埠、工廠與外觀。
+- `subscription-store.ts`：訂閱狀態存取。
+- `webhook-http.ts`：Webhook HTTP 處理。
+- `ecpay-mac.ts`：綠界 MAC 相關。
+- `adapters/stripe-adapter.ts`、`ecpay-payment-adapter.ts`、`ecpay-invoice-adapter.ts`、`noop-invoice.ts`：付款／發票適配器。
+
+## [新增] 伺服器路由與服務
+
+- `routes/billing.ts`、`routes/instance-plans.ts`：計費結帳／Webhook 與實例方案 API。
+- `services/billing/entitlements.ts`、`services/billing/plan-visibility.ts`：權益合併與方案可見性。
+- `services/browser-use-llm-cost.ts`：Browser Use LLM 成本對應邏輯。
+
+## [修改] 伺服器核心與周邊（摘錄）
+
+- `app.ts`：掛載計費與實例方案路由等。
+- `routes/authz.ts`：`admin.pricing` 授權檢查。
+- `routes/assets.ts`、`company-skills.ts`、`issues.ts`：與權限或資源路徑微調。
+- `routes/browser-use-tools.ts`、`services/browser-use-gateway.ts`、`services/browser-use-llm-cost.ts`（搭配）：承接 **`browser_extract_content`** 回傳之 **`llmUsage`／`llmModel`／`llmProvider`**。
+- `services/costs.ts`、`run-log-store.ts`、`heartbeat.ts`、`storage/service.ts`、`storage/types.ts`、`company-skill-bundle.ts`：成本紀錄、儲存與技能 bundle 等配合調整。
+- `vitest.config.ts`：測試設定微調。
+
+## [新增] 伺服器測試
+
+- `__tests__/billing-ecpay-mac.test.ts`：綠界 MAC 測試。
+- `__tests__/billing-entitlements-merge.test.ts`：權益合併測試。
+- `__tests__/browser-use-tools-routes.test.ts`、`storage-local-provider.test.ts`：既有測試擴充以涵蓋新行為。
+
+## [修改] `browser-use-service/app.py`
+
+- `_handle` 於工具名為 **`browser_extract_content`** 時，從 server 讀取 **`_last_llm_usage`、`_last_llm_model`、`_last_llm_provider`**，寫入回應 **`llmUsage`、`llmModel`、`llmProvider`** 欄位，供上游計費。
+
+## [新增] 前端 API 與頁面
+
+- `ui/src/api/billing.ts`、`instance-plans.ts`：計費與實例方案 API 客戶端。
+- `pages/CompanyBilling.tsx`、`CompanyBilling.css`：公司計費頁。
+- `pages/InstancePlansSettings.tsx`、`InstancePlansSettings.css`：實例方案設定。
+- `pages/PricingPage.tsx`：定價頁。
+- `pages/BillingCheckoutReturn.tsx`、`BillingCheckoutCancel.tsx`：結帳導回／取消頁。
+- `components/PlanEntitlementsList.tsx`：方案權益列表元件。
+
+## [修改] 前端導覽與樣式
+
+- `App.tsx`、`Layout.tsx`、`Sidebar.tsx`、`InstanceSidebar.tsx`、`CommandPalette.tsx`、`lib/company-routes.ts`、`queryKeys.ts`：路由、側欄與指令面板擴充。
+- `pages/Landing.tsx`、`Landing.css`：首頁內容與版面強化。
+- `pages/Account.tsx`、`InstanceSettings.tsx`、`OnboardingWizard.tsx`、`OnboardingWizard.css`：帳戶／實例設定與引導流程銜接計費或方案。
+- `components/CostCharts.tsx`、`styles/chat.css`、`index.css`：成本圖表與聊天樣式調整。
+- `i18n.ts`、`locales/en.json`、`locales/zh-TW.json`：中英與繁中翻譯大量補齊計費與權限相關字串。
+
+## 附錄：完整 `git diff`（相對於 HEAD）
+
+以下為工作區相對於索引／HEAD 之差異，**已排除** `__pycache__/*.pyc`、`debug.log` 與子模組 **`browser-use`** 目錄；新增未追蹤檔案之內容請以工作目錄實際檔案為準（`git diff` 預設不含未追蹤檔）。
+
+（diff 內容由建檔當下 `git diff` 匯出，見同目錄或下方接續區塊。）
+
+```diff
+diff --git a/paperclip-official/browser-use-service/app.py b/paperclip-official/browser-use-service/app.py
+index e25b81f..9a64a27 100644
+--- a/paperclip-official/browser-use-service/app.py
++++ b/paperclip-official/browser-use-service/app.py
+@@ -103,7 +103,19 @@ async def _handle(tool_name: str, env: Envelope) -> dict[str, Any]:
+     trace_id = env.traceId or str(uuid.uuid4())
+     try:
+         result = await server._execute_tool(tool_name, env.toolInput)
+-        return {"ok": True, "data": result, "error": None, "traceId": trace_id}
++        out: dict[str, Any] = {"ok": True, "data": result, "error": None, "traceId": trace_id}
++        # browser_extract_content 會呼叫 LLM：附帶 usage 供控制平面計費
++        if tool_name == "browser_extract_content":
++            usage = getattr(server, "_last_llm_usage", None)
++            if usage:
++                out["llmUsage"] = usage
++            model = getattr(server, "_last_llm_model", None)
++            if model:
++                out["llmModel"] = model
++            prov = getattr(server, "_last_llm_provider", None)
++            if prov:
++                out["llmProvider"] = prov
++        return out
+     except Exception as exc:  # noqa: BLE001
+         return {
+             "ok": False,
+diff --git a/paperclip-official/packages/db/src/migrations/meta/_journal.json b/paperclip-official/packages/db/src/migrations/meta/_journal.json
+index 57cc4ab..97526cc 100644
+--- a/paperclip-official/packages/db/src/migrations/meta/_journal.json
++++ b/paperclip-official/packages/db/src/migrations/meta/_journal.json
+@@ -337,6 +337,34 @@
+       "when": 1774997529217,
+       "tag": "0047_safe_tempest",
+       "breakpoints": true
++    },
++    {
++      "idx": 48,
++      "version": "7",
++      "when": 1775100000000,
++      "tag": "0059_billing_plans_subscriptions",
++      "breakpoints": true
++    },
++    {
++      "idx": 49,
++      "version": "7",
++      "when": 1775200000000,
++      "tag": "0060_byok_plan_entitlements_meta",
++      "breakpoints": true
++    },
++    {
++      "idx": 50,
++      "version": "7",
++      "when": 1775300000000,
++      "tag": "0061_plans_catalog_visibility",
++      "breakpoints": true
++    },
++    {
++      "idx": 51,
++      "version": "7",
++      "when": 1775400000000,
++      "tag": "0062_grant_admin_pricing_to_setting_groups",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff --git a/paperclip-official/packages/db/src/schema/index.ts b/paperclip-official/packages/db/src/schema/index.ts
+index 58047bf..0546291 100644
+--- a/paperclip-official/packages/db/src/schema/index.ts
++++ b/paperclip-official/packages/db/src/schema/index.ts
+@@ -1,4 +1,13 @@
+ export { companies } from "./companies.js";
++export { plans, type PlanEntitlements, type PlanExternalRefs } from "./plans.js";
++export {
++  companySubscriptions,
++  type PaymentProviderId,
++  paymentProviderEnum,
++  subscriptionStatusEnum,
++} from "./company_subscriptions.js";
++export { billingWebhookEvents } from "./billing_webhook_events.js";
++export { billingInvoiceAttempts } from "./billing_invoice_attempts.js";
+ export { companyWebhookEndpoints } from "./company_webhook_endpoints.js";
+ export { companyNotificationDestinations } from "./company_notification_destinations.js";
+ export { issueSubscriptions } from "./issue_subscriptions.js";
+diff --git a/paperclip-official/packages/shared/src/index.ts b/paperclip-official/packages/shared/src/index.ts
+index 12f3ec9..5563bc6 100644
+--- a/paperclip-official/packages/shared/src/index.ts
++++ b/paperclip-official/packages/shared/src/index.ts
+@@ -226,6 +226,12 @@ export {
+   type CreateCompany,
+   type UpdateCompany,
+   type UpdateCompanyLimits,
++  billingCheckoutSchema,
++  createInstancePlanSchema,
++  updateInstancePlanSchema,
++  type BillingCheckoutInput,
++  type CreateInstancePlanInput,
++  type UpdateInstancePlanInput,
+   createCompanyWebhookEndpointSchema,
+   updateCompanyWebhookEndpointSchema,
+   type CreateCompanyWebhookEndpoint,
+@@ -502,6 +508,14 @@ export type {
+   WorkflowStepWorkerResultV1,
+   WorkflowStepWorkerResultSchemaVersion,
+ } from "./types/workflow-worker.js";
++export type {
++  PlanEntitlementsSummary,
++  PlanSummary,
++  CompanyBillingStatus,
++  InstancePlanRow,
++  BillingCheckoutProvider,
++  BillingCheckoutRequest,
++} from "./types/billing.js";
+ 
+ export {
+   skillFrontmatterSchema,
+diff --git a/paperclip-official/packages/shared/src/instance-permissions.ts b/paperclip-official/packages/shared/src/instance-permissions.ts
+index e1e4f4b..460b973 100644
+--- a/paperclip-official/packages/shared/src/instance-permissions.ts
++++ b/paperclip-official/packages/shared/src/instance-permissions.ts
+@@ -17,6 +17,7 @@ export const COMPANY_CREATE_AMOUNT_PLACEHOLDER_KEY = "company.create.amount.{num
+ export const INSTANCE_PERMISSION_REGISTRY: ReadonlyArray<InstancePermissionRegistryEntry> = [
+   { key: "*", labelKey: "instance.permissionKey_all", category: "instance" },
+   { key: "admin.setting", labelKey: "instance.permissionKey_admin_setting", category: "instance" },
++  { key: "admin.pricing", labelKey: "instance.permissionKey_admin_pricing", category: "instance" },
+   { key: "company.view.all", labelKey: "instance.permissionKey_company_view_all", category: "company" },
+   { key: COMPANY_CREATE_AMOUNT_PLACEHOLDER_KEY, labelKey: "instance.permissionKey_company_create_amount_number", category: "company" },
+   { key: "company.create.amount.infinite", labelKey: "instance.permissionKey_company_create_amount_infinite", category: "company" },
+@@ -36,6 +37,7 @@ export const INSTANCE_PERMISSION_REGISTRY: ReadonlyArray<InstancePermissionRegis
+ const FIXED_INSTANCE_PERMISSION_KEYS = [
+   "*",
+   "admin.setting",
++  "admin.pricing",
+   "company.view.all",
+   "company.create.amount.infinite",
+   "model.gemini.local",
+diff --git a/paperclip-official/packages/shared/src/validators/index.ts b/paperclip-official/packages/shared/src/validators/index.ts
+index 9abd021..2e2c529 100644
+--- a/paperclip-official/packages/shared/src/validators/index.ts
++++ b/paperclip-official/packages/shared/src/validators/index.ts
+@@ -311,3 +311,12 @@ export {
+ } from "./skill.js";
+ 
+ export { workflowStepWorkerResultSchema, type WorkflowStepWorkerResultParsed } from "./workflow-worker.js";
++
++export { billingCheckoutSchema, billingCheckoutInvoiceSchema, type BillingCheckoutInput } from "./billing.js";
++
++export {
++  createInstancePlanSchema,
++  updateInstancePlanSchema,
++  type CreateInstancePlanInput,
++  type UpdateInstancePlanInput,
++} from "./instance-plans.js";
+diff --git a/paperclip-official/pnpm-lock.yaml b/paperclip-official/pnpm-lock.yaml
+index a1bbcf7..7327b81 100644
+--- a/paperclip-official/pnpm-lock.yaml
++++ b/paperclip-official/pnpm-lock.yaml
+@@ -357,6 +357,9 @@ importers:
+       redis:
+         specifier: ^5.8.2
+         version: 5.11.0
++      stripe:
++        specifier: ^22.0.0
++        version: 22.0.0(@types/node@24.12.0)
+       swagger-ui-express:
+         specifier: ^5.0.1
+         version: 5.0.1(express@5.2.1)
+@@ -5472,6 +5475,15 @@ packages:
+   strip-literal@3.1.0:
+     resolution: {integrity: sha512-8r3mkIM/2+PpjHoOtiAW8Rg3jJLHaV7xPwG+YRGrv6FP0wwk/toTpATxWYOW0BKdWwl82VT2tFYi5DlROa0Mxg==}
+ 
++  stripe@22.0.0:
++    resolution: {integrity: sha512-q1UgXXpSfZCmkyzZEh3vFEWT7+ajuaFGqaP9Tsi2NMtwlkigIWNr+KBIUQqtNeNEsreDKgdn+BP5HRW9JDj22Q==}
++    engines: {node: '>=18'}
++    peerDependencies:
++      '@types/node': '>=18'
++    peerDependenciesMeta:
++      '@types/node':
++        optional: true
++
+   strnum@2.1.2:
+     resolution: {integrity: sha512-l63NF9y/cLROq/yqKXSLtcMeeyOfnSQlfMSlzFt/K73oIaD8DGaQWd7Z34X9GPiKqP5rbSh84Hl4bOlLcjiSrQ==}
+ 
+@@ -11971,6 +11983,10 @@ snapshots:
+     dependencies:
+       js-tokens: 9.0.1
+ 
++  stripe@22.0.0(@types/node@24.12.0):
++    optionalDependencies:
++      '@types/node': 24.12.0
++
+   strnum@2.1.2: {}
+ 
+   style-mod@4.1.3: {}
+diff --git a/paperclip-official/server/package.json b/paperclip-official/server/package.json
+index 797a1ba..abe90cb 100644
+--- a/paperclip-official/server/package.json
++++ b/paperclip-official/server/package.json
+@@ -61,6 +61,7 @@
+     "pino-http": "^10.4.0",
+     "pino-pretty": "^13.1.3",
+     "redis": "^5.8.2",
++    "stripe": "^22.0.0",
+     "swagger-ui-express": "^5.0.1",
+     "ws": "^8.19.0",
+     "zod": "^3.24.2"
+diff --git a/paperclip-official/server/src/__tests__/browser-use-tools-routes.test.ts b/paperclip-official/server/src/__tests__/browser-use-tools-routes.test.ts
+index e207467..14b7926 100644
+--- a/paperclip-official/server/src/__tests__/browser-use-tools-routes.test.ts
++++ b/paperclip-official/server/src/__tests__/browser-use-tools-routes.test.ts
+@@ -6,6 +6,7 @@ import { browserUseToolRoutes } from "../routes/browser-use-tools.js";
+ 
+ const mockInvoke = vi.hoisted(() => vi.fn());
+ const mockLogActivity = vi.hoisted(() => vi.fn());
++const mockCreateEvent = vi.hoisted(() => vi.fn());
+ 
+ vi.mock("../services/browser-use-gateway.js", () => ({
+   browserUseGatewayService: () => ({
+@@ -15,9 +16,12 @@ vi.mock("../services/browser-use-gateway.js", () => ({
+ 
+ vi.mock("../services/index.js", () => ({
+   logActivity: mockLogActivity,
++  costService: () => ({
++    createEvent: mockCreateEvent,
++  }),
+ }));
+ 
+-function createApp() {
++function createApp(db: unknown) {
+   const app = express();
+   app.use(express.json());
+   app.use((req, _res, next) => {
+@@ -29,14 +33,24 @@ function createApp() {
+     };
+     next();
+   });
+-  app.use("/api", browserUseToolRoutes({} as any));
++  app.use("/api", browserUseToolRoutes(db as any));
+   app.use(errorHandler);
+   return app;
+ }
+ 
++function drizzleLikeDbForAgentLookup(companyId: string) {
++  const limit = vi.fn().mockResolvedValue([{ companyId }]);
++  const where = vi.fn().mockReturnValue({ limit });
++  const from = vi.fn().mockReturnValue({ where });
++  const select = vi.fn().mockReturnValue({ from });
++  return { select };
++}
++
+ describe("browser-use tool routes", () => {
+   beforeEach(() => {
+     mockInvoke.mockReset();
++    mockCreateEvent.mockReset();
++    mockCreateEvent.mockResolvedValue({ event: { id: "e1" }, alreadyExisted: false });
+   });
+ 
+   it("forwards navigate request to gateway", async () => {
+@@ -47,7 +61,7 @@ describe("browser-use tool routes", () => {
+       traceId: "trace-1",
+     });
+ 
+-    const res = await request(createApp()).post("/api/tools/browser-use/navigate").send({
++    const res = await request(createApp({})).post("/api/tools/browser-use/navigate").send({
+       agentId: "agent-1",
+       runId: "run-1",
+       toolInput: { sessionId: "sess-1", url: "https://example.com" },
+@@ -61,5 +75,34 @@ describe("browser-use tool routes", () => {
+         runId: "run-1",
+       }),
+     );
++    expect(mockCreateEvent).not.toHaveBeenCalled();
++  });
++
++  it("extract with llmUsage records a cost event", async () => {
++    mockInvoke.mockResolvedValue({
++      ok: true,
++      data: "extracted",
++      error: null,
++      traceId: "trace-1",
++      llmUsage: {
++        prompt_tokens: 100,
++        prompt_cached_tokens: 0,
++        completion_tokens: 50,
++        total_tokens: 150,
++      },
++      llmModel: "gpt-4o-mini",
++      llmProvider: "openai",
++    });
++
++    const res = await request(createApp(drizzleLikeDbForAgentLookup("company-1")))
++      .post("/api/tools/browser-use/extract")
++      .send({
++        agentId: "00000000-0000-4000-8000-000000000001",
++        runId: "run-1",
++        toolInput: { sessionId: "sess-1", query: "title" },
++      });
++
++    expect(res.status).toBe(200);
++    expect(mockCreateEvent).toHaveBeenCalled();
+   });
+ });
+diff --git a/paperclip-official/server/src/__tests__/storage-local-provider.test.ts b/paperclip-official/server/src/__tests__/storage-local-provider.test.ts
+index 9e9a55d..40372bc 100644
+--- a/paperclip-official/server/src/__tests__/storage-local-provider.test.ts
++++ b/paperclip-official/server/src/__tests__/storage-local-provider.test.ts
+@@ -28,6 +28,7 @@ describe("local disk storage provider", () => {
+     const service = createStorageService(createLocalDiskStorageProvider(root));
+     const content = Buffer.from("hello image bytes", "utf8");
+     const stored = await service.putFile({
++      tenantId: "tenant-1",
+       companyId: "company-1",
+       namespace: "issues/issue-1",
+       originalFilename: "demo.png",
+@@ -35,7 +36,7 @@ describe("local disk storage provider", () => {
+       body: content,
+     });
+ 
+-    const fetched = await service.getObject("company-1", stored.objectKey);
++    const fetched = await service.getObject("company-1", stored.objectKey, "tenant-1");
+     const fetchedBody = await readStreamToBuffer(fetched.stream);
+ 
+     expect(fetchedBody.toString("utf8")).toBe("hello image bytes");
+@@ -48,6 +49,7 @@ describe("local disk storage provider", () => {
+ 
+     const service = createStorageService(createLocalDiskStorageProvider(root));
+     const stored = await service.putFile({
++      tenantId: "tenant-a",
+       companyId: "company-a",
+       namespace: "issues/issue-1",
+       originalFilename: "demo.png",
+@@ -55,7 +57,7 @@ describe("local disk storage provider", () => {
+       body: Buffer.from("hello", "utf8"),
+     });
+ 
+-    await expect(service.getObject("company-b", stored.objectKey)).rejects.toMatchObject({ status: 403 });
++    await expect(service.getObject("company-b", stored.objectKey, "tenant-a")).rejects.toMatchObject({ status: 403 });
+   });
+ 
+   it("delete is idempotent", async () => {
+@@ -64,6 +66,7 @@ describe("local disk storage provider", () => {
+ 
+     const service = createStorageService(createLocalDiskStorageProvider(root));
+     const stored = await service.putFile({
++      tenantId: "tenant-1",
+       companyId: "company-1",
+       namespace: "issues/issue-1",
+       originalFilename: "demo.png",
+@@ -71,8 +74,8 @@ describe("local disk storage provider", () => {
+       body: Buffer.from("hello", "utf8"),
+     });
+ 
+-    await service.deleteObject("company-1", stored.objectKey);
+-    await service.deleteObject("company-1", stored.objectKey);
+-    await expect(service.getObject("company-1", stored.objectKey)).rejects.toMatchObject({ status: 404 });
++    await service.deleteObject("company-1", stored.objectKey, "tenant-1");
++    await service.deleteObject("company-1", stored.objectKey, "tenant-1");
++    await expect(service.getObject("company-1", stored.objectKey, "tenant-1")).rejects.toMatchObject({ status: 404 });
+   });
+ });
+diff --git a/paperclip-official/server/src/app.ts b/paperclip-official/server/src/app.ts
+index 1fcc727..d032309 100644
+--- a/paperclip-official/server/src/app.ts
++++ b/paperclip-official/server/src/app.ts
+@@ -34,6 +34,8 @@ import { workflowRunRoutes } from "./routes/workflow-runs.js";
+ import { approvalRoutes } from "./routes/approvals.js";
+ import { secretRoutes } from "./routes/secrets.js";
+ import { costRoutes } from "./routes/costs.js";
++import { billingRoutes } from "./routes/billing.js";
++import { ecpayBillingWebhookMiddleware, stripeBillingWebhookMiddleware } from "./billing/webhook-http.js";
+ import { activityRoutes } from "./routes/activity.js";
+ import { dashboardRoutes } from "./routes/dashboard.js";
+ import { sidebarBadgeRoutes } from "./routes/sidebar-badges.js";
+@@ -44,6 +46,7 @@ import { browserUseToolRoutes } from "./routes/browser-use-tools.js";
+ import { instanceGroupsRoutes } from "./routes/instance-groups.js";
+ import { instanceUsersRoutes } from "./routes/instance-users.js";
+ import { instanceSettingsRoutes } from "./routes/instance-settings.js";
++import { instancePlansRoutes } from "./routes/instance-plans.js";
+ import { platformAlertRoutes } from "./routes/platform-alerts.js";
+ import { serviceLogRoutes } from "./routes/service-logs.js";
+ import { roadmapRoutes } from "./routes/roadmap.js";
+@@ -163,6 +166,17 @@ export async function createApp(
+     app.all(/^\/api\/auth\/.+/, opts.betterAuthHandler);
+   }
+ 
++  app.post(
++    "/api/webhooks/billing/stripe",
++    express.raw({ type: "application/json" }),
++    stripeBillingWebhookMiddleware(db),
++  );
++  app.post(
++    "/api/webhooks/billing/ecpay",
++    express.urlencoded({ extended: false }),
++    ecpayBillingWebhookMiddleware(db),
++  );
++
+   app.use(express.json());
+   app.use("/api/scim/v2", scimBearerAuthMiddleware(db), scimRoutes(db));
+   app.use(llmRoutes(db));
+@@ -282,6 +296,10 @@ export async function createApp(
+   openApiTargets.push({ mountPath: "", router: costRouter });
+   api.use(costRouter);
+ 
++  const billingRouter = billingRoutes(db);
++  openApiTargets.push({ mountPath: "", router: billingRouter });
++  api.use(billingRouter);
++
+   const activityRouter = activityRoutes(db);
+   openApiTargets.push({ mountPath: "", router: activityRouter });
+   api.use(activityRouter);
+@@ -323,6 +341,10 @@ export async function createApp(
+   openApiTargets.push({ mountPath: "/instance/settings", router: instanceSettingsRouter });
+   api.use("/instance/settings", instanceSettingsRouter);
+ 
++  const instancePlansRouter = instancePlansRoutes(db);
++  openApiTargets.push({ mountPath: "/instance/plans", router: instancePlansRouter });
++  api.use("/instance/plans", instancePlansRouter);
++
+   const scimProvisioningKeyRouter = scimProvisioningKeyRoutes(db);
+   openApiTargets.push({ mountPath: "/instance/scim-provisioning-keys", router: scimProvisioningKeyRouter });
+   api.use("/instance/scim-provisioning-keys", scimProvisioningKeyRouter);
+diff --git a/paperclip-official/server/src/routes/assets.ts b/paperclip-official/server/src/routes/assets.ts
+index 1272048..75df408 100644
+--- a/paperclip-official/server/src/routes/assets.ts
++++ b/paperclip-official/server/src/routes/assets.ts
+@@ -4,7 +4,7 @@ import type { Db } from "@paperclipai/db";
+ import { createAssetImageMetadataSchema } from "@paperclipai/shared";
+ import type { StorageService } from "../storage/types.js";
+ import { assetService, logActivity } from "../services/index.js";
+-import { assertCompanyAccess, getActorInfo } from "./authz.js";
++import { assertCompanyAccess, getActorInfo, resolveTenantIdForStorage } from "./authz.js";
+ import {
+   isAllowedContentType,
+   MAX_ATTACHMENT_BYTES,
+@@ -76,7 +76,9 @@ export function assetRoutes(db: Db, storage: StorageService) {
+ 
+     const namespaceSuffix = parsedMeta.data.namespace ?? "general";
+     const actor = getActorInfo(req);
++    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
+     const stored = await storage.putFile({
++      tenantId,
+       companyId,
+       namespace: `assets/${namespaceSuffix}`,
+       originalFilename: file.originalname || null,
+@@ -176,7 +178,9 @@ export function assetRoutes(db: Db, storage: StorageService) {
+ 
+     const namespaceSuffix = "icon";
+     const actor = getActorInfo(req);
++    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
+     const stored = await storage.putFile({
++      tenantId,
+       companyId,
+       namespace: `assets/${namespaceSuffix}`,
+       originalFilename: file.originalname || null,
+@@ -238,7 +242,8 @@ export function assetRoutes(db: Db, storage: StorageService) {
+     }
+     await assertCompanyAccess(req, asset.companyId, db);
+ 
+-    const object = await storage.getObject(asset.companyId, asset.objectKey);
++    const tenantId = await resolveTenantIdForStorage(req, db, asset.companyId);
++    const object = await storage.getObject(asset.companyId, asset.objectKey, tenantId);
+     res.setHeader("Content-Type", asset.contentType || object.contentType || "application/octet-stream");
+     res.setHeader("Content-Length", String(asset.byteSize || object.contentLength || 0));
+     res.setHeader("Cache-Control", "private, max-age=60");
+diff --git a/paperclip-official/server/src/routes/authz.ts b/paperclip-official/server/src/routes/authz.ts
+index 544555d..51a6966 100644
+--- a/paperclip-official/server/src/routes/authz.ts
++++ b/paperclip-official/server/src/routes/authz.ts
+@@ -73,6 +73,21 @@ export function assertInstanceSetting(req: Request): void {
+   }
+ }
+ 
++/** 方案目錄／定價管理：local_implicit 或 admin.pricing / * */
++export function hasInstancePricingPermission(req: Request): boolean {
++  if (req.actor.type === "banned") return false;
++  if (req.actor.type !== "board") return false;
++  if (req.actor.source === "local_implicit") return true;
++  const perms = req.actor.permissions ?? [];
++  return perms.includes("admin.pricing") || perms.includes("*");
++}
++
++export function assertInstancePricing(req: Request): void {
++  if (!hasInstancePricingPermission(req)) {
++    throw forbidden("admin.pricing or * required for plan management");
++  }
++}
++
+ /**
+  * 確認目前 actor 可存取該公司；若 req.tenantId 已設定，則一併驗證公司屬於該租戶。
+  * 傳入 db 且 req.tenantId 存在時會非同步查詢公司並檢查 tenant_id。
+@@ -109,6 +124,21 @@ export async function assertCompanyAccess(
+   }
+ }
+ 
++/**
++ * 物件儲存鍵需帶租戶前綴時，在已通過 `assertCompanyAccess` 後解析 `companies.tenant_id`。
++ * 若請求已帶 `X-Tenant-ID` 則直接使用（與 assert 一致）。
++ */
++export async function resolveTenantIdForStorage(req: Request, db: Db, companyId: string): Promise<string> {
++  if (req.tenantId) return req.tenantId;
++  const row = await db
++    .select({ tenantId: companies.tenantId })
++    .from(companies)
++    .where(eq(companies.id, companyId))
++    .then((rows) => rows[0] ?? null);
++  if (!row?.tenantId) throw notFound("Company not found");
++  return row.tenantId;
++}
++
+ export function getActorInfo(req: Request) {
+   if (req.actor.type === "none" || req.actor.type === "banned") {
+     throw unauthorized();
+diff --git a/paperclip-official/server/src/routes/browser-use-tools.ts b/paperclip-official/server/src/routes/browser-use-tools.ts
+index 79e156c..28db0d8 100644
+--- a/paperclip-official/server/src/routes/browser-use-tools.ts
++++ b/paperclip-official/server/src/routes/browser-use-tools.ts
+@@ -1,6 +1,8 @@
+ import crypto from "node:crypto";
+ import { Router } from "express";
+ import type { Db } from "@paperclipai/db";
++import { agents } from "@paperclipai/db";
++import { eq } from "drizzle-orm";
+ import {
+   browserUseClickSchema,
+   browserUseCloseSchema,
+@@ -12,10 +14,18 @@ import {
+   browserUseTypeSchema,
+ } from "@paperclipai/shared";
+ import { forbidden } from "../errors.js";
++import { logger } from "../middleware/logger.js";
+ import { validate } from "../middleware/validate.js";
+ import { getActorInfo } from "./authz.js";
+-import { logActivity } from "../services/index.js";
+-import { browserUseGatewayService } from "../services/browser-use-gateway.js";
++import { costService, logActivity } from "../services/index.js";
++import {
++  browserUseGatewayService,
++  type BrowserUseLlmUsagePayload,
++} from "../services/browser-use-gateway.js";
++import {
++  estimateBrowserUseExtractCostCents,
++  splitBrowserUseUsageForCostEvent,
++} from "../services/browser-use-llm-cost.js";
+ 
+ type RateLimitBucket = {
+   windowStartMs: number;
+@@ -49,6 +59,51 @@ function assertBodySizeLimit(value: unknown, maxBytes = 64 * 1024) {
+ export function browserUseToolRoutes(db: Db) {
+   const router = Router();
+   const gateway = browserUseGatewayService();
++  const costs = costService(db);
++
++  async function recordBrowserUseExtractCost(params: {
++    agentId: string;
++    traceId: string;
++    llmUsage: BrowserUseLlmUsagePayload;
++    llmModel: string | null;
++    llmProvider: string | null;
++  }) {
++    const { agentId, traceId, llmUsage, llmModel, llmProvider } = params;
++    if (!llmUsage) return;
++
++    const [agentRow] = await db
++      .select({ companyId: agents.companyId })
++      .from(agents)
++      .where(eq(agents.id, agentId))
++      .limit(1);
++    if (!agentRow?.companyId) {
++      logger.warn({ agentId }, "browser-use cost: agent not found, skip");
++      return;
++    }
++
++    const split = splitBrowserUseUsageForCostEvent(llmUsage);
++    const costCents = estimateBrowserUseExtractCostCents(split);
++    const totalTok =
++      split.inputTokens + split.outputTokens + split.cachedReadTokens + split.cachedWriteTokens;
++    if (totalTok === 0 && costCents === 0) return;
++
++    try {
++      await costs.createEvent(agentRow.companyId, {
++        agentId,
++        provider: llmProvider ?? "browser-use",
++        model: llmModel ?? "unknown",
++        inputTokens: split.inputTokens,
++        outputTokens: split.outputTokens,
++        cachedReadTokens: split.cachedReadTokens,
++        cachedWriteTokens: split.cachedWriteTokens,
++        costCents,
++        occurredAt: new Date(),
++        idempotencyKey: `browser-use:extract:${traceId}`,
++      });
++    } catch (err) {
++      logger.warn({ err, agentId, traceId }, "browser-use cost event failed (non-fatal)");
++    }
++  }
+ 
+   function bindRoute(path: string, schema: Parameters<typeof validate>[0], action: Parameters<typeof gateway.invoke>[0]) {
+     router.post(path, validate(schema), async (req, res) => {
+@@ -64,6 +119,16 @@ export function browserUseToolRoutes(db: Db) {
+       assertToolRateLimit(`${payload.agentId}:${action}`);
+       const result = await gateway.invoke(action, { ...payload, traceId });
+ 
++      if (result.ok && action === "extract" && result.llmUsage) {
++        await recordBrowserUseExtractCost({
++          agentId: payload.agentId,
++          traceId,
++          llmUsage: result.llmUsage,
++          llmModel: result.llmModel ?? null,
++          llmProvider: result.llmProvider ?? null,
++        });
++      }
++
+       await logActivity(db, {
+         companyId:
+           req.actor.type === "agent"
+diff --git a/paperclip-official/server/src/routes/company-skills.ts b/paperclip-official/server/src/routes/company-skills.ts
+index 8becae4..0683400 100644
+--- a/paperclip-official/server/src/routes/company-skills.ts
++++ b/paperclip-official/server/src/routes/company-skills.ts
+@@ -15,7 +15,7 @@ function isManualSlashWorkflow(fm: SkillFrontmatter): boolean {
+   if (on === "schedule" || on === "event") return false;
+   return true;
+ }
+-import { assertCompanyAccess, getActorInfo } from "./authz.js";
++import { assertCompanyAccess, getActorInfo, resolveTenantIdForStorage } from "./authz.js";
+ import { assertBoard } from "./authz.js";
+ import {
+   companySkillBundleConstants,
+@@ -61,6 +61,7 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
+ 
+   function persistBundle(args: {
+     companyId: string;
++    tenantId: string;
+     skills: Array<{ key: string; skillMarkdown: string }>;
+     actor: ReturnType<typeof getActorInfo>;
+     action: string;
+@@ -85,6 +86,7 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
+ 
+       const jsonText = JSON.stringify(bundleToStore, null, 2);
+       const stored = await storage.putFile({
++        tenantId: args.tenantId,
+         companyId: args.companyId,
+         namespace: companySkillBundleConstants.namespace,
+         originalFilename: companySkillBundleConstants.originalFilename,
+@@ -212,8 +214,10 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
+     };
+ 
+     const actor = getActorInfo(req);
++    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
+     const jsonText = JSON.stringify(bundleToStore, null, 2);
+     const stored = await storage.putFile({
++      tenantId,
+       companyId,
+       namespace: companySkillBundleConstants.namespace,
+       originalFilename: companySkillBundleConstants.originalFilename,
+@@ -278,8 +282,16 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
+     }
+ 
+     const actor = getActorInfo(req);
++    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
+     const nextSkills = [...baseLoaded.map((s) => ({ key: s.key, skillMarkdown: s.skillMarkdown })), { key, skillMarkdown: body.skillMarkdown }];
+-    const result = await persistBundle({ companyId, skills: nextSkills, actor, action: "company.skills.create", res });
++    const result = await persistBundle({
++      companyId,
++      tenantId,
++      skills: nextSkills,
++      actor,
++      action: "company.skills.create",
++      res,
++    });
+     if (!result) return;
+     res.status(201).json(result);
+   });
+@@ -320,12 +332,20 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
+     }
+ 
+     const actor = getActorInfo(req);
++    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
+     const nextSkills = baseLoaded.map((s) => {
+       if (s.key !== keyFromParam) return { key: s.key, skillMarkdown: s.skillMarkdown };
+       return { key: keyFromBody, skillMarkdown: body.skillMarkdown };
+     });
+ 
+-    const result = await persistBundle({ companyId, skills: nextSkills, actor, action: "company.skills.update", res });
++    const result = await persistBundle({
++      companyId,
++      tenantId,
++      skills: nextSkills,
++      actor,
++      action: "company.skills.update",
++      res,
++    });
+     if (!result) return;
+     res.status(200).json(result);
+   });
+@@ -345,11 +365,19 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
+     }
+ 
+     const actor = getActorInfo(req);
++    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
+     const nextSkills = baseLoaded
+       .filter((s) => s.key !== keyFromParam)
+       .map((s) => ({ key: s.key, skillMarkdown: s.skillMarkdown }));
+ 
+-    const result = await persistBundle({ companyId, skills: nextSkills, actor, action: "company.skills.delete", res });
++    const result = await persistBundle({
++      companyId,
++      tenantId,
++      skills: nextSkills,
++      actor,
++      action: "company.skills.delete",
++      res,
++    });
+     if (!result) return;
+     res.status(200).json(result);
+   });
+diff --git a/paperclip-official/server/src/routes/issues.ts b/paperclip-official/server/src/routes/issues.ts
+index 72c7d0f..d489600 100644
+--- a/paperclip-official/server/src/routes/issues.ts
++++ b/paperclip-official/server/src/routes/issues.ts
+@@ -26,7 +26,13 @@ import {
+ } from "../services/index.js";
+ import { logger } from "../middleware/logger.js";
+ import { forbidden, HttpError, unauthorized } from "../errors.js";
+-import { assertBoard, assertCompanyAccess, getActorInfo, hasCompanyViewAll } from "./authz.js";
++import {
++  assertBoard,
++  assertCompanyAccess,
++  getActorInfo,
++  hasCompanyViewAll,
++  resolveTenantIdForStorage,
++} from "./authz.js";
+ import { assertCompanyIntegrationScope } from "./integration-scope.js";
+ import { shouldWakeAssigneeOnCheckout } from "./issues-checkout-wakeup.js";
+ import { isAllowedContentType, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
+@@ -958,6 +964,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
+       return;
+     }
+     const attachments = await svc.listAttachments(id);
++    const storageTenantId = await resolveTenantIdForStorage(req, db, existing.companyId);
+ 
+     const issue = await svc.remove(id);
+     if (!issue) {
+@@ -967,7 +974,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
+ 
+     for (const attachment of attachments) {
+       try {
+-        await storage.deleteObject(attachment.companyId, attachment.objectKey);
++        await storage.deleteObject(attachment.companyId, attachment.objectKey, storageTenantId);
+       } catch (err) {
+         logger.warn({ err, issueId: id, attachmentId: attachment.id }, "failed to delete attachment object during issue delete");
+       }
+@@ -1426,7 +1433,9 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
+     }
+ 
+     const actor = getActorInfo(req);
++    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
+     const stored = await storage.putFile({
++      tenantId,
+       companyId,
+       namespace: `issues/${issueId}`,
+       originalFilename: file.originalname || null,
+@@ -1476,7 +1485,8 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
+     }
+     await assertCompanyIntegrationScope(db, req, attachment.companyId, "issues:read");
+ 
+-    const object = await storage.getObject(attachment.companyId, attachment.objectKey);
++    const tenantId = await resolveTenantIdForStorage(req, db, attachment.companyId);
++    const object = await storage.getObject(attachment.companyId, attachment.objectKey, tenantId);
+     res.setHeader("Content-Type", attachment.contentType || object.contentType || "application/octet-stream");
+     res.setHeader("Content-Length", String(attachment.byteSize || object.contentLength || 0));
+     res.setHeader("Cache-Control", "private, max-age=60");
+@@ -1503,7 +1513,8 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
+     }
+ 
+     try {
+-      await storage.deleteObject(attachment.companyId, attachment.objectKey);
++      const tenantId = await resolveTenantIdForStorage(req, db, attachment.companyId);
++      await storage.deleteObject(attachment.companyId, attachment.objectKey, tenantId);
+     } catch (err) {
+       logger.warn({ err, attachmentId }, "storage delete failed while removing attachment");
+     }
+diff --git a/paperclip-official/server/src/services/browser-use-gateway.ts b/paperclip-official/server/src/services/browser-use-gateway.ts
+index a572cf0..53b5661 100644
+--- a/paperclip-official/server/src/services/browser-use-gateway.ts
++++ b/paperclip-official/server/src/services/browser-use-gateway.ts
+@@ -10,6 +10,15 @@ type BrowserUseAction =
+   | "screenshot"
+   | "sessions/close";
+ 
++/** OpenAI 相容的 usage 片段（來自 browser-use ChatInvokeUsage.model_dump） */
++export type BrowserUseLlmUsagePayload = {
++  prompt_tokens?: number;
++  prompt_cached_tokens?: number | null;
++  prompt_cache_creation_tokens?: number | null;
++  completion_tokens?: number;
++  total_tokens?: number;
++};
++
+ type GatewayEnvelope = {
+   ok: boolean;
+   data: unknown;
+@@ -20,6 +29,10 @@ type GatewayEnvelope = {
+     details?: unknown;
+   } | null;
+   traceId: string;
++  /** 僅 browser_extract_content：頁面抽取所用 LLM 的 token usage */
++  llmUsage?: BrowserUseLlmUsagePayload | null;
++  llmModel?: string | null;
++  llmProvider?: string | null;
+ };
+ 
+ export type BrowserUseGatewayRequest = {
+@@ -161,6 +174,11 @@ export function browserUseGatewayService() {
+     }
+ 
+     const record = parsed as Record<string, unknown>;
++    const llmUsageRaw = record.llmUsage;
++    const llmUsage =
++      llmUsageRaw !== undefined && llmUsageRaw !== null && typeof llmUsageRaw === "object"
++        ? (llmUsageRaw as BrowserUseLlmUsagePayload)
++        : undefined;
+     return {
+       ok: record.ok === true,
+       data: record.data ?? null,
+@@ -174,6 +192,9 @@ export function browserUseGatewayService() {
+               details: (record.error as Record<string, unknown> | null)?.details,
+             },
+       traceId: String(record.traceId ?? payload.traceId),
++      llmUsage: llmUsage ?? null,
++      llmModel: record.llmModel != null ? String(record.llmModel) : null,
++      llmProvider: record.llmProvider != null ? String(record.llmProvider) : null,
+     };
+   }
+ 
+diff --git a/paperclip-official/server/src/services/company-skill-bundle.ts b/paperclip-official/server/src/services/company-skill-bundle.ts
+index 7d186c3..4b3ba53 100644
+--- a/paperclip-official/server/src/services/company-skill-bundle.ts
++++ b/paperclip-official/server/src/services/company-skill-bundle.ts
+@@ -1,5 +1,5 @@
+-import { and, desc, eq, sql } from "drizzle-orm";
+-import { assets as assetsTable } from "@paperclipai/db";
++import { and, desc, eq, or, sql } from "drizzle-orm";
++import { assets as assetsTable, companies } from "@paperclipai/db";
+ import type { Db } from "@paperclipai/db";
+ import type { StorageService } from "../storage/types.js";
+ import { safeParseSkillFrontmatterFromMarkdown } from "@paperclipai/shared";
+@@ -57,14 +57,21 @@ function normalizeSkillKey(input: string): string {
+   return input.trim().toLowerCase().replace(/_/g, "-");
+ }
+ 
+-function buildObjectKeyPrefix(companyId: string): string {
+-  // Storage objectKey is: <companyId>/<normalizedNamespace>/YYYY/MM/DD/<uuid>-<stem><ext>
+-  // Our namespace is constant and already safe for storage namespace normalization.
+-  return `${companyId}/${SKILL_BUNDLE_NAMESPACE}/`;
++/** 舊版 `companyId/...` 與新版 `tenantId/companyId/...` 物件鍵前綴（供 LIKE 查詢）。 */
++function skillBundleObjectKeyPrefixes(companyId: string, tenantId: string): { legacy: string; withTenant: string } {
++  return {
++    legacy: `${companyId}/${SKILL_BUNDLE_NAMESPACE}/`,
++    withTenant: `${tenantId}/${companyId}/${SKILL_BUNDLE_NAMESPACE}/`,
++  };
+ }
+ 
+-async function readStorageObjectToText(storage: StorageService, companyId: string, objectKey: string): Promise<string> {
+-  const obj = await storage.getObject(companyId, objectKey);
++async function readStorageObjectToText(
++  storage: StorageService,
++  companyId: string,
++  objectKey: string,
++  tenantId: string,
++): Promise<string> {
++  const obj = await storage.getObject(companyId, objectKey, tenantId);
+   const chunks: Buffer[] = [];
+   for await (const chunk of obj.stream) {
+     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+@@ -98,8 +105,16 @@ function parseBundleJson(jsonText: string): CompanySkillBundleV0 | null {
+ }
+ 
+ async function loadLatestBundleFromAssets(db: Db, storage: StorageService, companyId: string): Promise<CompanySkillBundleV0 | null> {
+-  const prefix = buildObjectKeyPrefix(companyId);
+-  const pattern = `${prefix}%`;
++  const company = await db
++    .select({ tenantId: companies.tenantId })
++    .from(companies)
++    .where(eq(companies.id, companyId))
++    .then((rows) => rows[0] ?? null);
++  if (!company?.tenantId) return null;
++  const tenantId = company.tenantId;
++  const { legacy, withTenant } = skillBundleObjectKeyPrefixes(companyId, tenantId);
++  const patternLegacy = `${legacy}%`;
++  const patternWithTenant = `${withTenant}%`;
+ 
+   const row = await db
+     .select({ id: assetsTable.id, objectKey: assetsTable.objectKey, createdAt: assetsTable.createdAt })
+@@ -107,7 +122,10 @@ async function loadLatestBundleFromAssets(db: Db, storage: StorageService, compa
+     .where(
+       and(
+         eq(assetsTable.companyId, companyId),
+-        sql`${assetsTable.objectKey} like ${pattern}`,
++        or(
++          sql`${assetsTable.objectKey} like ${patternLegacy}`,
++          sql`${assetsTable.objectKey} like ${patternWithTenant}`,
++        ),
+         eq(assetsTable.contentType, SKILL_BUNDLE_CONTENT_TYPE),
+       ),
+     )
+@@ -116,7 +134,7 @@ async function loadLatestBundleFromAssets(db: Db, storage: StorageService, compa
+ 
+   if (!row[0]) return null;
+ 
+-  const jsonText = await readStorageObjectToText(storage, companyId, row[0]!.objectKey);
++  const jsonText = await readStorageObjectToText(storage, companyId, row[0]!.objectKey, tenantId);
+   return parseBundleJson(jsonText);
+ }
+ 
+diff --git a/paperclip-official/server/src/services/costs.ts b/paperclip-official/server/src/services/costs.ts
+index 4665307..012a6de 100644
+--- a/paperclip-official/server/src/services/costs.ts
++++ b/paperclip-official/server/src/services/costs.ts
+@@ -12,6 +12,7 @@ import {
+ } from "@paperclipai/db";
+ import { notFound, unprocessable } from "../errors.js";
+ import { budgetPolicyService } from "./budget-policies.js";
++import { resolveCompanyEffectiveLimits } from "./billing/entitlements.js";
+ import { notifyLimitBreach } from "./limit-breach-notify.js";
+ import { del as redisDel, getJson as redisGetJson, setJson as redisSetJson } from "./redis.js";
+ import { logger } from "../middleware/logger.js";
+@@ -45,12 +46,13 @@ function formatYearMonthUtc(date: Date): string {
+   return `${y}${m}`;
+ }
+ 
+-function companyUsageCacheKey(companyId: string, yyyyMM: string): string {
+-  return `paperclip:cost:usage:${companyId}:${yyyyMM}`;
++/** 含租戶 namespace，避免多租戶共用 Redis 時鍵空間混淆。 */
++function companyUsageCacheKey(tenantId: string, companyId: string, yyyyMM: string): string {
++  return `paperclip:tenant:${tenantId}:cost:usage:${companyId}:${yyyyMM}`;
+ }
+ 
+-function companyLimitExceededCacheKey(companyId: string, yyyyMM: string): string {
+-  return `paperclip:cost:limitExceeded:${companyId}:${yyyyMM}`;
++function companyLimitExceededCacheKey(tenantId: string, companyId: string, yyyyMM: string): string {
++  return `paperclip:tenant:${tenantId}:cost:limitExceeded:${companyId}:${yyyyMM}`;
+ }
+ 
+ function isCostCacheDebugEnabled(): boolean {
+@@ -140,7 +142,30 @@ export { COST_EXPORT_MAX_LIMIT, COST_EXPORT_DEFAULT_LIMIT };
+ 
+ export function costService(db: Db) {
+   const budgetPolicies = budgetPolicyService(db);
++
++  async function tenantIdForCompany(companyId: string): Promise<string | null> {
++    const row = await db
++      .select({ tenantId: companies.tenantId })
++      .from(companies)
++      .where(eq(companies.id, companyId))
++      .then((rows) => rows[0] ?? null);
++    return row?.tenantId ?? null;
++  }
++
+   return {
++    /** 訂閱／方案變更後清除用量與上限快取。 */
++    invalidateBillingRelatedCaches: async (companyId: string) => {
++      const { from } = currentMonthRange();
++      const yyyyMM = formatYearMonthUtc(from);
++      const tenantId = await tenantIdForCompany(companyId);
++      if (tenantId) {
++        await redisDel([
++          companyUsageCacheKey(tenantId, companyId, yyyyMM),
++          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM),
++        ]);
++      }
++    },
++
+     createEvent: async (companyId: string, data: Omit<typeof costEvents.$inferInsert, "companyId">) => {
+       const agent = await db
+         .select()
+@@ -251,8 +276,9 @@ export function costService(db: Db) {
+           );
+         const spendCents = Number(usage.spendCents);
+         const tokenUsage = Number(usage.tokenUsage);
+-        const tokenLimit = companyRow.tokenLimit != null ? Number(companyRow.tokenLimit) : null;
+-        const priceLimitCents = companyRow.priceLimitCents ?? null;
++        const effective = await resolveCompanyEffectiveLimits(db, companyId);
++        const tokenLimit = effective?.tokenLimit ?? null;
++        const priceLimitCents = effective?.priceLimitCents ?? null;
+ 
+         if (tokenLimit != null && tokenUsage >= tokenLimit) {
+           const [existing] = await db
+@@ -336,13 +362,16 @@ export function costService(db: Db) {
+         },
+       });
+ 
+-      // Invalidate monthly usage caches (multi-instance safe).
++      // Invalidate monthly usage caches（含租戶前綴鍵；multi-instance safe）
+       const { from: monthStartForCache } = currentMonthRange();
+       const yyyyMM = formatYearMonthUtc(monthStartForCache);
+-      await redisDel([
+-        companyUsageCacheKey(companyId, yyyyMM),
+-        companyLimitExceededCacheKey(companyId, yyyyMM),
+-      ]);
++      const tenantId = await tenantIdForCompany(companyId);
++      if (tenantId) {
++        await redisDel([
++          companyUsageCacheKey(tenantId, companyId, yyyyMM),
++          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM),
++        ]);
++      }
+ 
+       return { event: inserted, alreadyExisted: false as const };
+     },
+@@ -351,7 +380,21 @@ export function costService(db: Db) {
+     getCompanyUsageForMonth: async (companyId: string) => {
+       const { from } = currentMonthRange();
+       const yyyyMM = formatYearMonthUtc(from);
+-      const cacheKey = companyUsageCacheKey(companyId, yyyyMM);
++      const tenantId = await tenantIdForCompany(companyId);
++      if (!tenantId) {
++        const [row] = await db
++          .select({
++            spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
++            tokenUsage: sql<number>`coalesce(sum(${costEvents.inputTokens} + ${costEvents.outputTokens}), 0)::int`,
++          })
++          .from(costEvents)
++          .where(and(eq(costEvents.companyId, companyId), gte(costEvents.occurredAt, from)));
++        return {
++          spendCents: Number(row?.spendCents ?? 0),
++          tokenUsage: Number(row?.tokenUsage ?? 0),
++        };
++      }
++      const cacheKey = companyUsageCacheKey(tenantId, companyId, yyyyMM);
+       const cached = await redisGetJson<{ spendCents: number; tokenUsage: number }>(cacheKey);
+       if (cached) {
+         if (isCostCacheDebugEnabled()) {
+@@ -386,7 +429,32 @@ export function costService(db: Db) {
+     ): Promise<{ token: boolean; price: boolean; reason: "token_limit" | "price_limit" | null }> => {
+       const { from } = currentMonthRange();
+       const yyyyMM = formatYearMonthUtc(from);
+-      const cacheKey = companyLimitExceededCacheKey(companyId, yyyyMM);
++      const tenantId = await tenantIdForCompany(companyId);
++      if (!tenantId) {
++        const effective = await resolveCompanyEffectiveLimits(db, companyId);
++        if (!effective) return { token: false, price: false, reason: null };
++        const [usage] = await db
++          .select({
++            spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
++            tokenUsage: sql<number>`coalesce(sum(${costEvents.inputTokens} + ${costEvents.outputTokens}), 0)::int`,
++          })
++          .from(costEvents)
++          .where(and(eq(costEvents.companyId, companyId), gte(costEvents.occurredAt, from)));
++        const spendCents = Number(usage?.spendCents ?? 0);
++        const tokenUsage = Number(usage?.tokenUsage ?? 0);
++        const tokenLimit = effective.tokenLimit;
++        const priceLimitCents = effective.priceLimitCents;
++        const tokenExceeded = tokenLimit != null && tokenUsage >= tokenLimit;
++        const priceExceeded = priceLimitCents != null && spendCents >= priceLimitCents;
++        const reason =
++          tokenExceeded ? "token_limit" : priceExceeded ? "price_limit" : null;
++        return {
++          token: tokenExceeded,
++          price: priceExceeded,
++          reason,
++        };
++      }
++      const cacheKey = companyLimitExceededCacheKey(tenantId, companyId, yyyyMM);
+       const cached = await redisGetJson<{ token: boolean; price: boolean; reason: "token_limit" | "price_limit" | null }>(
+         cacheKey,
+       );
+@@ -400,15 +468,8 @@ export function costService(db: Db) {
+         logger.debug({ companyId, yyyyMM, cacheKey }, "cost cache miss: company limit exceeded");
+       }
+ 
+-      const company = await db
+-        .select({
+-          tokenLimit: companies.tokenLimit,
+-          priceLimitCents: companies.priceLimitCents,
+-        })
+-        .from(companies)
+-        .where(eq(companies.id, companyId))
+-        .then((rows) => rows[0] ?? null);
+-      if (!company) return { token: false, price: false, reason: null };
++      const effective = await resolveCompanyEffectiveLimits(db, companyId);
++      if (!effective) return { token: false, price: false, reason: null };
+       const [usage] = await db
+         .select({
+           spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+@@ -420,8 +481,8 @@ export function costService(db: Db) {
+         );
+       const spendCents = Number(usage?.spendCents ?? 0);
+       const tokenUsage = Number(usage?.tokenUsage ?? 0);
+-      const tokenLimit = company.tokenLimit != null ? Number(company.tokenLimit) : null;
+-      const priceLimitCents = company.priceLimitCents ?? null;
++      const tokenLimit = effective.tokenLimit;
++      const priceLimitCents = effective.priceLimitCents;
+       const tokenExceeded = tokenLimit != null && tokenUsage >= tokenLimit;
+       const priceExceeded = priceLimitCents != null && spendCents >= priceLimitCents;
+       const reason =
+@@ -561,14 +622,16 @@ export function costService(db: Db) {
+         spendSpikeVsPreviousWeek,
+       };
+ 
++      const effective = await resolveCompanyEffectiveLimits(db, companyId);
++
+       return {
+         companyId,
+         spendCents,
+         budgetCents,
+         utilizationPercent: Number(utilization.toFixed(2)),
+         tokenUsage,
+-        tokenLimit: company.tokenLimit != null ? Number(company.tokenLimit) : null,
+-        priceLimitCents: company.priceLimitCents ?? null,
++        tokenLimit: effective?.tokenLimit ?? null,
++        priceLimitCents: effective?.priceLimitCents ?? null,
+         breachEvents,
+         forecast,
+       };
+diff --git a/paperclip-official/server/src/services/heartbeat.ts b/paperclip-official/server/src/services/heartbeat.ts
+index bbfcbd3..60cc969 100644
+--- a/paperclip-official/server/src/services/heartbeat.ts
++++ b/paperclip-official/server/src/services/heartbeat.ts
+@@ -1602,6 +1602,7 @@ export function heartbeatService(db: Db, storage?: StorageService) {
+     const companyRow = await db
+       .select({
+         id: companies.id,
++        tenantId: companies.tenantId,
+         name: companies.name,
+         description: companies.description,
+         issuePrefix: companies.issuePrefix,
+@@ -1716,7 +1717,11 @@ export function heartbeatService(db: Db, storage?: StorageService) {
+         message: "run started",
+       });
+ 
++      if (!companyRow?.tenantId) {
++        throw notFound("Company tenant not found for run log");
++      }
+       handle = await runLogStore.begin({
++        tenantId: companyRow.tenantId,
+         companyId: run.companyId,
+         agentId: run.agentId,
+         runId,
+diff --git a/paperclip-official/server/src/services/run-log-store.ts b/paperclip-official/server/src/services/run-log-store.ts
+index 6429c5f..1f5c490 100644
+--- a/paperclip-official/server/src/services/run-log-store.ts
++++ b/paperclip-official/server/src/services/run-log-store.ts
+@@ -28,7 +28,8 @@ export interface RunLogFinalizeSummary {
+ }
+ 
+ export interface RunLogStore {
+-  begin(input: { companyId: string; agentId: string; runId: string }): Promise<RunLogHandle>;
++  /** 路徑為 `tenantId/companyId/agentId/{runId}.ndjson`，與租戶儲存隔離一致。 */
++  begin(input: { tenantId: string; companyId: string; agentId: string; runId: string }): Promise<RunLogHandle>;
+   append(
+     handle: RunLogHandle,
+     event: { stream: "stdout" | "stderr" | "system"; chunk: string; ts: string },
+@@ -94,9 +95,9 @@ function createLocalFileRunLogStore(basePath: string): RunLogStore {
+ 
+   return {
+     async begin(input) {
+-      const [companyId, agentId] = safeSegments(input.companyId, input.agentId);
++      const [tenantId, companyId, agentId] = safeSegments(input.tenantId, input.companyId, input.agentId);
+       const runId = safeSegments(input.runId)[0]!;
+-      const relDir = path.join(companyId, agentId);
++      const relDir = path.join(tenantId, companyId, agentId);
+       const relPath = path.join(relDir, `${runId}.ndjson`);
+       await ensureDir(relDir);
+ 
+@@ -137,9 +138,22 @@ function createLocalFileRunLogStore(basePath: string): RunLogStore {
+       if (handle.store !== "local_file") {
+         throw notFound("Run log not found");
+       }
+-      const absPath = resolveWithin(basePath, handle.logRef);
+       const offset = opts?.offset ?? 0;
+       const limitBytes = opts?.limitBytes ?? 256_000;
++      const primary = resolveWithin(basePath, handle.logRef);
++      let absPath = primary;
++      let stat = await fs.stat(primary).catch(() => null);
++      if (!stat) {
++        const parts = handle.logRef.split(path.sep).filter(Boolean);
++        // 新版 logRef 為四段（tenant/company/agent/file）；若檔案尚未遷移，可回退為舊版三段路徑
++        if (parts.length === 4) {
++          const legacyRel = parts.slice(1).join(path.sep);
++          const legacyAbs = resolveWithin(basePath, legacyRel);
++          stat = await fs.stat(legacyAbs).catch(() => null);
++          if (stat) absPath = legacyAbs;
++        }
++      }
++      if (!stat) throw notFound("Run log not found");
+       return readFileRange(absPath, offset, limitBytes);
+     },
+   };
+diff --git a/paperclip-official/server/src/storage/service.ts b/paperclip-official/server/src/storage/service.ts
+index 6401c41..bae518d 100644
+--- a/paperclip-official/server/src/storage/service.ts
++++ b/paperclip-official/server/src/storage/service.ts
+@@ -43,21 +43,31 @@ function splitFilename(filename: string | null): { stem: string; ext: string } {
+   };
+ }
+ 
+-function ensureCompanyPrefix(companyId: string, objectKey: string): void {
+-  const expectedPrefix = `${companyId}/`;
+-  if (!objectKey.startsWith(expectedPrefix)) {
+-    throw forbidden("Object does not belong to company");
+-  }
++/**
++ * 允許新版 `tenantId/companyId/...` 與舊版 `companyId/...`（既有資產）。
++ */
++function ensureObjectKeyForCompany(tenantId: string, companyId: string, objectKey: string): void {
+   if (objectKey.includes("..")) {
+     throw badRequest("Invalid object key");
+   }
++  const newPrefix = `${tenantId}/${companyId}/`;
++  const legacyPrefix = `${companyId}/`;
++  if (objectKey.startsWith(newPrefix) || objectKey.startsWith(legacyPrefix)) {
++    return;
++  }
++  throw forbidden("Object does not belong to company");
+ }
+ 
+ function hashBuffer(input: Buffer): string {
+   return createHash("sha256").update(input).digest("hex");
+ }
+ 
+-function buildObjectKey(companyId: string, namespace: string, originalFilename: string | null): string {
++function buildObjectKey(
++  tenantId: string,
++  companyId: string,
++  namespace: string,
++  originalFilename: string | null,
++): string {
+   const ns = normalizeNamespace(namespace);
+   const now = new Date();
+   const year = String(now.getUTCFullYear());
+@@ -66,10 +76,13 @@ function buildObjectKey(companyId: string, namespace: string, originalFilename:
+   const { stem, ext } = splitFilename(originalFilename);
+   const suffix = randomUUID();
+   const filename = `${suffix}-${stem}${ext}`;
+-  return `${companyId}/${ns}/${year}/${month}/${day}/${filename}`;
++  return `${tenantId}/${companyId}/${ns}/${year}/${month}/${day}/${filename}`;
+ }
+ 
+ function assertPutFileInput(input: PutFileInput): void {
++  if (!input.tenantId || input.tenantId.trim().length === 0) {
++    throw unprocessable("tenantId is required");
++  }
+   if (!input.companyId || input.companyId.trim().length === 0) {
+     throw unprocessable("companyId is required");
+   }
+@@ -93,7 +106,12 @@ export function createStorageService(provider: StorageProvider): StorageService
+ 
+     async putFile(input: PutFileInput): Promise<PutFileResult> {
+       assertPutFileInput(input);
+-      const objectKey = buildObjectKey(input.companyId, input.namespace, input.originalFilename);
++      const objectKey = buildObjectKey(
++        input.tenantId.trim(),
++        input.companyId.trim(),
++        input.namespace,
++        input.originalFilename,
++      );
+       const byteSize = input.body.length;
+       const contentType = input.contentType.trim().toLowerCase();
+       await provider.putObject({
+@@ -113,18 +131,18 @@ export function createStorageService(provider: StorageProvider): StorageService
+       };
+     },
+ 
+-    async getObject(companyId: string, objectKey: string) {
+-      ensureCompanyPrefix(companyId, objectKey);
++    async getObject(companyId: string, objectKey: string, tenantId: string) {
++      ensureObjectKeyForCompany(tenantId, companyId, objectKey);
+       return provider.getObject({ objectKey });
+     },
+ 
+-    async headObject(companyId: string, objectKey: string) {
+-      ensureCompanyPrefix(companyId, objectKey);
++    async headObject(companyId: string, objectKey: string, tenantId: string) {
++      ensureObjectKeyForCompany(tenantId, companyId, objectKey);
+       return provider.headObject({ objectKey });
+     },
+ 
+-    async deleteObject(companyId: string, objectKey: string) {
+-      ensureCompanyPrefix(companyId, objectKey);
++    async deleteObject(companyId: string, objectKey: string, tenantId: string) {
++      ensureObjectKeyForCompany(tenantId, companyId, objectKey);
+       await provider.deleteObject({ objectKey });
+     },
+   };
+diff --git a/paperclip-official/server/src/storage/types.ts b/paperclip-official/server/src/storage/types.ts
+index 22325f2..4e6c727 100644
+--- a/paperclip-official/server/src/storage/types.ts
++++ b/paperclip-official/server/src/storage/types.ts
+@@ -37,6 +37,8 @@ export interface StorageProvider {
+ }
+ 
+ export interface PutFileInput {
++  /** 物件鍵前綴，與 DB `companies.tenant_id` 一致，用於多租戶儲存隔離。 */
++  tenantId: string;
+   companyId: string;
+   namespace: string;
+   originalFilename: string | null;
+@@ -56,7 +58,7 @@ export interface PutFileResult {
+ export interface StorageService {
+   provider: StorageProviderId;
+   putFile(input: PutFileInput): Promise<PutFileResult>;
+-  getObject(companyId: string, objectKey: string): Promise<GetObjectResult>;
+-  headObject(companyId: string, objectKey: string): Promise<HeadObjectResult>;
+-  deleteObject(companyId: string, objectKey: string): Promise<void>;
++  getObject(companyId: string, objectKey: string, tenantId: string): Promise<GetObjectResult>;
++  headObject(companyId: string, objectKey: string, tenantId: string): Promise<HeadObjectResult>;
++  deleteObject(companyId: string, objectKey: string, tenantId: string): Promise<void>;
+ }
+diff --git a/paperclip-official/server/vitest.config.ts b/paperclip-official/server/vitest.config.ts
+index f624398..ce7e79b 100644
+--- a/paperclip-official/server/vitest.config.ts
++++ b/paperclip-official/server/vitest.config.ts
+@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
+ 
+ export default defineConfig({
+   test: {
++    name: "server",
+     environment: "node",
+   },
+ });
+diff --git a/paperclip-official/ui/src/App.tsx b/paperclip-official/ui/src/App.tsx
+index 46967ce..e91135e 100644
+--- a/paperclip-official/ui/src/App.tsx
++++ b/paperclip-official/ui/src/App.tsx
+@@ -30,6 +30,10 @@ import { Chat } from "./pages/Chat";
+ import { ChatEmpty } from "./pages/ChatEmpty";
+ import { ChatRoom } from "./pages/ChatRoom";
+ import { CompanySettings } from "./pages/CompanySettings";
++import { CompanyBilling } from "./pages/CompanyBilling";
++import { PricingPage } from "./pages/PricingPage";
++import { BillingCheckoutReturn } from "./pages/BillingCheckoutReturn";
++import { BillingCheckoutCancel } from "./pages/BillingCheckoutCancel";
+ import { CompanyAutomation } from "./pages/CompanyAutomation";
+ import { CompanySkills } from "./pages/CompanySkills";
+ import { CompanyWorkflowEditPage, CompanyWorkflowNewPage } from "./pages/CompanyWorkflowEdit";
+@@ -42,6 +46,7 @@ import { ArchiveCompanySettings } from "./pages/ArchiveCompanySettings";
+ import { InstanceCompanyManagement } from "./pages/InstanceCompanyManagement";
+ import { InstanceGroupManagement } from "./pages/InstanceGroupManagement";
+ import { InstanceUserManagement } from "./pages/InstanceUserManagement";
++import { InstancePlansSettings } from "./pages/InstancePlansSettings";
+ import { RunTranscriptUxLab } from "./pages/RunTranscriptUxLab";
+ import { OrgChart } from "./pages/OrgChart";
+ import { GoalMap } from "./pages/GoalMap";
+@@ -208,6 +213,10 @@ function boardRoutes() {
+       <Route path="onboarding" element={<OnboardingRoutePage />} />
+       <Route path="companies" element={<Companies />} />
+       <Route path="company/settings" element={<CompanySettings />} />
++      <Route path="company/billing" element={<CompanyBilling />} />
++      <Route path="company/billing/return" element={<BillingCheckoutReturn />} />
++      <Route path="company/billing/cancel" element={<BillingCheckoutCancel />} />
++      <Route path="pricing" element={<PricingPage />} />
+       <Route path="company/automation" element={<CompanyAutomation />} />
+       <Route path="settings" element={<LegacySettingsRedirect />} />
+       <Route path="settings/*" element={<LegacySettingsRedirect />} />
+@@ -449,6 +458,9 @@ export function App() {
+           <Route path="instance/users" element={<Layout />}>
+             <Route index element={<InstanceUserManagement />} />
+           </Route>
++          <Route path="instance/plans" element={<Layout />}>
++            <Route index element={<InstancePlansSettings />} />
++          </Route>
+           <Route path="companies" element={<UnprefixedBoardRedirect />} />
+           <Route path="issues" element={<UnprefixedBoardRedirect />} />
+           <Route path="issues/:issueId" element={<UnprefixedBoardRedirect />} />
+diff --git a/paperclip-official/ui/src/api/me.ts b/paperclip-official/ui/src/api/me.ts
+index 11198df..ae8cccb 100644
+--- a/paperclip-official/ui/src/api/me.ts
++++ b/paperclip-official/ui/src/api/me.ts
+@@ -6,7 +6,7 @@ export type MeProfile = {
+   email: string | null;
+   image: string | null;
+   group: string | null;
+-  /** Instance 身分組權限鍵；含 "admin.setting" 或 "*" 時可顯示設定按鈕 */
++  /** Instance 身分組權限鍵；含 "admin.setting"／"admin.pricing"／"*" 等（依各功能檢查） */
+   permissions?: string[];
+   /** 是否仍可建立公司（依身分組權限與已擁有數量） */
+   canCreateCompany?: boolean;
+@@ -22,6 +22,12 @@ export function canAccessInstanceSettings(me: MeProfile | null | undefined): boo
+   return perms.includes("admin.setting") || perms.includes("*");
+ }
+ 
++/** 方案目錄管理（/instance/plans）：admin.pricing 或 * */
++export function canAccessInstancePricing(me: MeProfile | null | undefined): boolean {
++  const perms = me?.permissions ?? [];
++  return perms.includes("admin.pricing") || perms.includes("*");
++}
++
+ export const meApi = {
+   get: () => api.get<MeProfile>("/me"),
+   updateDeveloperMode: (developerMode: boolean) =>
+diff --git a/paperclip-official/ui/src/components/CommandPalette.tsx b/paperclip-official/ui/src/components/CommandPalette.tsx
+index d0f54c4..8956c0e 100644
+--- a/paperclip-official/ui/src/components/CommandPalette.tsx
++++ b/paperclip-official/ui/src/components/CommandPalette.tsx
+@@ -30,6 +30,7 @@ import {
+   SquarePen,
+   Plus,
+   Keyboard,
++  CreditCard,
+ } from "lucide-react";
+ import { Identity } from "./Identity";
+ import { agentUrl, projectUrl } from "../lib/utils";
+@@ -169,6 +170,10 @@ export function CommandPalette() {
+             <DollarSign className="ui-cmd-icon" />
+             {t("costs")}
+           </CommandItem>
++          <CommandItem onSelect={() => go("/company/billing")}>
++            <CreditCard className="ui-cmd-icon" />
++            {t("billing")}
++          </CommandItem>
+           <CommandItem onSelect={() => go("/activity")}>
+             <History className="ui-cmd-icon" />
+             {t("activity")}
+diff --git a/paperclip-official/ui/src/components/CostCharts.tsx b/paperclip-official/ui/src/components/CostCharts.tsx
+index ab5bedb..64cd13c 100644
+--- a/paperclip-official/ui/src/components/CostCharts.tsx
++++ b/paperclip-official/ui/src/components/CostCharts.tsx
+@@ -133,6 +133,14 @@ export function TokenUsageByAgentChart({
+             <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.output }} />
+             {t("outputTokens")}
+           </span>
++          <span className="ui-cost-chart-legend-item">
++            <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.cachedRead }} />
++            {t("cachedReadTokens")}
++          </span>
++          <span className="ui-cost-chart-legend-item">
++            <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.cachedWrite }} />
++            {t("cachedWriteTokens")}
++          </span>
+         </div>
+         {totalTokenSummary && (
+           <div className="ui-cost-chart-total-summary" aria-label={t("totalTokensConsumed")}>
+@@ -265,6 +273,14 @@ export function TokenUsageByProjectChart({
+             <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.output }} />
+             {t("outputTokens")}
+           </span>
++          <span className="ui-cost-chart-legend-item">
++            <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.cachedRead }} />
++            {t("cachedReadTokens")}
++          </span>
++          <span className="ui-cost-chart-legend-item">
++            <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.cachedWrite }} />
++            {t("cachedWriteTokens")}
++          </span>
+         </div>
+         {totalTokenSummary && (
+           <div className="ui-cost-chart-total-summary" aria-label={t("totalTokensConsumed")}>
+diff --git a/paperclip-official/ui/src/components/InstanceSidebar.tsx b/paperclip-official/ui/src/components/InstanceSidebar.tsx
+index fbc27c3..278f990 100644
+--- a/paperclip-official/ui/src/components/InstanceSidebar.tsx
++++ b/paperclip-official/ui/src/components/InstanceSidebar.tsx
+@@ -1,8 +1,8 @@
+ import { useTranslation } from "react-i18next";
+-import { Archive, Building2, FolderOpen, Settings, Users, UserCog } from "lucide-react";
++import { Archive, Building2, CreditCard, FolderOpen, Settings, Users, UserCog } from "lucide-react";
+ import { SidebarNavItem } from "./SidebarNavItem";
+ 
+-export function InstanceSidebar() {
++export function InstanceSidebar({ canManagePlans = false }: { canManagePlans?: boolean }) {
+   const { t } = useTranslation();
+   return (
+     <aside className="board-sidebar">
+@@ -20,6 +20,13 @@ export function InstanceSidebar() {
+             label={t("instance.userManagement")}
+             icon={UserCog}
+           />
++          {canManagePlans ? (
++            <SidebarNavItem
++              to="/instance/plans"
++              label={t("instance.planManagement")}
++              icon={CreditCard}
++            />
++          ) : null}
+           <SidebarNavItem
+             to="/instance/default-company-path"
+             label={t("instance.defaultCompanyPath")}
+diff --git a/paperclip-official/ui/src/components/Layout.tsx b/paperclip-official/ui/src/components/Layout.tsx
+index 6acd7a5..54492c7 100644
+--- a/paperclip-official/ui/src/components/Layout.tsx
++++ b/paperclip-official/ui/src/components/Layout.tsx
+@@ -26,7 +26,7 @@ import { useTheme } from "../context/ThemeContext";
+ import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+ import { useCompanyPageMemory } from "../hooks/useCompanyPageMemory";
+ import { healthApi } from "../api/health";
+-import { meApi, canAccessInstanceSettings } from "../api/me";
++import { meApi, canAccessInstanceSettings, canAccessInstancePricing } from "../api/me";
+ import { queryKeys } from "../lib/queryKeys";
+ import { NotFoundPage } from "../pages/NotFound";
+ import { Button } from "@/components/ui/button";
+@@ -158,6 +158,7 @@ export function Layout() {
+     retry: false,
+   });
+   const showSettingsButton = canAccessInstanceSettings(meProfile);
++  const canManagePlans = canAccessInstancePricing(meProfile);
+   const companiesReady = !companiesLoading && !companiesError;
+   const noCompaniesReady = companiesReady && companies.length === 0;
+   /** 無公司時不顯示看板側欄（例如 /account）；instance 設定仍保留導覽。 */
+@@ -407,7 +408,7 @@ export function Layout() {
+           <div className={`board-sidebar-wrap-mobile ${sidebarOpen ? "open" : "closed"}`}>
+             <div className="board-sidebar-inner">
+               {!noCompaniesReady && <CompanyRail />}
+-              {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
++              {isInstanceSettingsRoute ? <InstanceSidebar canManagePlans={canManagePlans} /> : <Sidebar />}
+             </div>
+             <div className="board-sidebar-footer">
+               <div className="board-sidebar-footer-btn-wrap">
+@@ -453,7 +454,7 @@ export function Layout() {
+                   className="board-sidebar-collapsible"
+                   style={{ width: sidebarOpen ? sidebarWidth : 0 }}
+                 >
+-                  {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
++                  {isInstanceSettingsRoute ? <InstanceSidebar canManagePlans={canManagePlans} /> : <Sidebar />}
+                 </div>
+               </div>
+               <div className="board-sidebar-footer">
+diff --git a/paperclip-official/ui/src/components/OnboardingWizard.css b/paperclip-official/ui/src/components/OnboardingWizard.css
+index 53b7db4..3816bf2 100644
+--- a/paperclip-official/ui/src/components/OnboardingWizard.css
++++ b/paperclip-official/ui/src/components/OnboardingWizard.css
+@@ -976,3 +976,15 @@
+   color: var(--muted-foreground);
+   margin: 0;
+ }
++
++.onboarding-wizard-byok-note {
++  font-size: 0.75rem;
++  line-height: 1.45;
++  color: var(--muted-foreground);
++  margin: 0.5rem 0 0;
++}
++
++.onboarding-wizard-byok-note.onboarding-wizard-byok-muted {
++  margin-top: 0.35rem;
++  opacity: 0.92;
++}
+diff --git a/paperclip-official/ui/src/components/OnboardingWizard.tsx b/paperclip-official/ui/src/components/OnboardingWizard.tsx
+index dce6ffd..46f88fc 100644
+--- a/paperclip-official/ui/src/components/OnboardingWizard.tsx
++++ b/paperclip-official/ui/src/components/OnboardingWizard.tsx
+@@ -1167,6 +1167,11 @@ export function OnboardingWizard() {
+                           {apiKeyValidationError}
+                         </p>
+                       )}
++                      <p className="onboarding-wizard-byok-note">{t("onboarding:byokModelCostNote")}</p>
++                      <p className="onboarding-wizard-byok-note">{t("onboarding:secretRefRecommendNote")}</p>
++                      <p className="onboarding-wizard-byok-note onboarding-wizard-byok-muted">
++                        {t("onboarding:hostedInferenceUpsell")}
++                      </p>
+                     </div>
+                   )}
+ 
+diff --git a/paperclip-official/ui/src/components/Sidebar.tsx b/paperclip-official/ui/src/components/Sidebar.tsx
+index 1784124..0865c43 100644
+--- a/paperclip-official/ui/src/components/Sidebar.tsx
++++ b/paperclip-official/ui/src/components/Sidebar.tsx
+@@ -17,6 +17,7 @@ import {
+   Calendar,
+   Zap,
+   BookText,
++  CreditCard,
+ } from "lucide-react";
+ import { useQuery } from "@tanstack/react-query";
+ import { SidebarSection } from "./SidebarSection";
+@@ -109,6 +110,7 @@ export function Sidebar() {
+           <SidebarNavItem to="/governance" label={t("nav.governance")} icon={Scale} />
+           <SidebarNavItem to="/company/automation" label={t("nav.automation")} icon={Zap} />
+           <SidebarNavItem to="/costs" label={t("nav.costs")} icon={DollarSign} />
++          <SidebarNavItem to="/company/billing" label={t("nav.billing")} icon={CreditCard} />
+           <SidebarNavItem to="/activity" label={t("nav.activity")} icon={History} />
+           <SidebarNavItem to="/company/settings" label={t("nav.settings")} icon={Settings} />
+         </SidebarSection>
+diff --git a/paperclip-official/ui/src/i18n.ts b/paperclip-official/ui/src/i18n.ts
+index 692ff32..e2476be 100644
+--- a/paperclip-official/ui/src/i18n.ts
++++ b/paperclip-official/ui/src/i18n.ts
+@@ -26,6 +26,7 @@ function detectLanguage(): SupportedLocale {
+ const PAGE_NAMESPACES = [
+   "activity",
+   "approvals",
++  "billing",
+   "chat",
+   "company",
+     "companySkills",
+diff --git a/paperclip-official/ui/src/index.css b/paperclip-official/ui/src/index.css
+index 674a785..b288bb1 100644
+--- a/paperclip-official/ui/src/index.css
++++ b/paperclip-official/ui/src/index.css
+@@ -610,6 +610,8 @@ label {
+ .paperclip-markdown img {
+   border-radius: calc(var(--radius) + 2px);
+   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent);
++  max-width: 100%;
++  height: auto;
+ }
+ 
+ .paperclip-markdown table {
+diff --git a/paperclip-official/ui/src/lib/company-routes.ts b/paperclip-official/ui/src/lib/company-routes.ts
+index 0ba277d..535bce4 100644
+--- a/paperclip-official/ui/src/lib/company-routes.ts
++++ b/paperclip-official/ui/src/lib/company-routes.ts
+@@ -16,6 +16,12 @@ const BOARD_ROUTE_ROOTS = new Set([
+   "activity",
+   "inbox",
+   "design-guide",
++  /** 須與 App board 子路由一致；漏列時 Link 會把首段誤判為 company prefix（例如 /pricing → PRICING）。 */
++  "pricing",
++  "onboarding",
++  "runs",
++  "chat",
++  "tests",
+ ]);
+ 
+ const GLOBAL_ROUTE_ROOTS = new Set(["auth", "invite", "board-claim", "docs", "instance", "landing"]);
+diff --git a/paperclip-official/ui/src/lib/queryKeys.ts b/paperclip-official/ui/src/lib/queryKeys.ts
+index 05108a2..02466f3 100644
+--- a/paperclip-official/ui/src/lib/queryKeys.ts
++++ b/paperclip-official/ui/src/lib/queryKeys.ts
+@@ -123,6 +123,9 @@ export const queryKeys = {
+   instanceUsers: {
+     all: ["instance", "users"] as const,
+   },
++  instancePlans: {
++    all: ["instance", "plans"] as const,
++  },
+   instanceSettings: {
+     defaultCompanyPath: ["instance", "settings", "default-company-path"] as const,
+     complianceDefaultRetention: ["instance", "settings", "compliance-default-retention"] as const,
+@@ -138,6 +141,10 @@ export const queryKeys = {
+   activity: (companyId: string) => ["activity", companyId] as const,
+   costs: (companyId: string, from?: string, to?: string) =>
+     ["costs", companyId, from, to] as const,
++  billing: {
++    plans: (companyId: string) => ["billing", "plans", companyId] as const,
++    company: (companyId: string) => ["billing", "company", companyId] as const,
++  },
+   budgetPolicies: (companyId: string) => ["budget-policies", companyId] as const,
+   heartbeats: (companyId: string, agentId?: string) =>
+     ["heartbeats", companyId, agentId] as const,
+diff --git a/paperclip-official/ui/src/locales/en.json b/paperclip-official/ui/src/locales/en.json
+index 3375822..321eebe 100644
+--- a/paperclip-official/ui/src/locales/en.json
++++ b/paperclip-official/ui/src/locales/en.json
+@@ -77,6 +77,7 @@
+     "orgChart": "Org Chart",
+     "goalMap": "Goal Map",
+     "costs": "Costs",
++    "billing": "Billing",
+     "governance": "Governance",
+     "automation": "Automation",
+     "activity": "Activity",
+@@ -262,6 +263,50 @@
+     "cleanupOrphansFailed": "Failed to clean up orphaned data.",
+     "userManagement": "User management",
+     "userManagementDesc": "View board users and assign them to instance groups. Users with no group use the default group's permissions.",
++    "planManagement": "Plan management",
++    "planManagementDesc": "Create and edit subscription plans, catalog visibility, and which companies may select each plan (e.g. internal or enterprise-only).",
++    "backToInstanceSettings": "Back to instance settings",
++    "plansLoadFailed": "Failed to load plans.",
++    "planSlug": "Slug",
++    "planSlugHint": "Lowercase letters, digits, underscore or hyphen. Cannot be changed after creation.",
++    "planSlugRequired": "Enter a plan slug.",
++    "planName": "Display name",
++    "planDescription": "Description",
++    "catalogVisible": "Show in public catalog",
++    "catalogVisibleHint": "If off, the plan is hidden unless the company is on the allowed list below.",
++    "allowedCompanies": "Allowed companies (optional)",
++    "allowedCompaniesHint": "If any are selected, only those companies can subscribe. Leave all unchecked to allow any company (subject to catalog visibility).",
++    "entitlementsJson": "Entitlements (JSON object)",
++    "externalRefsJson": "External refs (JSON object, string values only)",
++    "externalRefsJsonHint": "e.g. Stripe price IDs: {\"stripe_price_usd\":\"price_…\",\"stripe_price_twd\":\"price_…\"}",
++    "intervalDays": "Billing interval (days)",
++    "sortOrder": "Sort order",
++    "planActive": "Plan active",
++    "newPlan": "New plan",
++    "editPlan": "Edit",
++    "savePlan": "Save",
++    "cancelEdit": "Clear form",
++    "deactivatePlan": "Deactivate",
++    "confirmDeactivatePlan": "Deactivate this plan? Existing subscriptions are unchanged; new checkouts will not use it.",
++    "planSaveFailed": "Failed to save plan.",
++    "planDeactivateFailed": "Failed to deactivate plan.",
++    "invalidJsonEntitlements": "Entitlements must be a JSON object.",
++    "invalidJsonExternalRefs": "External refs must be a JSON object.",
++    "externalRefsMustBeStrings": "External refs: every value must be a string.",
++    "planIntervalInvalid": "Enter a valid billing interval (days ≥ 1).",
++    "planSortInvalid": "Enter a valid sort order (integer).",
++    "planListEmpty": "No plans yet. Create one above.",
++    "plansTableTitle": "All plans",
++    "colSlug": "Slug",
++    "colName": "Name",
++    "colCatalog": "Catalog",
++    "colAllowed": "Access",
++    "colInterval": "Days",
++    "colActive": "Active",
++    "publicCatalog": "Public",
++    "hiddenCatalog": "Hidden",
++    "companiesCount": "{{count}} companies",
++    "anyCompany": "Any (if visible)",
+     "userName": "Name",
+     "userEmail": "Email",
+     "userGroup": "Group",
+@@ -349,6 +394,7 @@
+     "permissionCount": "{{count}} permission(s)",
+     "permissionKey_all": "All permissions",
+     "permissionKey_admin_setting": "Instance settings",
++    "permissionKey_admin_pricing": "Plan catalog & pricing",
+     "permissionKey_company_view_all": "View all companies",
+     "permissionKey_company_create_amount": "Create company (limit {{count}})",
+     "permissionKey_company_create_amount_number": "Create company (limit N)",
+@@ -659,12 +705,12 @@
+     "noCompanyChromeNavLabel": "Sign out and theme"
+   },
+   "landing": {
+-    "heroBadge": "AI control plane",
+-    "heroTitle": "AI agent control plane for your team",
+-    "heroSubtitle": "Manage agents, issues, and workflows in one place. Built for teams who ship with AI.",
+-    "valueProp1": "Single dashboard for all agents",
+-    "valueProp2": "Approvals and governance built in",
+-    "valueProp3": "Cost and activity tracking",
++    "heroBadge": "BYOK-first control plane",
++    "heroTitle": "Govern AI agents with your own API keys",
++    "heroSubtitle": "Bring your keys from OpenAI, Anthropic, or Google. We bill the platform—runs, storage, webhooks—not your model tokens.",
++    "valueProp1": "Model fees stay on your cloud bill",
++    "valueProp2": "Governance, approvals, and audit in one place",
++    "valueProp3": "Secrets as references—not pasted into configs",
+     "goToDashboard": "Go to Dashboard",
+     "getStarted": "Get Started",
+     "statAgentsValue": "60+",
+@@ -697,7 +743,21 @@
+     "step3Desc": "Assign tasks to agents. Track progress, approve when needed, and monitor costs.",
+     "ctaTitle": "Ready to take control?",
+     "ctaSubtitle": "Open your dashboard and start managing your AI workforce.",
+-    "footerNote": "This is the product landing. More SaaS features coming soon."
++    "footerNote": "This is the product landing. More SaaS features coming soon.",
++    "pricingTransparencyTitle": "How we charge",
++    "pricingTransparencyLead": "Three lines, no surprise math:",
++    "pricingPoint1": "Base subscription per company for the control plane and collaboration.",
++    "pricingPoint2": "Platform quotas for billable runs, concurrency, storage, and outbound automation—separate from LLM cost.",
++    "pricingPoint3": "Optional add-ons (SSO, retention, priority queues, hosted inference) when you need them.",
++    "faqTitle": "FAQ",
++    "faqQ1": "Why do I pay VFactory if I already pay OpenAI or Anthropic?",
++    "faqA1": "You pay providers for tokens. You pay us for orchestration, governance, schedules, webhooks, audit trails, and team guardrails—things that do not appear on a model invoice.",
++    "faqQ2": "Is my API key safe?",
++    "faqA2": "Keys you enter during onboarding are stored as encrypted company secrets. Agent configs should reference secrets (secret_ref) instead of pasting keys into every field.",
++    "faqQ3": "What counts as a billable run?",
++    "faqA3": "Product definition: a platform-orchestrated agent or workflow execution. Exact metering rolls out per your plan; see documentation for the latest rules.",
++    "faqQ4": "Can you host inference for me?",
++    "faqA4": "Optional hosted inference is a separate add-on with transparent markup or prepaid credits. BYOK remains the default recommendation for cost control."
+   },
+   "company": {
+     "company": "Company",
+@@ -1098,6 +1158,8 @@
+     "topOfProjects": "Top {{top}} of {{total}} projects",
+     "inputTokens": "Input tokens",
+     "outputTokens": "Output tokens",
++    "cachedReadTokens": "Cache read tokens",
++    "cachedWriteTokens": "Cache write tokens",
+     "inOutTok": "in {{in}} / out {{out}} tok",
+     "apiRunsCount": "api runs: {{count}}",
+     "subscriptionRunsDetail": "subscription runs: {{count}} ({{in}} in / {{out}} out tok)",
+@@ -1175,6 +1237,43 @@
+     "attributionHint":
+       "Project and billing code on each cost event support attribution. Use billing codes for customer / cost-center; for environment (e.g. prod vs staging), encode it in the billing code (such as client_acme__prod) unless you add a dedicated column later."
+   },
++  "billing": {
++    "title": "Billing & plan",
++    "subtitle": "Subscription and platform quotas for this company. Model usage is billed by your cloud provider when you use BYOK.",
++    "breadcrumbCompany": "Company",
++    "currentPlan": "Current plan",
++    "plan": "Plan",
++    "status": "Status",
++    "effectiveTokenFairUse": "Team token budget (monthly, fair use)",
++    "effectiveSpendFairUse": "Team spend cap (monthly, fair use)",
++    "unlimited": "Unlimited",
++    "freeTier": "Free tier (no paid subscription)",
++    "openStripePortal": "Manage payment (Stripe)",
++    "availablePlans": "Available plans",
++    "tokenBudgetFairUse": "Token budget (monthly, fair use)",
++    "spendCapFairUse": "Spend cap (monthly, fair use)",
++    "platformBillableRuns": "Platform billable runs (monthly, included)",
++    "platformEditorSeats": "Editor seats included",
++    "platformConcurrentRuns": "Concurrent runs",
++    "platformWebhookDeliveries": "Webhook deliveries (monthly, included)",
++    "platformTierKey": "Tier",
++    "planEntitlementsEmpty": "No platform quotas listed for this plan.",
++    "costLimitsOnCostsPage": "Token and spend limits are managed on the Costs page and backend policies.",
++    "byokChargeSeparationNote": "BYOK default: LLM charges appear on your provider bill. VFactory bills the control plane, governance, and platform quotas shown below.",
++    "subscribeStripe": "Pay with card (Stripe)",
++    "subscribeEcpay": "Pay with ECPay (TWD)",
++    "viewPricingPage": "View pricing overview",
++    "ecpayRedirect": "Redirecting to ECPay",
++    "ecpayRedirectHint": "Redirecting to payment…",
++    "ecpayContinueSubmit": "Continue to payment",
++    "pricingTitle": "Pricing",
++    "pricingSubtitle": "Plans and platform quotas on this instance. Sign in to subscribe from your company billing page.",
++    "returnTitle": "Payment received",
++    "returnBody": "Your subscription will update shortly. You can close this page or return to billing.",
++    "cancelTitle": "Checkout canceled",
++    "cancelBody": "No charges were made. You can try again from the billing page.",
++    "backToBilling": "Back to billing"
++  },
+   "activity": {
+     "pageTitle": "ACTIVITY",
+     "filterByType": "Filter by type",
+@@ -1800,6 +1899,9 @@
+     "apiKey": "API Key",
+     "apiKeyHint": "Enter the API key for this adapter. It will be saved as an encrypted company secret (not stored in plain text). Claude: ANTHROPIC_API_KEY (starts with sk-ant-). Codex: OPENAI_API_KEY (starts with sk-). Gemini: GEMINI_API_KEY or GOOGLE_API_KEY.",
+     "apiKeyPlaceholder": "Paste your API key here",
++    "byokModelCostNote": "With BYOK, model usage is billed by your provider (OpenAI, Anthropic, Google, etc.). VFactory does not resell tokens on the default path.",
++    "secretRefRecommendNote": "After onboarding, prefer secret references (secret_ref) in agent environment variables so keys are not duplicated in plain text across configs.",
++    "hostedInferenceUpsell": "Optional: If you prefer not to manage API keys, ask us about the hosted inference add-on (separate billing, transparent markup or credits).",
+     "model": "Model",
+     "default": "Default",
+     "searchModels": "Search models...",
+diff --git a/paperclip-official/ui/src/locales/zh-TW.json b/paperclip-official/ui/src/locales/zh-TW.json
+index 70d7d7b..a84a4ea 100644
+--- a/paperclip-official/ui/src/locales/zh-TW.json
++++ b/paperclip-official/ui/src/locales/zh-TW.json
+@@ -77,6 +77,7 @@
+     "orgChart": "組織圖",
+     "goalMap": "目標圖",
+     "costs": "成本",
++    "billing": "方案與帳單",
+     "governance": "治理",
+     "automation": "自動化",
+     "activity": "活動",
+@@ -262,6 +263,50 @@
+     "cleanupOrphansFailed": "清理孤兒資料失敗。",
+     "userManagement": "使用者管理",
+     "userManagementDesc": "檢視此站使用者並指派身分組。未指定群組的使用者將使用預設群組的權限。",
++    "planManagement": "方案管理",
++    "planManagementDesc": "新增、編輯訂閱方案、目錄是否公開，以及哪些公司可選用（例如內部 Infinite 或企業專屬）。",
++    "backToInstanceSettings": "返回此站設定",
++    "plansLoadFailed": "無法載入方案。",
++    "planSlug": "代號（slug）",
++    "planSlugHint": "小寫英數、底線或連字號；建立後無法變更。",
++    "planSlugRequired": "請輸入方案代號。",
++    "planName": "顯示名稱",
++    "planDescription": "說明",
++    "catalogVisible": "公開顯示於方案目錄",
++    "catalogVisibleHint": "關閉時，僅下方允許名單內的公司可看見並結帳。",
++    "allowedCompanies": "允許的公司（選填）",
++    "allowedCompaniesHint": "若有勾選，僅這些公司可訂閱；全部不勾則依「公開目錄」規則開放（仍受目錄開關影響）。",
++    "entitlementsJson": "權益配額（JSON 物件）",
++    "externalRefsJson": "外部參照（JSON 物件，值須為字串）",
++    "externalRefsJsonHint": "例如 Stripe 價格 ID：{\"stripe_price_usd\":\"price_…\",\"stripe_price_twd\":\"price_…\"}",
++    "intervalDays": "計費週期（天）",
++    "sortOrder": "排序",
++    "planActive": "方案啟用中",
++    "newPlan": "新增方案",
++    "editPlan": "編輯",
++    "savePlan": "儲存",
++    "cancelEdit": "清空表單",
++    "deactivatePlan": "停用",
++    "confirmDeactivatePlan": "確定停用此方案？既有訂閱不受影響；新結帳將無法選用。",
++    "planSaveFailed": "儲存方案失敗。",
++    "planDeactivateFailed": "停用方案失敗。",
++    "invalidJsonEntitlements": "權益須為 JSON 物件。",
++    "invalidJsonExternalRefs": "外部參照須為 JSON 物件。",
++    "externalRefsMustBeStrings": "外部參照：每個值必須為字串。",
++    "planIntervalInvalid": "請輸入有效計費週期（天數 ≥ 1）。",
++    "planSortInvalid": "請輸入有效排序（整數）。",
++    "planListEmpty": "尚無方案，請於上方建立。",
++    "plansTableTitle": "所有方案",
++    "colSlug": "代號",
++    "colName": "名稱",
++    "colCatalog": "目錄",
++    "colAllowed": "存取",
++    "colInterval": "天數",
++    "colActive": "啟用",
++    "publicCatalog": "公開",
++    "hiddenCatalog": "隱藏",
++    "companiesCount": "{{count}} 家公司",
++    "anyCompany": "不限（若可見）",
+     "userName": "名稱",
+     "userEmail": "Email",
+     "userGroup": "身分組",
+@@ -349,6 +394,7 @@
+     "permissionCount": "共 {{count}} 項權限",
+     "permissionKey_all": "全部權限",
+     "permissionKey_admin_setting": "此站設定",
++    "permissionKey_admin_pricing": "方案目錄與定價",
+     "permissionKey_company_view_all": "檢視全部公司",
+     "permissionKey_company_create_amount": "建立公司（限 {{count}} 家）",
+     "permissionKey_company_create_amount_number": "建立公司（限 N 家）",
+@@ -659,12 +705,12 @@
+     "noCompanyChromeNavLabel": "登出與主題"
+   },
+   "landing": {
+-    "heroBadge": "AI 控制台",
+-    "heroTitle": "專為團隊打造的 AI 員工控制台",
+-    "heroSubtitle": "在單一介面管理 AI 員工、議題與工作流程，為以 AI 協作的團隊而生。",
+-    "valueProp1": "單一儀表板掌握所有 AI 員工",
+-    "valueProp2": "內建審核與治理流程",
+-    "valueProp3": "成本與活動追蹤",
++    "heroBadge": "BYOK 優先控制台",
++    "heroTitle": "用您自備的 API Key 治理 AI 員工",
++    "heroSubtitle": "帶入 OpenAI、Anthropic 或 Google 等金鑰。我們對平台收費——執行、儲存、Webhook——不包含您的模型 Token。",
++    "valueProp1": "模型費用留在您的雲端帳單",
++    "valueProp2": "治理、審核與稽核集中一處",
++    "valueProp3": "機密以 Secret 參照管理，避免到處貼金鑰",
+     "goToDashboard": "前往儀表板",
+     "getStarted": "立即開始",
+     "statAgentsValue": "60+",
+@@ -697,7 +743,21 @@
+     "step3Desc": "將議題指派給 AI 員工，追蹤進度、必要時審核並監控成本。",
+     "ctaTitle": "準備好掌握全局？",
+     "ctaSubtitle": "開啟儀表板，開始管理你的 AI 人力。",
+-    "footerNote": "此為產品 Landing 頁，更多 SaaS 功能即將推出。"
++    "footerNote": "此為產品 Landing 頁，更多 SaaS 功能即將推出。",
++    "pricingTransparencyTitle": "我們如何收費",
++    "pricingTransparencyLead": "三行講清楚，避免隱藏項目：",
++    "pricingPoint1": "每公司訂閱底座：控制台與協作能力。",
++    "pricingPoint2": "平台配額：計費執行、並發、儲存、出站自動化等——與 LLM 成本分開。",
++    "pricingPoint3": "選購加購：SSO、留存、優先佇列、託管推論等，依需求再加。",
++    "faqTitle": "常見問題",
++    "faqQ1": "我已經付 OpenAI／Anthropic，為什麼還要付 VFactory？",
++    "faqA1": "您付給原廠的是 Token。付給我們的是編排、治理、排程、Webhook、稽核與團隊護欄——這些不會出現在模型帳單上。",
++    "faqQ2": "我的 API 金鑰安全嗎？",
++    "faqA2": "新手引導中輸入的金鑰會以加密的公司 Secret 儲存。建議在員工設定中以 secret_ref 參照，而非在每個欄位貼明文。",
++    "faqQ3": "什麼算一次「計費執行」？",
++    "faqA3": "產品定義：由平台編排觸發的一次 Agent 或 Workflow 執行。實際計量規則依方案與文件最新說明為準。",
++    "faqQ4": "可以不要自己管 Key，請你們代管推論嗎？",
++    "faqA4": "可選「託管推論」加購，與 BYOK 分開計費（明碼加價或預付點數）。預設仍建議 BYOK 以掌握模型成本。"
+   },
+   "company": {
+     "company": "公司",
+@@ -1176,6 +1236,43 @@
+     "attributionHint":
+       "每筆成本事件可帶專案與帳務代碼（billing code）以利歸因：帳務代碼可作為客戶／成本中心；若需區分環境（如 prod／staging），建議寫在帳務代碼（例如 client_acme__prod），除非日後新增獨立欄位。"
+   },
++  "billing": {
++    "title": "方案與帳單",
++    "subtitle": "此公司的訂閱與平台配額。採 BYOK 時，模型用量由您的雲端供應商計費。",
++    "breadcrumbCompany": "公司",
++    "currentPlan": "目前方案",
++    "plan": "方案",
++    "status": "狀態",
++    "effectiveTokenFairUse": "團隊 Token 預算（每月，公平使用）",
++    "effectiveSpendFairUse": "團隊花費上限（每月，公平使用）",
++    "unlimited": "無上限",
++    "freeTier": "免費方案（無付費訂閱）",
++    "openStripePortal": "管理付款（Stripe）",
++    "availablePlans": "可選方案",
++    "tokenBudgetFairUse": "Token 預算（每月，公平使用）",
++    "spendCapFairUse": "花費上限（每月，公平使用）",
++    "platformBillableRuns": "平台計費執行（每月含括）",
++    "platformEditorSeats": "含括編輯席",
++    "platformConcurrentRuns": "並發執行數",
++    "platformWebhookDeliveries": "Webhook 成功派送（每月含括）",
++    "platformTierKey": "層級代號",
++    "planEntitlementsEmpty": "此方案未列出平台配額。",
++    "costLimitsOnCostsPage": "Token 與花費上限請至「成本」頁與後端政策管理。",
++    "byokChargeSeparationNote": "預設 BYOK：LLM 費用出現在您的供應商帳單。VFactory 對控制台、治理與下列平台配額收費。",
++    "subscribeStripe": "信用卡付款（Stripe）",
++    "subscribeEcpay": "綠界付款（新台幣）",
++    "viewPricingPage": "查看定價總覽",
++    "ecpayRedirect": "正在導向綠界",
++    "ecpayRedirectHint": "正在導向付款頁面…",
++    "ecpayContinueSubmit": "前往付款",
++    "pricingTitle": "定價",
++    "pricingSubtitle": "此站台提供的方案與平台配額。登入後可於公司帳單頁完成訂閱。",
++    "returnTitle": "已收到付款",
++    "returnBody": "訂閱狀態將於稍後更新。您可關閉此頁或返回帳單頁。",
++    "cancelTitle": "已取消結帳",
++    "cancelBody": "未扣款。您可從帳單頁再次嘗試。",
++    "backToBilling": "返回帳單"
++  },
+   "activity": {
+     "pageTitle": "活動",
+     "filterByType": "依類型篩選",
+@@ -1801,6 +1898,9 @@
+     "apiKey": "API 金鑰",
+     "apiKeyHint": "請輸入此適配器對應的 API 金鑰，將以加密的公司機密（Secret）儲存（不以明文寫入資料庫）。Claude：ANTHROPIC_API_KEY（以 sk-ant- 開頭）。Codex：OPENAI_API_KEY（以 sk- 開頭）。Gemini：GEMINI_API_KEY 或 GOOGLE_API_KEY。",
+     "apiKeyPlaceholder": "請在此貼上您的 API 金鑰",
++    "byokModelCostNote": "採 BYOK 時，模型用量由您的供應商（OpenAI、Anthropic、Google 等）計費；預設路徑下 VFactory 不代售 Token。",
++    "secretRefRecommendNote": "完成引導後，建議在員工環境變數使用 secret_ref 參照 Secret，避免在多處設定重複貼上金鑰。",
++    "hostedInferenceUpsell": "選配：若希望不必自行管理 API 金鑰，可洽詢「託管推論」加購（獨立計費，明碼加價或點數制）。",
+     "model": "模型",
+     "default": "預設",
+     "searchModels": "搜尋模型…",
+diff --git a/paperclip-official/ui/src/pages/Account.tsx b/paperclip-official/ui/src/pages/Account.tsx
+index 6425e66..2e63f4d 100644
+--- a/paperclip-official/ui/src/pages/Account.tsx
++++ b/paperclip-official/ui/src/pages/Account.tsx
+@@ -23,6 +23,13 @@ export function Account() {
+     queryFn: () => meApi.get(),
+   });
+ 
++  const updateDeveloperMode = useMutation({
++    mutationFn: (next: boolean) => meApi.updateDeveloperMode(next),
++    onSuccess: async () => {
++      await queryClient.invalidateQueries({ queryKey: ["me"] });
++    },
++  });
++
+   useEffect(() => {
+     setBreadcrumbs([{ label: t("account.title") }]);
+   }, [setBreadcrumbs, t]);
+@@ -63,13 +70,6 @@ export function Account() {
+     );
+   }
+ 
+-  const updateDeveloperMode = useMutation({
+-    mutationFn: (next: boolean) => meApi.updateDeveloperMode(next),
+-    onSuccess: async (_data, variables) => {
+-      await queryClient.invalidateQueries({ queryKey: ["me"] });
+-    },
+-  });
+-
+   const devMode = Boolean(profile.developerMode);
+ 
+   return (
+diff --git a/paperclip-official/ui/src/pages/InstanceSettings.tsx b/paperclip-official/ui/src/pages/InstanceSettings.tsx
+index 0b7867a..e1dd57d 100644
+--- a/paperclip-official/ui/src/pages/InstanceSettings.tsx
++++ b/paperclip-official/ui/src/pages/InstanceSettings.tsx
+@@ -1,14 +1,22 @@
+ import { useEffect } from "react";
+ import { useTranslation } from "react-i18next";
+-import { Archive, Building2, FolderOpen, Settings, Shield, Users, UserCog } from "lucide-react";
++import { useQuery } from "@tanstack/react-query";
++import { Archive, Building2, CreditCard, FolderOpen, Settings, Shield, Users, UserCog } from "lucide-react";
+ import { Link } from "@/lib/router";
+ import { useBreadcrumbs } from "../context/BreadcrumbContext";
++import { meApi, canAccessInstancePricing } from "../api/me";
+ import { Card, CardContent } from "@/components/ui/card";
+ import "./InstanceSettings.css";
+ 
+ export function InstanceSettings() {
+   const { t } = useTranslation();
+   const { setBreadcrumbs } = useBreadcrumbs();
++  const { data: me } = useQuery({
++    queryKey: ["me"],
++    queryFn: () => meApi.get(),
++    retry: false,
++  });
++  const showPlanManagement = canAccessInstancePricing(me);
+ 
+   useEffect(() => {
+     setBreadcrumbs([{ label: t("instance.instanceSettings") }]);
+@@ -38,6 +46,18 @@ export function InstanceSettings() {
+         </Link>
+       </Card>
+ 
++      {showPlanManagement ? (
++        <Card className="instance-settings-card">
++          <Link to="/instance/plans" className="instance-settings-card-link">
++            <CreditCard />
++            <CardContent className="instance-settings-card-body">
++              <div className="instance-settings-card-label">{t("instance.planManagement")}</div>
++              <p className="instance-settings-card-desc">{t("instance.planManagementDesc")}</p>
++            </CardContent>
++          </Link>
++        </Card>
++      ) : null}
++
+       <Card className="instance-settings-card">
+         <Link to="/instance/default-company-path" className="instance-settings-card-link">
+           <FolderOpen />
+diff --git a/paperclip-official/ui/src/pages/Landing.css b/paperclip-official/ui/src/pages/Landing.css
+index 4aaeec6..91f37f5 100644
+--- a/paperclip-official/ui/src/pages/Landing.css
++++ b/paperclip-official/ui/src/pages/Landing.css
+@@ -528,6 +528,170 @@
+   color: var(--muted-foreground);
+ }
+ 
++/* ---------------------------------------------------------------------------
++   定價透明說明
++   --------------------------------------------------------------------------- */
++.landing-pricing-transparency {
++  padding-top: 4rem;
++  padding-bottom: 4rem;
++  padding-left: 1.25rem;
++  padding-right: 1.25rem;
++  border-top: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
++}
++
++@media (min-width: 768px) {
++  .landing-pricing-transparency {
++    padding-left: 2rem;
++    padding-right: 2rem;
++  }
++}
++
++.landing-pricing-inner {
++  max-width: 40rem;
++  margin-left: auto;
++  margin-right: auto;
++}
++
++.landing-pricing-title {
++  font-size: 22px;
++  font-weight: 700;
++  letter-spacing: -0.02em;
++  color: var(--foreground);
++  margin: 0 0 0.75rem;
++}
++
++@media (min-width: 768px) {
++  .landing-pricing-title {
++    font-size: 28px;
++  }
++}
++
++.landing-pricing-lead {
++  font-size: 15px;
++  line-height: 1.5;
++  color: var(--muted-foreground);
++  margin: 0 0 1.25rem;
++}
++
++.landing-pricing-list {
++  list-style: none;
++  margin: 0;
++  padding: 0;
++  display: flex;
++  flex-direction: column;
++  gap: 0.75rem;
++}
++
++.landing-pricing-item {
++  display: flex;
++  align-items: flex-start;
++  gap: 0.625rem;
++  font-size: 15px;
++  line-height: 1.5;
++  color: var(--foreground);
++}
++
++.landing-pricing-icon {
++  width: 1.125rem;
++  height: 1.125rem;
++  flex-shrink: 0;
++  margin-top: 0.125rem;
++  color: color-mix(in oklab, var(--primary) 85%, var(--foreground));
++}
++
++/* ---------------------------------------------------------------------------
++   FAQ
++   --------------------------------------------------------------------------- */
++.landing-faq {
++  padding-top: 4rem;
++  padding-bottom: 4rem;
++  padding-left: 1.25rem;
++  padding-right: 1.25rem;
++  border-top: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
++}
++
++@media (min-width: 768px) {
++  .landing-faq {
++    padding-left: 2rem;
++    padding-right: 2rem;
++  }
++}
++
++.landing-faq-inner {
++  max-width: 40rem;
++  margin-left: auto;
++  margin-right: auto;
++}
++
++.landing-faq-title {
++  font-size: 22px;
++  font-weight: 700;
++  letter-spacing: -0.02em;
++  color: var(--foreground);
++  margin: 0 0 1.25rem;
++}
++
++@media (min-width: 768px) {
++  .landing-faq-title {
++    font-size: 28px;
++  }
++}
++
++.landing-faq-list {
++  display: flex;
++  flex-direction: column;
++  gap: 0.5rem;
++}
++
++.landing-faq-item {
++  border-radius: 0.75rem;
++  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
++  background: color-mix(in oklab, var(--card) 92%, transparent);
++  padding: 0;
++  overflow: hidden;
++}
++
++.landing-faq-summary {
++  list-style: none;
++  cursor: pointer;
++  padding: 0.875rem 1rem;
++  font-size: 15px;
++  font-weight: 600;
++  color: var(--foreground);
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 0.75rem;
++}
++
++.landing-faq-summary::-webkit-details-marker {
++  display: none;
++}
++
++.landing-faq-summary::after {
++  content: "";
++  width: 0.5rem;
++  height: 0.5rem;
++  border-right: 2px solid var(--muted-foreground);
++  border-bottom: 2px solid var(--muted-foreground);
++  transform: rotate(45deg);
++  flex-shrink: 0;
++  opacity: 0.6;
++  transition: transform 0.2s ease;
++}
++
++.landing-faq-item[open] .landing-faq-summary::after {
++  transform: rotate(-135deg);
++}
++
++.landing-faq-answer {
++  margin: 0;
++  padding: 0 1rem 1rem;
++  font-size: 14px;
++  line-height: 1.55;
++  color: var(--muted-foreground);
++}
++
+ /* ---------------------------------------------------------------------------
+    CTA：單一卡牌、軟陰影
+    --------------------------------------------------------------------------- */
+diff --git a/paperclip-official/ui/src/pages/Landing.tsx b/paperclip-official/ui/src/pages/Landing.tsx
+index e79bcfe..dd7edcd 100644
+--- a/paperclip-official/ui/src/pages/Landing.tsx
++++ b/paperclip-official/ui/src/pages/Landing.tsx
+@@ -86,6 +86,19 @@ export function Landing() {
+     { titleKey: "landing.step3Title", descKey: "landing.step3Desc" },
+   ] as const;
+ 
++  const pricingPoints = [
++    "landing.pricingPoint1",
++    "landing.pricingPoint2",
++    "landing.pricingPoint3",
++  ] as const;
++
++  const faqItems = [
++    { qKey: "landing.faqQ1", aKey: "landing.faqA1" },
++    { qKey: "landing.faqQ2", aKey: "landing.faqA2" },
++    { qKey: "landing.faqQ3", aKey: "landing.faqA3" },
++    { qKey: "landing.faqQ4", aKey: "landing.faqA4" },
++  ] as const;
++
+   return (
+     <div className="landing-page">
+       <header className="landing-header">
+@@ -194,6 +207,26 @@ export function Landing() {
+           </div>
+         </section>
+ 
++        <section
++          className="landing-pricing-transparency"
++          aria-labelledby="landing-pricing-heading"
++        >
++          <div className="landing-pricing-inner">
++            <h2 id="landing-pricing-heading" className="landing-pricing-title">
++              {t("landing.pricingTransparencyTitle")}
++            </h2>
++            <p className="landing-pricing-lead">{t("landing.pricingTransparencyLead")}</p>
++            <ul className="landing-pricing-list">
++              {pricingPoints.map((key) => (
++                <li key={key} className="landing-pricing-item">
++                  <CheckCircle2 className="landing-pricing-icon" aria-hidden />
++                  {t(key)}
++                </li>
++              ))}
++            </ul>
++          </div>
++        </section>
++
+         <section className="landing-how">
+           <div className="landing-how-inner">
+             <p className="landing-section-label">
+@@ -216,6 +249,22 @@ export function Landing() {
+           </div>
+         </section>
+ 
++        <section className="landing-faq" aria-labelledby="landing-faq-heading">
++          <div className="landing-faq-inner">
++            <h2 id="landing-faq-heading" className="landing-faq-title">
++              {t("landing.faqTitle")}
++            </h2>
++            <div className="landing-faq-list">
++              {faqItems.map(({ qKey, aKey }) => (
++                <details key={qKey} className="landing-faq-item">
++                  <summary className="landing-faq-summary">{t(qKey)}</summary>
++                  <p className="landing-faq-answer">{t(aKey)}</p>
++                </details>
++              ))}
++            </div>
++          </div>
++        </section>
++
+         <section className="landing-cta">
+           <div className="landing-cta-inner">
+             <h2 className="landing-cta-title">{t("landing.ctaTitle")}</h2>
+diff --git a/paperclip-official/ui/src/styles/chat.css b/paperclip-official/ui/src/styles/chat.css
+index a03bbc0..85913a5 100644
+--- a/paperclip-official/ui/src/styles/chat.css
++++ b/paperclip-official/ui/src/styles/chat.css
+@@ -843,7 +843,14 @@
+   padding: 0.75rem 1rem;
+   font-size: 0.875rem;
+   line-height: 1.5;
+-  max-width: 85%;
++  /* 
++   * 關鍵：氣泡本身是 inline-flex，若子內容（Markdown / 圖片 / SVG / Mermaid）未受限，
++   * 可能會在視覺上「撐破」氣泡邊界。這裡同時約束容器與子項寬度，避免溢出。
++   */
++  max-width: min(85%, 56rem);
++  min-width: 0;
++  box-sizing: border-box;
++  overflow: hidden;
+   display: inline-flex;
+   flex-direction: column;
+   align-items: flex-start;
+@@ -879,6 +886,40 @@
+   color: inherit !important;
+ }
+ 
++/* 氣泡內 Markdown：任何內容都不得超出氣泡寬度 */
++.chat-bubble-content .paperclip-markdown {
++  max-width: 100%;
++  min-width: 0;
++  overflow-wrap: anywhere;
++  word-break: break-word;
++}
++
++.chat-bubble-content .paperclip-markdown :where(p, li, blockquote, a) {
++  overflow-wrap: anywhere;
++  word-break: break-word;
++}
++
++/* 圖片 / SVG / Mermaid：強制縮放在氣泡內 */
++.chat-bubble-content .paperclip-markdown :where(img, svg) {
++  max-width: 100%;
++  height: auto;
++}
++
++.chat-bubble-content .paperclip-markdown .paperclip-mermaid {
++  max-width: 100%;
++  overflow-x: auto;
++}
++
++.chat-bubble-content .paperclip-markdown .paperclip-mermaid svg {
++  max-width: 100%;
++  height: auto;
++}
++
++/* code block 仍可橫向捲動，但不得溢出氣泡邊界 */
++.chat-bubble-content .paperclip-markdown :where(pre) {
++  max-width: 100%;
++}
++
+ /* 氣泡內嵌 Issue 狀態 + Run 預覽卡（與 Dashboard 卡片同概念） */
+ .chat-bubble-issue-cards {
+   width: 100%;
+
+```

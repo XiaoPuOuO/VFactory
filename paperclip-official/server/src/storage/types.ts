@@ -37,6 +37,8 @@ export interface StorageProvider {
 }
 
 export interface PutFileInput {
+  /** 物件鍵前綴，與 DB `companies.tenant_id` 一致，用於多租戶儲存隔離。 */
+  tenantId: string;
   companyId: string;
   namespace: string;
   originalFilename: string | null;
@@ -56,7 +58,7 @@ export interface PutFileResult {
 export interface StorageService {
   provider: StorageProviderId;
   putFile(input: PutFileInput): Promise<PutFileResult>;
-  getObject(companyId: string, objectKey: string): Promise<GetObjectResult>;
-  headObject(companyId: string, objectKey: string): Promise<HeadObjectResult>;
-  deleteObject(companyId: string, objectKey: string): Promise<void>;
+  getObject(companyId: string, objectKey: string, tenantId: string): Promise<GetObjectResult>;
+  headObject(companyId: string, objectKey: string, tenantId: string): Promise<HeadObjectResult>;
+  deleteObject(companyId: string, objectKey: string, tenantId: string): Promise<void>;
 }

@@ -23,6 +23,13 @@ export function Account() {
     queryFn: () => meApi.get(),
   });
 
+  const updateDeveloperMode = useMutation({
+    mutationFn: (next: boolean) => meApi.updateDeveloperMode(next),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+
   useEffect(() => {
     setBreadcrumbs([{ label: t("account.title") }]);
   }, [setBreadcrumbs, t]);
@@ -62,13 +69,6 @@ export function Account() {
       </div>
     );
   }
-
-  const updateDeveloperMode = useMutation({
-    mutationFn: (next: boolean) => meApi.updateDeveloperMode(next),
-    onSuccess: async (_data, variables) => {
-      await queryClient.invalidateQueries({ queryKey: ["me"] });
-    },
-  });
 
   const devMode = Boolean(profile.developerMode);
 

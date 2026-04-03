@@ -26,7 +26,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useCompanyPageMemory } from "../hooks/useCompanyPageMemory";
 import { healthApi } from "../api/health";
-import { meApi, canAccessInstanceSettings } from "../api/me";
+import { meApi, canAccessInstanceSettings, canAccessInstancePricing } from "../api/me";
 import { queryKeys } from "../lib/queryKeys";
 import { NotFoundPage } from "../pages/NotFound";
 import { Button } from "@/components/ui/button";
@@ -158,6 +158,7 @@ export function Layout() {
     retry: false,
   });
   const showSettingsButton = canAccessInstanceSettings(meProfile);
+  const canManagePlans = canAccessInstancePricing(meProfile);
   const companiesReady = !companiesLoading && !companiesError;
   const noCompaniesReady = companiesReady && companies.length === 0;
   /** 無公司時不顯示看板側欄（例如 /account）；instance 設定仍保留導覽。 */
@@ -407,7 +408,7 @@ export function Layout() {
           <div className={`board-sidebar-wrap-mobile ${sidebarOpen ? "open" : "closed"}`}>
             <div className="board-sidebar-inner">
               {!noCompaniesReady && <CompanyRail />}
-              {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
+              {isInstanceSettingsRoute ? <InstanceSidebar canManagePlans={canManagePlans} /> : <Sidebar />}
             </div>
             <div className="board-sidebar-footer">
               <div className="board-sidebar-footer-btn-wrap">
@@ -453,7 +454,7 @@ export function Layout() {
                   className="board-sidebar-collapsible"
                   style={{ width: sidebarOpen ? sidebarWidth : 0 }}
                 >
-                  {isInstanceSettingsRoute ? <InstanceSidebar /> : <Sidebar />}
+                  {isInstanceSettingsRoute ? <InstanceSidebar canManagePlans={canManagePlans} /> : <Sidebar />}
                 </div>
               </div>
               <div className="board-sidebar-footer">

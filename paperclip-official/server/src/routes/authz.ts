@@ -73,6 +73,21 @@ export function assertInstanceSetting(req: Request): void {
   }
 }
 
+/** 方案目錄／定價管理：local_implicit 或 admin.pricing / * */
+export function hasInstancePricingPermission(req: Request): boolean {
+  if (req.actor.type === "banned") return false;
+  if (req.actor.type !== "board") return false;
+  if (req.actor.source === "local_implicit") return true;
+  const perms = req.actor.permissions ?? [];
+  return perms.includes("admin.pricing") || perms.includes("*");
+}
+
+export function assertInstancePricing(req: Request): void {
+  if (!hasInstancePricingPermission(req)) {
+    throw forbidden("admin.pricing or * required for plan management");
+  }
+}
+
 /**
  * 確認目前 actor 可存取該公司；若 req.tenantId 已設定，則一併驗證公司屬於該租戶。
  * 傳入 db 且 req.tenantId 存在時會非同步查詢公司並檢查 tenant_id。
@@ -107,6 +122,21 @@ export async function assertCompanyAccess(
       throw forbidden("User does not have access to this company");
     }
   }
+}
+
+/**
+ * 物件儲存鍵需帶租戶前綴時，在已通過 `assertCompanyAccess` 後解析 `companies.tenant_id`。
+ * 若請求已帶 `X-Tenant-ID` 則直接使用（與 assert 一致）。
+ */
+export async function resolveTenantIdForStorage(req: Request, db: Db, companyId: string): Promise<string> {
+  if (req.tenantId) return req.tenantId;
+  const row = await db
+    .select({ tenantId: companies.tenantId })
+    .from(companies)
+    .where(eq(companies.id, companyId))
+    .then((rows) => rows[0] ?? null);
+  if (!row?.tenantId) throw notFound("Company not found");
+  return row.tenantId;
 }
 
 export function getActorInfo(req: Request) {

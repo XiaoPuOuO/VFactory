@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { Router } from "express";
 import type { Db } from "@paperclipai/db";
+import { agents } from "@paperclipai/db";
+import { eq } from "drizzle-orm";
 import {
   browserUseClickSchema,
   browserUseCloseSchema,
@@ -12,10 +14,18 @@ import {
   browserUseTypeSchema,
 } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
+import { logger } from "../middleware/logger.js";
 import { validate } from "../middleware/validate.js";
 import { getActorInfo } from "./authz.js";
-import { logActivity } from "../services/index.js";
-import { browserUseGatewayService } from "../services/browser-use-gateway.js";
+import { costService, logActivity } from "../services/index.js";
+import {
+  browserUseGatewayService,
+  type BrowserUseLlmUsagePayload,
+} from "../services/browser-use-gateway.js";
+import {
+  estimateBrowserUseExtractCostCents,
+  splitBrowserUseUsageForCostEvent,
+} from "../services/browser-use-llm-cost.js";
 
 type RateLimitBucket = {
   windowStartMs: number;
@@ -49,6 +59,51 @@ function assertBodySizeLimit(value: unknown, maxBytes = 64 * 1024) {
 export function browserUseToolRoutes(db: Db) {
   const router = Router();
   const gateway = browserUseGatewayService();
+  const costs = costService(db);
+
+  async function recordBrowserUseExtractCost(params: {
+    agentId: string;
+    traceId: string;
+    llmUsage: BrowserUseLlmUsagePayload;
+    llmModel: string | null;
+    llmProvider: string | null;
+  }) {
+    const { agentId, traceId, llmUsage, llmModel, llmProvider } = params;
+    if (!llmUsage) return;
+
+    const [agentRow] = await db
+      .select({ companyId: agents.companyId })
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .limit(1);
+    if (!agentRow?.companyId) {
+      logger.warn({ agentId }, "browser-use cost: agent not found, skip");
+      return;
+    }
+
+    const split = splitBrowserUseUsageForCostEvent(llmUsage);
+    const costCents = estimateBrowserUseExtractCostCents(split);
+    const totalTok =
+      split.inputTokens + split.outputTokens + split.cachedReadTokens + split.cachedWriteTokens;
+    if (totalTok === 0 && costCents === 0) return;
+
+    try {
+      await costs.createEvent(agentRow.companyId, {
+        agentId,
+        provider: llmProvider ?? "browser-use",
+        model: llmModel ?? "unknown",
+        inputTokens: split.inputTokens,
+        outputTokens: split.outputTokens,
+        cachedReadTokens: split.cachedReadTokens,
+        cachedWriteTokens: split.cachedWriteTokens,
+        costCents,
+        occurredAt: new Date(),
+        idempotencyKey: `browser-use:extract:${traceId}`,
+      });
+    } catch (err) {
+      logger.warn({ err, agentId, traceId }, "browser-use cost event failed (non-fatal)");
+    }
+  }
 
   function bindRoute(path: string, schema: Parameters<typeof validate>[0], action: Parameters<typeof gateway.invoke>[0]) {
     router.post(path, validate(schema), async (req, res) => {
@@ -63,6 +118,16 @@ export function browserUseToolRoutes(db: Db) {
       };
       assertToolRateLimit(`${payload.agentId}:${action}`);
       const result = await gateway.invoke(action, { ...payload, traceId });
+
+      if (result.ok && action === "extract" && result.llmUsage) {
+        await recordBrowserUseExtractCost({
+          agentId: payload.agentId,
+          traceId,
+          llmUsage: result.llmUsage,
+          llmModel: result.llmModel ?? null,
+          llmProvider: result.llmProvider ?? null,
+        });
+      }
 
       await logActivity(db, {
         companyId:

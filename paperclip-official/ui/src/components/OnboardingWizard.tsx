@@ -1167,6 +1167,11 @@ export function OnboardingWizard() {
                           {apiKeyValidationError}
                         </p>
                       )}
+                      <p className="onboarding-wizard-byok-note">{t("onboarding:byokModelCostNote")}</p>
+                      <p className="onboarding-wizard-byok-note">{t("onboarding:secretRefRecommendNote")}</p>
+                      <p className="onboarding-wizard-byok-note onboarding-wizard-byok-muted">
+                        {t("onboarding:hostedInferenceUpsell")}
+                      </p>
                     </div>
                   )}
 

@@ -17,6 +17,7 @@ import {
   Calendar,
   Zap,
   BookText,
+  CreditCard,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarSection } from "./SidebarSection";
@@ -109,6 +110,7 @@ export function Sidebar() {
           <SidebarNavItem to="/governance" label={t("nav.governance")} icon={Scale} />
           <SidebarNavItem to="/company/automation" label={t("nav.automation")} icon={Zap} />
           <SidebarNavItem to="/costs" label={t("nav.costs")} icon={DollarSign} />
+          <SidebarNavItem to="/company/billing" label={t("nav.billing")} icon={CreditCard} />
           <SidebarNavItem to="/activity" label={t("nav.activity")} icon={History} />
           <SidebarNavItem to="/company/settings" label={t("nav.settings")} icon={Settings} />
         </SidebarSection>

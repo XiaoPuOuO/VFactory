@@ -12,6 +12,7 @@ import {
 } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
 import { budgetPolicyService } from "./budget-policies.js";
+import { resolveCompanyEffectiveLimits } from "./billing/entitlements.js";
 import { notifyLimitBreach } from "./limit-breach-notify.js";
 import { del as redisDel, getJson as redisGetJson, setJson as redisSetJson } from "./redis.js";
 import { logger } from "../middleware/logger.js";
@@ -45,12 +46,13 @@ function formatYearMonthUtc(date: Date): string {
   return `${y}${m}`;
 }
 
-function companyUsageCacheKey(companyId: string, yyyyMM: string): string {
-  return `paperclip:cost:usage:${companyId}:${yyyyMM}`;
+/** 含租戶 namespace，避免多租戶共用 Redis 時鍵空間混淆。 */
+function companyUsageCacheKey(tenantId: string, companyId: string, yyyyMM: string): string {
+  return `paperclip:tenant:${tenantId}:cost:usage:${companyId}:${yyyyMM}`;
 }
 
-function companyLimitExceededCacheKey(companyId: string, yyyyMM: string): string {
-  return `paperclip:cost:limitExceeded:${companyId}:${yyyyMM}`;
+function companyLimitExceededCacheKey(tenantId: string, companyId: string, yyyyMM: string): string {
+  return `paperclip:tenant:${tenantId}:cost:limitExceeded:${companyId}:${yyyyMM}`;
 }
 
 function isCostCacheDebugEnabled(): boolean {
@@ -140,7 +142,30 @@ export { COST_EXPORT_MAX_LIMIT, COST_EXPORT_DEFAULT_LIMIT };
 
 export function costService(db: Db) {
   const budgetPolicies = budgetPolicyService(db);
+
+  async function tenantIdForCompany(companyId: string): Promise<string | null> {
+    const row = await db
+      .select({ tenantId: companies.tenantId })
+      .from(companies)
+      .where(eq(companies.id, companyId))
+      .then((rows) => rows[0] ?? null);
+    return row?.tenantId ?? null;
+  }
+
   return {
+    /** 訂閱／方案變更後清除用量與上限快取。 */
+    invalidateBillingRelatedCaches: async (companyId: string) => {
+      const { from } = currentMonthRange();
+      const yyyyMM = formatYearMonthUtc(from);
+      const tenantId = await tenantIdForCompany(companyId);
+      if (tenantId) {
+        await redisDel([
+          companyUsageCacheKey(tenantId, companyId, yyyyMM),
+          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM),
+        ]);
+      }
+    },
+
     createEvent: async (companyId: string, data: Omit<typeof costEvents.$inferInsert, "companyId">) => {
       const agent = await db
         .select()
@@ -251,8 +276,9 @@ export function costService(db: Db) {
           );
         const spendCents = Number(usage.spendCents);
         const tokenUsage = Number(usage.tokenUsage);
-        const tokenLimit = companyRow.tokenLimit != null ? Number(companyRow.tokenLimit) : null;
-        const priceLimitCents = companyRow.priceLimitCents ?? null;
+        const effective = await resolveCompanyEffectiveLimits(db, companyId);
+        const tokenLimit = effective?.tokenLimit ?? null;
+        const priceLimitCents = effective?.priceLimitCents ?? null;
 
         if (tokenLimit != null && tokenUsage >= tokenLimit) {
           const [existing] = await db
@@ -336,13 +362,16 @@ export function costService(db: Db) {
         },
       });
 
-      // Invalidate monthly usage caches (multi-instance safe).
+      // Invalidate monthly usage caches（含租戶前綴鍵；multi-instance safe）
       const { from: monthStartForCache } = currentMonthRange();
       const yyyyMM = formatYearMonthUtc(monthStartForCache);
-      await redisDel([
-        companyUsageCacheKey(companyId, yyyyMM),
-        companyLimitExceededCacheKey(companyId, yyyyMM),
-      ]);
+      const tenantId = await tenantIdForCompany(companyId);
+      if (tenantId) {
+        await redisDel([
+          companyUsageCacheKey(tenantId, companyId, yyyyMM),
+          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM),
+        ]);
+      }
 
       return { event: inserted, alreadyExisted: false as const };
     },
@@ -351,7 +380,21 @@ export function costService(db: Db) {
     getCompanyUsageForMonth: async (companyId: string) => {
       const { from } = currentMonthRange();
       const yyyyMM = formatYearMonthUtc(from);
-      const cacheKey = companyUsageCacheKey(companyId, yyyyMM);
+      const tenantId = await tenantIdForCompany(companyId);
+      if (!tenantId) {
+        const [row] = await db
+          .select({
+            spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+            tokenUsage: sql<number>`coalesce(sum(${costEvents.inputTokens} + ${costEvents.outputTokens}), 0)::int`,
+          })
+          .from(costEvents)
+          .where(and(eq(costEvents.companyId, companyId), gte(costEvents.occurredAt, from)));
+        return {
+          spendCents: Number(row?.spendCents ?? 0),
+          tokenUsage: Number(row?.tokenUsage ?? 0),
+        };
+      }
+      const cacheKey = companyUsageCacheKey(tenantId, companyId, yyyyMM);
       const cached = await redisGetJson<{ spendCents: number; tokenUsage: number }>(cacheKey);
       if (cached) {
         if (isCostCacheDebugEnabled()) {
@@ -386,7 +429,32 @@ export function costService(db: Db) {
     ): Promise<{ token: boolean; price: boolean; reason: "token_limit" | "price_limit" | null }> => {
       const { from } = currentMonthRange();
       const yyyyMM = formatYearMonthUtc(from);
-      const cacheKey = companyLimitExceededCacheKey(companyId, yyyyMM);
+      const tenantId = await tenantIdForCompany(companyId);
+      if (!tenantId) {
+        const effective = await resolveCompanyEffectiveLimits(db, companyId);
+        if (!effective) return { token: false, price: false, reason: null };
+        const [usage] = await db
+          .select({
+            spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+            tokenUsage: sql<number>`coalesce(sum(${costEvents.inputTokens} + ${costEvents.outputTokens}), 0)::int`,
+          })
+          .from(costEvents)
+          .where(and(eq(costEvents.companyId, companyId), gte(costEvents.occurredAt, from)));
+        const spendCents = Number(usage?.spendCents ?? 0);
+        const tokenUsage = Number(usage?.tokenUsage ?? 0);
+        const tokenLimit = effective.tokenLimit;
+        const priceLimitCents = effective.priceLimitCents;
+        const tokenExceeded = tokenLimit != null && tokenUsage >= tokenLimit;
+        const priceExceeded = priceLimitCents != null && spendCents >= priceLimitCents;
+        const reason =
+          tokenExceeded ? "token_limit" : priceExceeded ? "price_limit" : null;
+        return {
+          token: tokenExceeded,
+          price: priceExceeded,
+          reason,
+        };
+      }
+      const cacheKey = companyLimitExceededCacheKey(tenantId, companyId, yyyyMM);
       const cached = await redisGetJson<{ token: boolean; price: boolean; reason: "token_limit" | "price_limit" | null }>(
         cacheKey,
       );
@@ -400,15 +468,8 @@ export function costService(db: Db) {
         logger.debug({ companyId, yyyyMM, cacheKey }, "cost cache miss: company limit exceeded");
       }
 
-      const company = await db
-        .select({
-          tokenLimit: companies.tokenLimit,
-          priceLimitCents: companies.priceLimitCents,
-        })
-        .from(companies)
-        .where(eq(companies.id, companyId))
-        .then((rows) => rows[0] ?? null);
-      if (!company) return { token: false, price: false, reason: null };
+      const effective = await resolveCompanyEffectiveLimits(db, companyId);
+      if (!effective) return { token: false, price: false, reason: null };
       const [usage] = await db
         .select({
           spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
@@ -420,8 +481,8 @@ export function costService(db: Db) {
         );
       const spendCents = Number(usage?.spendCents ?? 0);
       const tokenUsage = Number(usage?.tokenUsage ?? 0);
-      const tokenLimit = company.tokenLimit != null ? Number(company.tokenLimit) : null;
-      const priceLimitCents = company.priceLimitCents ?? null;
+      const tokenLimit = effective.tokenLimit;
+      const priceLimitCents = effective.priceLimitCents;
       const tokenExceeded = tokenLimit != null && tokenUsage >= tokenLimit;
       const priceExceeded = priceLimitCents != null && spendCents >= priceLimitCents;
       const reason =
@@ -561,14 +622,16 @@ export function costService(db: Db) {
         spendSpikeVsPreviousWeek,
       };
 
+      const effective = await resolveCompanyEffectiveLimits(db, companyId);
+
       return {
         companyId,
         spendCents,
         budgetCents,
         utilizationPercent: Number(utilization.toFixed(2)),
         tokenUsage,
-        tokenLimit: company.tokenLimit != null ? Number(company.tokenLimit) : null,
-        priceLimitCents: company.priceLimitCents ?? null,
+        tokenLimit: effective?.tokenLimit ?? null,
+        priceLimitCents: effective?.priceLimitCents ?? null,
         breachEvents,
         forecast,
       };

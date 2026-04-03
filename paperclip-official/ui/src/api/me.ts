@@ -6,7 +6,7 @@ export type MeProfile = {
   email: string | null;
   image: string | null;
   group: string | null;
-  /** Instance 身分組權限鍵；含 "admin.setting" 或 "*" 時可顯示設定按鈕 */
+  /** Instance 身分組權限鍵；含 "admin.setting"／"admin.pricing"／"*" 等（依各功能檢查） */
   permissions?: string[];
   /** 是否仍可建立公司（依身分組權限與已擁有數量） */
   canCreateCompany?: boolean;
@@ -20,6 +20,12 @@ export type MeProfile = {
 export function canAccessInstanceSettings(me: MeProfile | null | undefined): boolean {
   const perms = me?.permissions ?? [];
   return perms.includes("admin.setting") || perms.includes("*");
+}
+
+/** 方案目錄管理（/instance/plans）：admin.pricing 或 * */
+export function canAccessInstancePricing(me: MeProfile | null | undefined): boolean {
+  const perms = me?.permissions ?? [];
+  return perms.includes("admin.pricing") || perms.includes("*");
 }
 
 export const meApi = {

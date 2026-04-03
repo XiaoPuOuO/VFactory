@@ -26,7 +26,13 @@ import {
 } from "../services/index.js";
 import { logger } from "../middleware/logger.js";
 import { forbidden, HttpError, unauthorized } from "../errors.js";
-import { assertBoard, assertCompanyAccess, getActorInfo, hasCompanyViewAll } from "./authz.js";
+import {
+  assertBoard,
+  assertCompanyAccess,
+  getActorInfo,
+  hasCompanyViewAll,
+  resolveTenantIdForStorage,
+} from "./authz.js";
 import { assertCompanyIntegrationScope } from "./integration-scope.js";
 import { shouldWakeAssigneeOnCheckout } from "./issues-checkout-wakeup.js";
 import { isAllowedContentType, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
@@ -958,6 +964,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
       return;
     }
     const attachments = await svc.listAttachments(id);
+    const storageTenantId = await resolveTenantIdForStorage(req, db, existing.companyId);
 
     const issue = await svc.remove(id);
     if (!issue) {
@@ -967,7 +974,7 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
 
     for (const attachment of attachments) {
       try {
-        await storage.deleteObject(attachment.companyId, attachment.objectKey);
+        await storage.deleteObject(attachment.companyId, attachment.objectKey, storageTenantId);
       } catch (err) {
         logger.warn({ err, issueId: id, attachmentId: attachment.id }, "failed to delete attachment object during issue delete");
       }
@@ -1426,7 +1433,9 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
     }
 
     const actor = getActorInfo(req);
+    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
     const stored = await storage.putFile({
+      tenantId,
       companyId,
       namespace: `issues/${issueId}`,
       originalFilename: file.originalname || null,
@@ -1476,7 +1485,8 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
     }
     await assertCompanyIntegrationScope(db, req, attachment.companyId, "issues:read");
 
-    const object = await storage.getObject(attachment.companyId, attachment.objectKey);
+    const tenantId = await resolveTenantIdForStorage(req, db, attachment.companyId);
+    const object = await storage.getObject(attachment.companyId, attachment.objectKey, tenantId);
     res.setHeader("Content-Type", attachment.contentType || object.contentType || "application/octet-stream");
     res.setHeader("Content-Length", String(attachment.byteSize || object.contentLength || 0));
     res.setHeader("Cache-Control", "private, max-age=60");
@@ -1503,7 +1513,8 @@ export function issueRoutes(db: Db, storage: StorageService, chatSvc?: ChatServi
     }
 
     try {
-      await storage.deleteObject(attachment.companyId, attachment.objectKey);
+      const tenantId = await resolveTenantIdForStorage(req, db, attachment.companyId);
+      await storage.deleteObject(attachment.companyId, attachment.objectKey, tenantId);
     } catch (err) {
       logger.warn({ err, attachmentId }, "storage delete failed while removing attachment");
     }

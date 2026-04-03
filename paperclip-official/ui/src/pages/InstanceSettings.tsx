@@ -1,14 +1,22 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Archive, Building2, FolderOpen, Settings, Shield, Users, UserCog } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Archive, Building2, CreditCard, FolderOpen, Settings, Shield, Users, UserCog } from "lucide-react";
 import { Link } from "@/lib/router";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
+import { meApi, canAccessInstancePricing } from "../api/me";
 import { Card, CardContent } from "@/components/ui/card";
 import "./InstanceSettings.css";
 
 export function InstanceSettings() {
   const { t } = useTranslation();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => meApi.get(),
+    retry: false,
+  });
+  const showPlanManagement = canAccessInstancePricing(me);
 
   useEffect(() => {
     setBreadcrumbs([{ label: t("instance.instanceSettings") }]);
@@ -37,6 +45,18 @@ export function InstanceSettings() {
           </CardContent>
         </Link>
       </Card>
+
+      {showPlanManagement ? (
+        <Card className="instance-settings-card">
+          <Link to="/instance/plans" className="instance-settings-card-link">
+            <CreditCard />
+            <CardContent className="instance-settings-card-body">
+              <div className="instance-settings-card-label">{t("instance.planManagement")}</div>
+              <p className="instance-settings-card-desc">{t("instance.planManagementDesc")}</p>
+            </CardContent>
+          </Link>
+        </Card>
+      ) : null}
 
       <Card className="instance-settings-card">
         <Link to="/instance/default-company-path" className="instance-settings-card-link">

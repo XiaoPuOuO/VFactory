@@ -1,0 +1,110 @@
+.company-billing-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.company-billing-header {
+  margin-bottom: 1.5rem;
+}
+
+.company-billing-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.35rem;
+}
+
+.company-billing-sub {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted-foreground, #737373);
+}
+
+.company-billing-byok-note {
+  margin: 0.65rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted-foreground, #737373);
+}
+
+.company-billing-costs-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted-foreground, #737373);
+}
+
+.company-billing-card {
+  margin-bottom: 1.5rem;
+}
+
+.company-billing-dl {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+}
+
+.company-billing-dl dt {
+  color: var(--muted-foreground, #737373);
+}
+
+.company-billing-portal {
+  margin-top: 0.5rem;
+}
+
+.company-billing-h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.company-billing-plan-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.company-billing-plan-name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.company-billing-plan-desc {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground, #737373);
+}
+
+.company-billing-plan-features {
+  margin: 0 0 1rem;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.company-billing-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.company-billing-footnote {
+  margin-top: 2rem;
+  font-size: 0.8125rem;
+}
+
+.company-billing-ecpay-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.company-billing-ecpay-hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted-foreground, #737373);
+}

@@ -1,4 +1,13 @@
 export { companies } from "./companies.js";
+export { plans, type PlanEntitlements, type PlanExternalRefs } from "./plans.js";
+export {
+  companySubscriptions,
+  type PaymentProviderId,
+  paymentProviderEnum,
+  subscriptionStatusEnum,
+} from "./company_subscriptions.js";
+export { billingWebhookEvents } from "./billing_webhook_events.js";
+export { billingInvoiceAttempts } from "./billing_invoice_attempts.js";
 export { companyWebhookEndpoints } from "./company_webhook_endpoints.js";
 export { companyNotificationDestinations } from "./company_notification_destinations.js";
 export { issueSubscriptions } from "./issue_subscriptions.js";

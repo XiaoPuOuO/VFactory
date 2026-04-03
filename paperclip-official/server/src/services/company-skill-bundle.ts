@@ -1,5 +1,5 @@
-import { and, desc, eq, sql } from "drizzle-orm";
-import { assets as assetsTable } from "@paperclipai/db";
+import { and, desc, eq, or, sql } from "drizzle-orm";
+import { assets as assetsTable, companies } from "@paperclipai/db";
 import type { Db } from "@paperclipai/db";
 import type { StorageService } from "../storage/types.js";
 import { safeParseSkillFrontmatterFromMarkdown } from "@paperclipai/shared";
@@ -57,14 +57,21 @@ function normalizeSkillKey(input: string): string {
   return input.trim().toLowerCase().replace(/_/g, "-");
 }
 
-function buildObjectKeyPrefix(companyId: string): string {
-  // Storage objectKey is: <companyId>/<normalizedNamespace>/YYYY/MM/DD/<uuid>-<stem><ext>
-  // Our namespace is constant and already safe for storage namespace normalization.
-  return `${companyId}/${SKILL_BUNDLE_NAMESPACE}/`;
+/** 舊版 `companyId/...` 與新版 `tenantId/companyId/...` 物件鍵前綴（供 LIKE 查詢）。 */
+function skillBundleObjectKeyPrefixes(companyId: string, tenantId: string): { legacy: string; withTenant: string } {
+  return {
+    legacy: `${companyId}/${SKILL_BUNDLE_NAMESPACE}/`,
+    withTenant: `${tenantId}/${companyId}/${SKILL_BUNDLE_NAMESPACE}/`,
+  };
 }
 
-async function readStorageObjectToText(storage: StorageService, companyId: string, objectKey: string): Promise<string> {
-  const obj = await storage.getObject(companyId, objectKey);
+async function readStorageObjectToText(
+  storage: StorageService,
+  companyId: string,
+  objectKey: string,
+  tenantId: string,
+): Promise<string> {
+  const obj = await storage.getObject(companyId, objectKey, tenantId);
   const chunks: Buffer[] = [];
   for await (const chunk of obj.stream) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -98,8 +105,16 @@ function parseBundleJson(jsonText: string): CompanySkillBundleV0 | null {
 }
 
 async function loadLatestBundleFromAssets(db: Db, storage: StorageService, companyId: string): Promise<CompanySkillBundleV0 | null> {
-  const prefix = buildObjectKeyPrefix(companyId);
-  const pattern = `${prefix}%`;
+  const company = await db
+    .select({ tenantId: companies.tenantId })
+    .from(companies)
+    .where(eq(companies.id, companyId))
+    .then((rows) => rows[0] ?? null);
+  if (!company?.tenantId) return null;
+  const tenantId = company.tenantId;
+  const { legacy, withTenant } = skillBundleObjectKeyPrefixes(companyId, tenantId);
+  const patternLegacy = `${legacy}%`;
+  const patternWithTenant = `${withTenant}%`;
 
   const row = await db
     .select({ id: assetsTable.id, objectKey: assetsTable.objectKey, createdAt: assetsTable.createdAt })
@@ -107,7 +122,10 @@ async function loadLatestBundleFromAssets(db: Db, storage: StorageService, compa
     .where(
       and(
         eq(assetsTable.companyId, companyId),
-        sql`${assetsTable.objectKey} like ${pattern}`,
+        or(
+          sql`${assetsTable.objectKey} like ${patternLegacy}`,
+          sql`${assetsTable.objectKey} like ${patternWithTenant}`,
+        ),
         eq(assetsTable.contentType, SKILL_BUNDLE_CONTENT_TYPE),
       ),
     )
@@ -116,7 +134,7 @@ async function loadLatestBundleFromAssets(db: Db, storage: StorageService, compa
 
   if (!row[0]) return null;
 
-  const jsonText = await readStorageObjectToText(storage, companyId, row[0]!.objectKey);
+  const jsonText = await readStorageObjectToText(storage, companyId, row[0]!.objectKey, tenantId);
   return parseBundleJson(jsonText);
 }
 

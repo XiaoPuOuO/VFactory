@@ -10,6 +10,15 @@ type BrowserUseAction =
   | "screenshot"
   | "sessions/close";
 
+/** OpenAI 相容的 usage 片段（來自 browser-use ChatInvokeUsage.model_dump） */
+export type BrowserUseLlmUsagePayload = {
+  prompt_tokens?: number;
+  prompt_cached_tokens?: number | null;
+  prompt_cache_creation_tokens?: number | null;
+  completion_tokens?: number;
+  total_tokens?: number;
+};
+
 type GatewayEnvelope = {
   ok: boolean;
   data: unknown;
@@ -20,6 +29,10 @@ type GatewayEnvelope = {
     details?: unknown;
   } | null;
   traceId: string;
+  /** 僅 browser_extract_content：頁面抽取所用 LLM 的 token usage */
+  llmUsage?: BrowserUseLlmUsagePayload | null;
+  llmModel?: string | null;
+  llmProvider?: string | null;
 };
 
 export type BrowserUseGatewayRequest = {
@@ -161,6 +174,11 @@ export function browserUseGatewayService() {
     }
 
     const record = parsed as Record<string, unknown>;
+    const llmUsageRaw = record.llmUsage;
+    const llmUsage =
+      llmUsageRaw !== undefined && llmUsageRaw !== null && typeof llmUsageRaw === "object"
+        ? (llmUsageRaw as BrowserUseLlmUsagePayload)
+        : undefined;
     return {
       ok: record.ok === true,
       data: record.data ?? null,
@@ -174,6 +192,9 @@ export function browserUseGatewayService() {
               details: (record.error as Record<string, unknown> | null)?.details,
             },
       traceId: String(record.traceId ?? payload.traceId),
+      llmUsage: llmUsage ?? null,
+      llmModel: record.llmModel != null ? String(record.llmModel) : null,
+      llmProvider: record.llmProvider != null ? String(record.llmProvider) : null,
     };
   }
 

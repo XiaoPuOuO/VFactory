@@ -103,7 +103,19 @@ async def _handle(tool_name: str, env: Envelope) -> dict[str, Any]:
     trace_id = env.traceId or str(uuid.uuid4())
     try:
         result = await server._execute_tool(tool_name, env.toolInput)
-        return {"ok": True, "data": result, "error": None, "traceId": trace_id}
+        out: dict[str, Any] = {"ok": True, "data": result, "error": None, "traceId": trace_id}
+        # browser_extract_content 會呼叫 LLM：附帶 usage 供控制平面計費
+        if tool_name == "browser_extract_content":
+            usage = getattr(server, "_last_llm_usage", None)
+            if usage:
+                out["llmUsage"] = usage
+            model = getattr(server, "_last_llm_model", None)
+            if model:
+                out["llmModel"] = model
+            prov = getattr(server, "_last_llm_provider", None)
+            if prov:
+                out["llmProvider"] = prov
+        return out
     except Exception as exc:  # noqa: BLE001
         return {
             "ok": False,

@@ -843,7 +843,14 @@
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
   line-height: 1.5;
-  max-width: 85%;
+  /* 
+   * 關鍵：氣泡本身是 inline-flex，若子內容（Markdown / 圖片 / SVG / Mermaid）未受限，
+   * 可能會在視覺上「撐破」氣泡邊界。這裡同時約束容器與子項寬度，避免溢出。
+   */
+  max-width: min(85%, 56rem);
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
@@ -877,6 +884,40 @@
 .chat-bubble-content .paperclip-markdown,
 .chat-bubble-content .paperclip-markdown * {
   color: inherit !important;
+}
+
+/* 氣泡內 Markdown：任何內容都不得超出氣泡寬度 */
+.chat-bubble-content .paperclip-markdown {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chat-bubble-content .paperclip-markdown :where(p, li, blockquote, a) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* 圖片 / SVG / Mermaid：強制縮放在氣泡內 */
+.chat-bubble-content .paperclip-markdown :where(img, svg) {
+  max-width: 100%;
+  height: auto;
+}
+
+.chat-bubble-content .paperclip-markdown .paperclip-mermaid {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chat-bubble-content .paperclip-markdown .paperclip-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* code block 仍可橫向捲動，但不得溢出氣泡邊界 */
+.chat-bubble-content .paperclip-markdown :where(pre) {
+  max-width: 100%;
 }
 
 /* 氣泡內嵌 Issue 狀態 + Run 預覽卡（與 Dashboard 卡片同概念） */

@@ -17,6 +17,7 @@ export const COMPANY_CREATE_AMOUNT_PLACEHOLDER_KEY = "company.create.amount.{num
 export const INSTANCE_PERMISSION_REGISTRY: ReadonlyArray<InstancePermissionRegistryEntry> = [
   { key: "*", labelKey: "instance.permissionKey_all", category: "instance" },
   { key: "admin.setting", labelKey: "instance.permissionKey_admin_setting", category: "instance" },
+  { key: "admin.pricing", labelKey: "instance.permissionKey_admin_pricing", category: "instance" },
   { key: "company.view.all", labelKey: "instance.permissionKey_company_view_all", category: "company" },
   { key: COMPANY_CREATE_AMOUNT_PLACEHOLDER_KEY, labelKey: "instance.permissionKey_company_create_amount_number", category: "company" },
   { key: "company.create.amount.infinite", labelKey: "instance.permissionKey_company_create_amount_infinite", category: "company" },
@@ -36,6 +37,7 @@ export const INSTANCE_PERMISSION_REGISTRY: ReadonlyArray<InstancePermissionRegis
 const FIXED_INSTANCE_PERMISSION_KEYS = [
   "*",
   "admin.setting",
+  "admin.pricing",
   "company.view.all",
   "company.create.amount.infinite",
   "model.gemini.local",

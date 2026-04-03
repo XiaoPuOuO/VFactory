@@ -26,6 +26,7 @@ function detectLanguage(): SupportedLocale {
 const PAGE_NAMESPACES = [
   "activity",
   "approvals",
+  "billing",
   "chat",
   "company",
     "companySkills",

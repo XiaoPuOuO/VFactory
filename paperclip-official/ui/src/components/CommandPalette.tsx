@@ -30,6 +30,7 @@ import {
   SquarePen,
   Plus,
   Keyboard,
+  CreditCard,
 } from "lucide-react";
 import { Identity } from "./Identity";
 import { agentUrl, projectUrl } from "../lib/utils";
@@ -168,6 +169,10 @@ export function CommandPalette() {
           <CommandItem onSelect={() => go("/costs")}>
             <DollarSign className="ui-cmd-icon" />
             {t("costs")}
+          </CommandItem>
+          <CommandItem onSelect={() => go("/company/billing")}>
+            <CreditCard className="ui-cmd-icon" />
+            {t("billing")}
           </CommandItem>
           <CommandItem onSelect={() => go("/activity")}>
             <History className="ui-cmd-icon" />

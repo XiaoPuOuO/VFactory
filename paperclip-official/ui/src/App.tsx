@@ -30,6 +30,10 @@ import { Chat } from "./pages/Chat";
 import { ChatEmpty } from "./pages/ChatEmpty";
 import { ChatRoom } from "./pages/ChatRoom";
 import { CompanySettings } from "./pages/CompanySettings";
+import { CompanyBilling } from "./pages/CompanyBilling";
+import { PricingPage } from "./pages/PricingPage";
+import { BillingCheckoutReturn } from "./pages/BillingCheckoutReturn";
+import { BillingCheckoutCancel } from "./pages/BillingCheckoutCancel";
 import { CompanyAutomation } from "./pages/CompanyAutomation";
 import { CompanySkills } from "./pages/CompanySkills";
 import { CompanyWorkflowEditPage, CompanyWorkflowNewPage } from "./pages/CompanyWorkflowEdit";
@@ -42,6 +46,7 @@ import { ArchiveCompanySettings } from "./pages/ArchiveCompanySettings";
 import { InstanceCompanyManagement } from "./pages/InstanceCompanyManagement";
 import { InstanceGroupManagement } from "./pages/InstanceGroupManagement";
 import { InstanceUserManagement } from "./pages/InstanceUserManagement";
+import { InstancePlansSettings } from "./pages/InstancePlansSettings";
 import { RunTranscriptUxLab } from "./pages/RunTranscriptUxLab";
 import { OrgChart } from "./pages/OrgChart";
 import { GoalMap } from "./pages/GoalMap";
@@ -208,6 +213,10 @@ function boardRoutes() {
       <Route path="onboarding" element={<OnboardingRoutePage />} />
       <Route path="companies" element={<Companies />} />
       <Route path="company/settings" element={<CompanySettings />} />
+      <Route path="company/billing" element={<CompanyBilling />} />
+      <Route path="company/billing/return" element={<BillingCheckoutReturn />} />
+      <Route path="company/billing/cancel" element={<BillingCheckoutCancel />} />
+      <Route path="pricing" element={<PricingPage />} />
       <Route path="company/automation" element={<CompanyAutomation />} />
       <Route path="settings" element={<LegacySettingsRedirect />} />
       <Route path="settings/*" element={<LegacySettingsRedirect />} />
@@ -448,6 +457,9 @@ export function App() {
           </Route>
           <Route path="instance/users" element={<Layout />}>
             <Route index element={<InstanceUserManagement />} />
+          </Route>
+          <Route path="instance/plans" element={<Layout />}>
+            <Route index element={<InstancePlansSettings />} />
           </Route>
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
           <Route path="issues" element={<UnprefixedBoardRedirect />} />

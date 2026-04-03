@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { Archive, Building2, FolderOpen, Settings, Users, UserCog } from "lucide-react";
+import { Archive, Building2, CreditCard, FolderOpen, Settings, Users, UserCog } from "lucide-react";
 import { SidebarNavItem } from "./SidebarNavItem";
 
-export function InstanceSidebar() {
+export function InstanceSidebar({ canManagePlans = false }: { canManagePlans?: boolean }) {
   const { t } = useTranslation();
   return (
     <aside className="board-sidebar">
@@ -20,6 +20,13 @@ export function InstanceSidebar() {
             label={t("instance.userManagement")}
             icon={UserCog}
           />
+          {canManagePlans ? (
+            <SidebarNavItem
+              to="/instance/plans"
+              label={t("instance.planManagement")}
+              icon={CreditCard}
+            />
+          ) : null}
           <SidebarNavItem
             to="/instance/default-company-path"
             label={t("instance.defaultCompanyPath")}

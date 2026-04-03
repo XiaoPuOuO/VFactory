@@ -133,6 +133,14 @@ export function TokenUsageByAgentChart({
             <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.output }} />
             {t("outputTokens")}
           </span>
+          <span className="ui-cost-chart-legend-item">
+            <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.cachedRead }} />
+            {t("cachedReadTokens")}
+          </span>
+          <span className="ui-cost-chart-legend-item">
+            <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.cachedWrite }} />
+            {t("cachedWriteTokens")}
+          </span>
         </div>
         {totalTokenSummary && (
           <div className="ui-cost-chart-total-summary" aria-label={t("totalTokensConsumed")}>
@@ -264,6 +272,14 @@ export function TokenUsageByProjectChart({
           <span className="ui-cost-chart-legend-item">
             <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.output }} />
             {t("outputTokens")}
+          </span>
+          <span className="ui-cost-chart-legend-item">
+            <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.cachedRead }} />
+            {t("cachedReadTokens")}
+          </span>
+          <span className="ui-cost-chart-legend-item">
+            <span className="ui-cost-chart-legend-dot" style={{ backgroundColor: CHART_COLORS.cachedWrite }} />
+            {t("cachedWriteTokens")}
           </span>
         </div>
         {totalTokenSummary && (

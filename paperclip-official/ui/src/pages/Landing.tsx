@@ -86,6 +86,19 @@ export function Landing() {
     { titleKey: "landing.step3Title", descKey: "landing.step3Desc" },
   ] as const;
 
+  const pricingPoints = [
+    "landing.pricingPoint1",
+    "landing.pricingPoint2",
+    "landing.pricingPoint3",
+  ] as const;
+
+  const faqItems = [
+    { qKey: "landing.faqQ1", aKey: "landing.faqA1" },
+    { qKey: "landing.faqQ2", aKey: "landing.faqA2" },
+    { qKey: "landing.faqQ3", aKey: "landing.faqA3" },
+    { qKey: "landing.faqQ4", aKey: "landing.faqA4" },
+  ] as const;
+
   return (
     <div className="landing-page">
       <header className="landing-header">
@@ -194,6 +207,26 @@ export function Landing() {
           </div>
         </section>
 
+        <section
+          className="landing-pricing-transparency"
+          aria-labelledby="landing-pricing-heading"
+        >
+          <div className="landing-pricing-inner">
+            <h2 id="landing-pricing-heading" className="landing-pricing-title">
+              {t("landing.pricingTransparencyTitle")}
+            </h2>
+            <p className="landing-pricing-lead">{t("landing.pricingTransparencyLead")}</p>
+            <ul className="landing-pricing-list">
+              {pricingPoints.map((key) => (
+                <li key={key} className="landing-pricing-item">
+                  <CheckCircle2 className="landing-pricing-icon" aria-hidden />
+                  {t(key)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
         <section className="landing-how">
           <div className="landing-how-inner">
             <p className="landing-section-label">
@@ -211,6 +244,22 @@ export function Landing() {
                     <p className="landing-step-desc">{t(descKey)}</p>
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-faq" aria-labelledby="landing-faq-heading">
+          <div className="landing-faq-inner">
+            <h2 id="landing-faq-heading" className="landing-faq-title">
+              {t("landing.faqTitle")}
+            </h2>
+            <div className="landing-faq-list">
+              {faqItems.map(({ qKey, aKey }) => (
+                <details key={qKey} className="landing-faq-item">
+                  <summary className="landing-faq-summary">{t(qKey)}</summary>
+                  <p className="landing-faq-answer">{t(aKey)}</p>
+                </details>
               ))}
             </div>
           </div>

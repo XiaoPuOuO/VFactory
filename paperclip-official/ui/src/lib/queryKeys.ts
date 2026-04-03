@@ -123,6 +123,9 @@ export const queryKeys = {
   instanceUsers: {
     all: ["instance", "users"] as const,
   },
+  instancePlans: {
+    all: ["instance", "plans"] as const,
+  },
   instanceSettings: {
     defaultCompanyPath: ["instance", "settings", "default-company-path"] as const,
     complianceDefaultRetention: ["instance", "settings", "compliance-default-retention"] as const,
@@ -138,6 +141,10 @@ export const queryKeys = {
   activity: (companyId: string) => ["activity", companyId] as const,
   costs: (companyId: string, from?: string, to?: string) =>
     ["costs", companyId, from, to] as const,
+  billing: {
+    plans: (companyId: string) => ["billing", "plans", companyId] as const,
+    company: (companyId: string) => ["billing", "company", companyId] as const,
+  },
   budgetPolicies: (companyId: string) => ["budget-policies", companyId] as const,
   heartbeats: (companyId: string, agentId?: string) =>
     ["heartbeats", companyId, agentId] as const,

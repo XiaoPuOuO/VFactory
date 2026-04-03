@@ -529,6 +529,170 @@
 }
 
 /* ---------------------------------------------------------------------------
+   定價透明說明
+   --------------------------------------------------------------------------- */
+.landing-pricing-transparency {
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+  border-top: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
+}
+
+@media (min-width: 768px) {
+  .landing-pricing-transparency {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.landing-pricing-inner {
+  max-width: 40rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.landing-pricing-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  margin: 0 0 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .landing-pricing-title {
+    font-size: 28px;
+  }
+}
+
+.landing-pricing-lead {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  margin: 0 0 1.25rem;
+}
+
+.landing-pricing-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.landing-pricing-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+
+.landing-pricing-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+  color: color-mix(in oklab, var(--primary) 85%, var(--foreground));
+}
+
+/* ---------------------------------------------------------------------------
+   FAQ
+   --------------------------------------------------------------------------- */
+.landing-faq {
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+  border-top: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
+}
+
+@media (min-width: 768px) {
+  .landing-faq {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.landing-faq-inner {
+  max-width: 40rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.landing-faq-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  margin: 0 0 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .landing-faq-title {
+    font-size: 28px;
+  }
+}
+
+.landing-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.landing-faq-item {
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  padding: 0;
+  overflow: hidden;
+}
+
+.landing-faq-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.875rem 1rem;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.landing-faq-summary::-webkit-details-marker {
+  display: none;
+}
+
+.landing-faq-summary::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid var(--muted-foreground);
+  border-bottom: 2px solid var(--muted-foreground);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: transform 0.2s ease;
+}
+
+.landing-faq-item[open] .landing-faq-summary::after {
+  transform: rotate(-135deg);
+}
+
+.landing-faq-answer {
+  margin: 0;
+  padding: 0 1rem 1rem;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+/* ---------------------------------------------------------------------------
    CTA：單一卡牌、軟陰影
    --------------------------------------------------------------------------- */
 .landing-cta {

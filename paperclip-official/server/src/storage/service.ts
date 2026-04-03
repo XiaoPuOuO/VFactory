@@ -43,21 +43,31 @@ function splitFilename(filename: string | null): { stem: string; ext: string } {
   };
 }
 
-function ensureCompanyPrefix(companyId: string, objectKey: string): void {
-  const expectedPrefix = `${companyId}/`;
-  if (!objectKey.startsWith(expectedPrefix)) {
-    throw forbidden("Object does not belong to company");
-  }
+/**
+ * 允許新版 `tenantId/companyId/...` 與舊版 `companyId/...`（既有資產）。
+ */
+function ensureObjectKeyForCompany(tenantId: string, companyId: string, objectKey: string): void {
   if (objectKey.includes("..")) {
     throw badRequest("Invalid object key");
   }
+  const newPrefix = `${tenantId}/${companyId}/`;
+  const legacyPrefix = `${companyId}/`;
+  if (objectKey.startsWith(newPrefix) || objectKey.startsWith(legacyPrefix)) {
+    return;
+  }
+  throw forbidden("Object does not belong to company");
 }
 
 function hashBuffer(input: Buffer): string {
   return createHash("sha256").update(input).digest("hex");
 }
 
-function buildObjectKey(companyId: string, namespace: string, originalFilename: string | null): string {
+function buildObjectKey(
+  tenantId: string,
+  companyId: string,
+  namespace: string,
+  originalFilename: string | null,
+): string {
   const ns = normalizeNamespace(namespace);
   const now = new Date();
   const year = String(now.getUTCFullYear());
@@ -66,10 +76,13 @@ function buildObjectKey(companyId: string, namespace: string, originalFilename: 
   const { stem, ext } = splitFilename(originalFilename);
   const suffix = randomUUID();
   const filename = `${suffix}-${stem}${ext}`;
-  return `${companyId}/${ns}/${year}/${month}/${day}/${filename}`;
+  return `${tenantId}/${companyId}/${ns}/${year}/${month}/${day}/${filename}`;
 }
 
 function assertPutFileInput(input: PutFileInput): void {
+  if (!input.tenantId || input.tenantId.trim().length === 0) {
+    throw unprocessable("tenantId is required");
+  }
   if (!input.companyId || input.companyId.trim().length === 0) {
     throw unprocessable("companyId is required");
   }
@@ -93,7 +106,12 @@ export function createStorageService(provider: StorageProvider): StorageService 
 
     async putFile(input: PutFileInput): Promise<PutFileResult> {
       assertPutFileInput(input);
-      const objectKey = buildObjectKey(input.companyId, input.namespace, input.originalFilename);
+      const objectKey = buildObjectKey(
+        input.tenantId.trim(),
+        input.companyId.trim(),
+        input.namespace,
+        input.originalFilename,
+      );
       const byteSize = input.body.length;
       const contentType = input.contentType.trim().toLowerCase();
       await provider.putObject({
@@ -113,18 +131,18 @@ export function createStorageService(provider: StorageProvider): StorageService 
       };
     },
 
-    async getObject(companyId: string, objectKey: string) {
-      ensureCompanyPrefix(companyId, objectKey);
+    async getObject(companyId: string, objectKey: string, tenantId: string) {
+      ensureObjectKeyForCompany(tenantId, companyId, objectKey);
       return provider.getObject({ objectKey });
     },
 
-    async headObject(companyId: string, objectKey: string) {
-      ensureCompanyPrefix(companyId, objectKey);
+    async headObject(companyId: string, objectKey: string, tenantId: string) {
+      ensureObjectKeyForCompany(tenantId, companyId, objectKey);
       return provider.headObject({ objectKey });
     },
 
-    async deleteObject(companyId: string, objectKey: string) {
-      ensureCompanyPrefix(companyId, objectKey);
+    async deleteObject(companyId: string, objectKey: string, tenantId: string) {
+      ensureObjectKeyForCompany(tenantId, companyId, objectKey);
       await provider.deleteObject({ objectKey });
     },
   };

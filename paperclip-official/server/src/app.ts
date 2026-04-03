@@ -34,6 +34,8 @@ import { workflowRunRoutes } from "./routes/workflow-runs.js";
 import { approvalRoutes } from "./routes/approvals.js";
 import { secretRoutes } from "./routes/secrets.js";
 import { costRoutes } from "./routes/costs.js";
+import { billingRoutes } from "./routes/billing.js";
+import { ecpayBillingWebhookMiddleware, stripeBillingWebhookMiddleware } from "./billing/webhook-http.js";
 import { activityRoutes } from "./routes/activity.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { sidebarBadgeRoutes } from "./routes/sidebar-badges.js";
@@ -44,6 +46,7 @@ import { browserUseToolRoutes } from "./routes/browser-use-tools.js";
 import { instanceGroupsRoutes } from "./routes/instance-groups.js";
 import { instanceUsersRoutes } from "./routes/instance-users.js";
 import { instanceSettingsRoutes } from "./routes/instance-settings.js";
+import { instancePlansRoutes } from "./routes/instance-plans.js";
 import { platformAlertRoutes } from "./routes/platform-alerts.js";
 import { serviceLogRoutes } from "./routes/service-logs.js";
 import { roadmapRoutes } from "./routes/roadmap.js";
@@ -162,6 +165,17 @@ export async function createApp(
   if (opts.betterAuthHandler) {
     app.all(/^\/api\/auth\/.+/, opts.betterAuthHandler);
   }
+
+  app.post(
+    "/api/webhooks/billing/stripe",
+    express.raw({ type: "application/json" }),
+    stripeBillingWebhookMiddleware(db),
+  );
+  app.post(
+    "/api/webhooks/billing/ecpay",
+    express.urlencoded({ extended: false }),
+    ecpayBillingWebhookMiddleware(db),
+  );
 
   app.use(express.json());
   app.use("/api/scim/v2", scimBearerAuthMiddleware(db), scimRoutes(db));
@@ -282,6 +296,10 @@ export async function createApp(
   openApiTargets.push({ mountPath: "", router: costRouter });
   api.use(costRouter);
 
+  const billingRouter = billingRoutes(db);
+  openApiTargets.push({ mountPath: "", router: billingRouter });
+  api.use(billingRouter);
+
   const activityRouter = activityRoutes(db);
   openApiTargets.push({ mountPath: "", router: activityRouter });
   api.use(activityRouter);
@@ -322,6 +340,10 @@ export async function createApp(
   const instanceSettingsRouter = instanceSettingsRoutes(db);
   openApiTargets.push({ mountPath: "/instance/settings", router: instanceSettingsRouter });
   api.use("/instance/settings", instanceSettingsRouter);
+
+  const instancePlansRouter = instancePlansRoutes(db);
+  openApiTargets.push({ mountPath: "/instance/plans", router: instancePlansRouter });
+  api.use("/instance/plans", instancePlansRouter);
 
   const scimProvisioningKeyRouter = scimProvisioningKeyRoutes(db);
   openApiTargets.push({ mountPath: "/instance/scim-provisioning-keys", router: scimProvisioningKeyRouter });

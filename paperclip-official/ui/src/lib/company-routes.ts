@@ -16,6 +16,12 @@ const BOARD_ROUTE_ROOTS = new Set([
   "activity",
   "inbox",
   "design-guide",
+  /** 須與 App board 子路由一致；漏列時 Link 會把首段誤判為 company prefix（例如 /pricing → PRICING）。 */
+  "pricing",
+  "onboarding",
+  "runs",
+  "chat",
+  "tests",
 ]);
 
 const GLOBAL_ROUTE_ROOTS = new Set(["auth", "invite", "board-claim", "docs", "instance", "landing"]);

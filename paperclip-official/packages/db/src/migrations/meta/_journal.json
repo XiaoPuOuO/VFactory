@@ -337,6 +337,34 @@
       "when": 1774997529217,
       "tag": "0047_safe_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1775100000000,
+      "tag": "0059_billing_plans_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1775200000000,
+      "tag": "0060_byok_plan_entitlements_meta",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1775300000000,
+      "tag": "0061_plans_catalog_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1775400000000,
+      "tag": "0062_grant_admin_pricing_to_setting_groups",
+      "breakpoints": true
     }
   ]
 }

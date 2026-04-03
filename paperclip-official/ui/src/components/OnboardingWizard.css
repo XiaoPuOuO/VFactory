@@ -976,3 +976,15 @@
   color: var(--muted-foreground);
   margin: 0;
 }
+
+.onboarding-wizard-byok-note {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  margin: 0.5rem 0 0;
+}
+
+.onboarding-wizard-byok-note.onboarding-wizard-byok-muted {
+  margin-top: 0.35rem;
+  opacity: 0.92;
+}

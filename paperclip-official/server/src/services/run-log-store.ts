@@ -28,7 +28,8 @@ export interface RunLogFinalizeSummary {
 }
 
 export interface RunLogStore {
-  begin(input: { companyId: string; agentId: string; runId: string }): Promise<RunLogHandle>;
+  /** 路徑為 `tenantId/companyId/agentId/{runId}.ndjson`，與租戶儲存隔離一致。 */
+  begin(input: { tenantId: string; companyId: string; agentId: string; runId: string }): Promise<RunLogHandle>;
   append(
     handle: RunLogHandle,
     event: { stream: "stdout" | "stderr" | "system"; chunk: string; ts: string },
@@ -94,9 +95,9 @@ function createLocalFileRunLogStore(basePath: string): RunLogStore {
 
   return {
     async begin(input) {
-      const [companyId, agentId] = safeSegments(input.companyId, input.agentId);
+      const [tenantId, companyId, agentId] = safeSegments(input.tenantId, input.companyId, input.agentId);
       const runId = safeSegments(input.runId)[0]!;
-      const relDir = path.join(companyId, agentId);
+      const relDir = path.join(tenantId, companyId, agentId);
       const relPath = path.join(relDir, `${runId}.ndjson`);
       await ensureDir(relDir);
 
@@ -137,9 +138,22 @@ function createLocalFileRunLogStore(basePath: string): RunLogStore {
       if (handle.store !== "local_file") {
         throw notFound("Run log not found");
       }
-      const absPath = resolveWithin(basePath, handle.logRef);
       const offset = opts?.offset ?? 0;
       const limitBytes = opts?.limitBytes ?? 256_000;
+      const primary = resolveWithin(basePath, handle.logRef);
+      let absPath = primary;
+      let stat = await fs.stat(primary).catch(() => null);
+      if (!stat) {
+        const parts = handle.logRef.split(path.sep).filter(Boolean);
+        // 新版 logRef 為四段（tenant/company/agent/file）；若檔案尚未遷移，可回退為舊版三段路徑
+        if (parts.length === 4) {
+          const legacyRel = parts.slice(1).join(path.sep);
+          const legacyAbs = resolveWithin(basePath, legacyRel);
+          stat = await fs.stat(legacyAbs).catch(() => null);
+          if (stat) absPath = legacyAbs;
+        }
+      }
+      if (!stat) throw notFound("Run log not found");
       return readFileRange(absPath, offset, limitBytes);
     },
   };

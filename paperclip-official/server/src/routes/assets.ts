@@ -4,7 +4,7 @@ import type { Db } from "@paperclipai/db";
 import { createAssetImageMetadataSchema } from "@paperclipai/shared";
 import type { StorageService } from "../storage/types.js";
 import { assetService, logActivity } from "../services/index.js";
-import { assertCompanyAccess, getActorInfo } from "./authz.js";
+import { assertCompanyAccess, getActorInfo, resolveTenantIdForStorage } from "./authz.js";
 import {
   isAllowedContentType,
   MAX_ATTACHMENT_BYTES,
@@ -76,7 +76,9 @@ export function assetRoutes(db: Db, storage: StorageService) {
 
     const namespaceSuffix = parsedMeta.data.namespace ?? "general";
     const actor = getActorInfo(req);
+    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
     const stored = await storage.putFile({
+      tenantId,
       companyId,
       namespace: `assets/${namespaceSuffix}`,
       originalFilename: file.originalname || null,
@@ -176,7 +178,9 @@ export function assetRoutes(db: Db, storage: StorageService) {
 
     const namespaceSuffix = "icon";
     const actor = getActorInfo(req);
+    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
     const stored = await storage.putFile({
+      tenantId,
       companyId,
       namespace: `assets/${namespaceSuffix}`,
       originalFilename: file.originalname || null,
@@ -238,7 +242,8 @@ export function assetRoutes(db: Db, storage: StorageService) {
     }
     await assertCompanyAccess(req, asset.companyId, db);
 
-    const object = await storage.getObject(asset.companyId, asset.objectKey);
+    const tenantId = await resolveTenantIdForStorage(req, db, asset.companyId);
+    const object = await storage.getObject(asset.companyId, asset.objectKey, tenantId);
     res.setHeader("Content-Type", asset.contentType || object.contentType || "application/octet-stream");
     res.setHeader("Content-Length", String(asset.byteSize || object.contentLength || 0));
     res.setHeader("Cache-Control", "private, max-age=60");

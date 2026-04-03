@@ -1602,6 +1602,7 @@ export function heartbeatService(db: Db, storage?: StorageService) {
     const companyRow = await db
       .select({
         id: companies.id,
+        tenantId: companies.tenantId,
         name: companies.name,
         description: companies.description,
         issuePrefix: companies.issuePrefix,
@@ -1716,7 +1717,11 @@ export function heartbeatService(db: Db, storage?: StorageService) {
         message: "run started",
       });
 
+      if (!companyRow?.tenantId) {
+        throw notFound("Company tenant not found for run log");
+      }
       handle = await runLogStore.begin({
+        tenantId: companyRow.tenantId,
         companyId: run.companyId,
         agentId: run.agentId,
         runId,

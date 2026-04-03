@@ -226,6 +226,12 @@ export {
   type CreateCompany,
   type UpdateCompany,
   type UpdateCompanyLimits,
+  billingCheckoutSchema,
+  createInstancePlanSchema,
+  updateInstancePlanSchema,
+  type BillingCheckoutInput,
+  type CreateInstancePlanInput,
+  type UpdateInstancePlanInput,
   createCompanyWebhookEndpointSchema,
   updateCompanyWebhookEndpointSchema,
   type CreateCompanyWebhookEndpoint,
@@ -502,6 +508,14 @@ export type {
   WorkflowStepWorkerResultV1,
   WorkflowStepWorkerResultSchemaVersion,
 } from "./types/workflow-worker.js";
+export type {
+  PlanEntitlementsSummary,
+  PlanSummary,
+  CompanyBillingStatus,
+  InstancePlanRow,
+  BillingCheckoutProvider,
+  BillingCheckoutRequest,
+} from "./types/billing.js";
 
 export {
   skillFrontmatterSchema,

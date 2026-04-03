@@ -15,7 +15,7 @@ function isManualSlashWorkflow(fm: SkillFrontmatter): boolean {
   if (on === "schedule" || on === "event") return false;
   return true;
 }
-import { assertCompanyAccess, getActorInfo } from "./authz.js";
+import { assertCompanyAccess, getActorInfo, resolveTenantIdForStorage } from "./authz.js";
 import { assertBoard } from "./authz.js";
 import {
   companySkillBundleConstants,
@@ -61,6 +61,7 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
 
   function persistBundle(args: {
     companyId: string;
+    tenantId: string;
     skills: Array<{ key: string; skillMarkdown: string }>;
     actor: ReturnType<typeof getActorInfo>;
     action: string;
@@ -85,6 +86,7 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
 
       const jsonText = JSON.stringify(bundleToStore, null, 2);
       const stored = await storage.putFile({
+        tenantId: args.tenantId,
         companyId: args.companyId,
         namespace: companySkillBundleConstants.namespace,
         originalFilename: companySkillBundleConstants.originalFilename,
@@ -212,8 +214,10 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
     };
 
     const actor = getActorInfo(req);
+    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
     const jsonText = JSON.stringify(bundleToStore, null, 2);
     const stored = await storage.putFile({
+      tenantId,
       companyId,
       namespace: companySkillBundleConstants.namespace,
       originalFilename: companySkillBundleConstants.originalFilename,
@@ -278,8 +282,16 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
     }
 
     const actor = getActorInfo(req);
+    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
     const nextSkills = [...baseLoaded.map((s) => ({ key: s.key, skillMarkdown: s.skillMarkdown })), { key, skillMarkdown: body.skillMarkdown }];
-    const result = await persistBundle({ companyId, skills: nextSkills, actor, action: "company.skills.create", res });
+    const result = await persistBundle({
+      companyId,
+      tenantId,
+      skills: nextSkills,
+      actor,
+      action: "company.skills.create",
+      res,
+    });
     if (!result) return;
     res.status(201).json(result);
   });
@@ -320,12 +332,20 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
     }
 
     const actor = getActorInfo(req);
+    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
     const nextSkills = baseLoaded.map((s) => {
       if (s.key !== keyFromParam) return { key: s.key, skillMarkdown: s.skillMarkdown };
       return { key: keyFromBody, skillMarkdown: body.skillMarkdown };
     });
 
-    const result = await persistBundle({ companyId, skills: nextSkills, actor, action: "company.skills.update", res });
+    const result = await persistBundle({
+      companyId,
+      tenantId,
+      skills: nextSkills,
+      actor,
+      action: "company.skills.update",
+      res,
+    });
     if (!result) return;
     res.status(200).json(result);
   });
@@ -345,11 +365,19 @@ export function companySkillRoutes(db: Db, storage: StorageService) {
     }
 
     const actor = getActorInfo(req);
+    const tenantId = await resolveTenantIdForStorage(req, db, companyId);
     const nextSkills = baseLoaded
       .filter((s) => s.key !== keyFromParam)
       .map((s) => ({ key: s.key, skillMarkdown: s.skillMarkdown }));
 
-    const result = await persistBundle({ companyId, skills: nextSkills, actor, action: "company.skills.delete", res });
+    const result = await persistBundle({
+      companyId,
+      tenantId,
+      skills: nextSkills,
+      actor,
+      action: "company.skills.delete",
+      res,
+    });
     if (!result) return;
     res.status(200).json(result);
   });
