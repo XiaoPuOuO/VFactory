@@ -1,0 +1,71 @@
+/* EmptyState — rich guided empty state */
+
+[data-slot="empty-state"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-12) var(--space-6);
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+[data-slot="empty-state-icon"] {
+  width: 4rem;
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xl);
+  background: var(--color-primary-50);
+  color: var(--color-primary-400);
+  margin-bottom: var(--space-4);
+}
+
+.dark [data-slot="empty-state-icon"] {
+  background: color-mix(in oklab, var(--color-primary-500) 15%, transparent);
+  color: var(--color-primary-300);
+}
+
+[data-slot="empty-state-icon"] svg {
+  width: 2rem;
+  height: 2rem;
+}
+
+[data-slot="empty-state-title"] {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--foreground);
+  margin-bottom: var(--space-2);
+}
+
+[data-slot="empty-state-description"] {
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  line-height: var(--leading-relaxed);
+  margin-bottom: var(--space-6);
+}
+
+[data-slot="empty-state-actions"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+[data-slot="empty-state-footer"] {
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+
+[data-slot="empty-state-footer"] a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+[data-slot="empty-state-footer"] a:hover {
+  text-decoration: underline;
+}

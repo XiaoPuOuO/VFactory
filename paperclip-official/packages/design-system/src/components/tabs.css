@@ -1,0 +1,48 @@
+/* Tabs — underline slide animation */
+
+[data-slot="tabs-list"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+[data-slot="tabs-trigger"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-default),
+    border-color var(--duration-normal) var(--ease-default);
+  outline: none;
+  margin-bottom: -1px;
+}
+
+[data-slot="tabs-trigger"]:hover {
+  color: var(--foreground);
+}
+
+[data-slot="tabs-trigger"][data-state="active"] {
+  color: var(--foreground);
+  border-bottom-color: var(--primary);
+}
+
+[data-slot="tabs-trigger"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+[data-slot="tabs-content"] {
+  padding-top: var(--space-4);
+  animation: page-enter var(--duration-normal) var(--ease-out);
+}

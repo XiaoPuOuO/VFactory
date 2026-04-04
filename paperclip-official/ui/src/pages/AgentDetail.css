@@ -19,7 +19,7 @@
 
 .agent-detail-pending-approval {
   font-size: 0.875rem;
-  color: #d97706;
+  color: var(--color-warning-text);
 }
 
 .agent-detail-header {
@@ -118,7 +118,7 @@
   gap: 0.375rem;
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
-  background: color-mix(in oklab, #3b82f6 10%, transparent);
+  background: color-mix(in oklab, var(--color-primary-500) 10%, transparent);
   text-decoration: none;
   color: inherit;
   transition: background 0.15s;
@@ -131,7 +131,7 @@
 }
 
 .agent-detail-mobile-live-link:hover {
-  background: color-mix(in oklab, #3b82f6 20%, transparent);
+  background: color-mix(in oklab, var(--color-primary-500) 20%, transparent);
 }
 
 .agent-detail-live-dot-wrap {
@@ -146,7 +146,7 @@
   inset: 0;
   animation: agent-detail-pulse 1.5s ease-in-out infinite;
   border-radius: 9999px;
-  background: #22d3ee;
+  background: var(--color-primary-400);
   opacity: 0.75;
 }
 
@@ -155,7 +155,7 @@
   border-radius: 9999px;
   height: 0.5rem;
   width: 0.5rem;
-  background: #22d3ee;
+  background: var(--color-primary-400);
 }
 
 .agent-detail-mobile-live-link .agent-detail-live-dot-wrap {
@@ -164,21 +164,21 @@
 }
 
 .agent-detail-mobile-live-link .agent-detail-live-dot-pulse {
-  background: #3b82f6;
+  background: var(--color-primary-500);
 }
 
 .agent-detail-mobile-live-link .agent-detail-live-dot {
-  background: #3b82f6;
+  background: var(--color-primary-500);
 }
 
 .agent-detail-mobile-live-text {
   font-size: 11px;
   font-weight: 500;
-  color: #2563eb;
+  color: var(--color-primary-600);
 }
 
 :root.dark .agent-detail-mobile-live-text {
-  color: #60a5fa;
+  color: var(--color-primary-400);
 }
 
 @keyframes agent-detail-pulse {
@@ -238,9 +238,9 @@
   background: color-mix(in oklab, var(--background) 90%, transparent);
   backdrop-filter: blur(4px);
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   padding: 0.375rem 0.75rem;
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-lg);
 }
 
 .agent-detail-mobile-bar {
@@ -263,14 +263,14 @@
 }
 
 /* Run status icon colors (data-status on wrapper) */
-.agent-detail-run-status-icon[data-status="succeeded"] { color: #16a34a; }
-:root.dark .agent-detail-run-status-icon[data-status="succeeded"] { color: #4ade80; }
+.agent-detail-run-status-icon[data-status="succeeded"] { color: var(--color-success-text); }
+:root.dark .agent-detail-run-status-icon[data-status="succeeded"] { color: oklch(0.72 0.22 145); }
 .agent-detail-run-status-icon[data-status="failed"] { color: #dc2626; }
 :root.dark .agent-detail-run-status-icon[data-status="failed"] { color: #f87171; }
-.agent-detail-run-status-icon[data-status="running"] { color: #0891b2; }
-:root.dark .agent-detail-run-status-icon[data-status="running"] { color: #22d3ee; }
-.agent-detail-run-status-icon[data-status="queued"] { color: #ca8a04; }
-:root.dark .agent-detail-run-status-icon[data-status="queued"] { color: #facc15; }
+.agent-detail-run-status-icon[data-status="running"] { color: var(--color-primary-500); }
+:root.dark .agent-detail-run-status-icon[data-status="running"] { color: var(--color-primary-400); }
+.agent-detail-run-status-icon[data-status="queued"] { color: var(--color-warning-text); }
+:root.dark .agent-detail-run-status-icon[data-status="queued"] { color: oklch(0.82 0.18 85); }
 .agent-detail-run-status-icon[data-status="timed_out"] { color: #ea580c; }
 :root.dark .agent-detail-run-status-icon[data-status="timed_out"] { color: #fb923c; }
 .agent-detail-run-status-icon[data-status="cancelled"] { color: #737373; }
@@ -305,22 +305,22 @@
 }
 
 .agent-detail-source-badge[data-source="timer"] {
-  background: color-mix(in oklab, #3b82f6 15%, transparent);
-  color: #1d4ed8;
+  background: color-mix(in oklab, var(--color-primary-500) 15%, transparent);
+  color: var(--color-primary-700);
 }
-:root.dark .agent-detail-source-badge[data-source="timer"] { color: #93c5fd; }
+:root.dark .agent-detail-source-badge[data-source="timer"] { color: var(--color-primary-300); }
 
 .agent-detail-source-badge[data-source="assignment"] {
-  background: color-mix(in oklab, #8b5cf6 15%, transparent);
-  color: #6d28d9;
+  background: color-mix(in oklab, var(--color-primary-500) 15%, transparent);
+  color: var(--color-primary-700);
 }
-:root.dark .agent-detail-source-badge[data-source="assignment"] { color: #c4b5fd; }
+:root.dark .agent-detail-source-badge[data-source="assignment"] { color: var(--color-primary-300); }
 
 .agent-detail-source-badge[data-source="on_demand"] {
-  background: color-mix(in oklab, #06b6d4 15%, transparent);
-  color: #0891b2;
+  background: color-mix(in oklab, var(--color-primary-500) 15%, transparent);
+  color: var(--color-primary-500);
 }
-:root.dark .agent-detail-source-badge[data-source="on_demand"] { color: #67e8f9; }
+:root.dark .agent-detail-source-badge[data-source="on_demand"] { color: var(--color-primary-300); }
 
 .agent-detail-source-badge[data-source="automation"],
 .agent-detail-source-badge:not([data-source]) {
@@ -400,8 +400,8 @@
 }
 
 .agent-detail-latest-run-card.live {
-  border-color: color-mix(in oklab, #06b6d4 30%, transparent);
-  box-shadow: 0 0 12px color-mix(in oklab, #06b6d4 8%, transparent);
+  border-color: color-mix(in oklab, var(--color-primary-500) 30%, transparent);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--color-primary-500) 8%, transparent);
 }
 
 .agent-detail-latest-run-card-row {
@@ -411,7 +411,7 @@
 }
 
 .agent-detail-latest-run-card-id {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--muted-foreground);
 }
@@ -475,7 +475,9 @@
 
 .agent-detail-issues-list {
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-issues-more {
@@ -500,8 +502,9 @@
 
 .agent-detail-costs-card {
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-costs-grid {
@@ -530,8 +533,9 @@
 
 .agent-detail-costs-table-wrap {
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-costs-table {
@@ -591,8 +595,9 @@
 
 .agent-detail-permissions-card {
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   padding: 1rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-permissions-row {
@@ -659,7 +664,7 @@
 }
 
 .agent-detail-revision-meta-left .font-mono {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .agent-detail-revision-changed {
@@ -709,8 +714,9 @@
 
 .agent-detail-runs-list-wrap {
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   overflow-x: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-runs-list-sticky {
@@ -766,14 +772,14 @@
 }
 
 .agent-detail-run-list-item-id {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--muted-foreground);
 }
 
 .agent-detail-run-list-item-exec-label {
   font-size: 11px;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   color: var(--muted-foreground);
 }
 
@@ -813,8 +819,9 @@
 
 .agent-detail-run-card {
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-run-card-main {
@@ -864,7 +871,7 @@
 
 .agent-detail-run-timing-main {
   font-size: 0.875rem;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .agent-detail-run-timing-muted {
@@ -911,7 +918,7 @@
 .agent-detail-run-metrics-item-value {
   font-size: 0.875rem;
   font-weight: 500;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .agent-detail-session-toggle {
@@ -978,7 +985,7 @@
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.75rem;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   overflow-x: auto;
   white-space: pre-wrap;
 }
@@ -1005,7 +1012,9 @@
 
 .agent-detail-touched-issues-list {
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-touched-issue-item {
@@ -1039,7 +1048,7 @@
 }
 
 .agent-detail-touched-issue-id {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   color: var(--muted-foreground);
   flex-shrink: 0;
   margin-left: 0.5rem;
@@ -1103,7 +1112,7 @@
 }
 
 .agent-detail-session-changed {
-  color: #facc15;
+  color: oklch(0.82 0.18 85);
   margin-left: 0.25rem;
 }
 
@@ -1141,7 +1150,7 @@
 .agent-detail-transcript-mode-btn.selected {
   background: var(--accent);
   color: var(--foreground);
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-log-event-row {
@@ -1216,7 +1225,8 @@
   padding: 0.75rem 1rem;
   background: color-mix(in oklch, var(--accent) 15%, transparent);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-memories-search-wrap {
@@ -1247,7 +1257,7 @@
   height: 2rem;
   width: 10rem;
   font-size: 0.875rem;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .agent-detail-memories-count {
@@ -1300,8 +1310,9 @@
 
 .agent-detail-memories-list {
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .agent-detail-memory-row {
@@ -1361,7 +1372,7 @@
 }
 
 .agent-detail-memory-row-room {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   max-width: 6rem;
   overflow: hidden;
   text-overflow: ellipsis;

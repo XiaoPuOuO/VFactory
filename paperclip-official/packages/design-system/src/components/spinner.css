@@ -1,0 +1,20 @@
+/* Spinner — brand-color rotating arc */
+
+[data-slot="spinner"] {
+  display: inline-block;
+  border: 2px solid color-mix(in oklab, var(--primary) 25%, transparent);
+  border-top-color: var(--primary);
+  border-radius: var(--radius-full);
+  animation: spin 600ms linear infinite;
+}
+
+[data-slot="spinner"][data-size="sm"] { width: 1rem;   height: 1rem;   border-width: 2px; }
+[data-slot="spinner"][data-size="md"] { width: 1.5rem; height: 1.5rem; border-width: 2px; }
+[data-slot="spinner"][data-size="lg"] { width: 2rem;   height: 2rem;   border-width: 3px; }
+[data-slot="spinner"][data-size="xl"] { width: 3rem;   height: 3rem;   border-width: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="spinner"] {
+    animation-duration: 1.5s;
+  }
+}

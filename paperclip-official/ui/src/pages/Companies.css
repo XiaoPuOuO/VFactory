@@ -45,11 +45,12 @@
 .companies-card {
   text-align: left;
   background: var(--card);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   padding: 1.25rem;
   transition: border-color 0.15s, box-shadow 0.15s;
   cursor: pointer;
   border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
 }
 
 .companies-card:hover {
@@ -105,21 +106,21 @@
 }
 
 .companies-card-status-badge.active {
-  background: color-mix(in oklab, #22c55e 10%, transparent);
-  color: #16a34a;
+  background: color-mix(in oklab, oklch(0.65 0.22 145) 10%, transparent);
+  color: var(--color-success-text);
 }
 
 :root.dark .companies-card-status-badge.active {
-  color: #4ade80;
+  color: oklch(0.72 0.22 145);
 }
 
 .companies-card-status-badge.paused {
-  background: color-mix(in oklab, #eab308 10%, transparent);
-  color: #ca8a04;
+  background: color-mix(in oklab, var(--color-warning-text) 10%, transparent);
+  color: var(--color-warning-text);
 }
 
 :root.dark .companies-card-status-badge.paused {
-  color: #facc15;
+  color: oklch(0.82 0.18 85);
 }
 
 .companies-card-status-badge.archived {
@@ -217,7 +218,7 @@
 }
 
 .companies-edit-check svg {
-  color: #22c55e;
+  color: oklch(0.65 0.22 145);
 }
 
 .companies-edit-x svg {

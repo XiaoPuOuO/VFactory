@@ -41,6 +41,9 @@
 
 .compliance-retention-card {
   border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .compliance-retention-form {

@@ -1,0 +1,13 @@
+/* Popover — scale + fade enter */
+
+[data-slot="popover-content"] {
+  z-index: var(--z-dialog);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-4);
+  animation: popover-enter var(--duration-fast) var(--ease-out);
+  outline: none;
+}

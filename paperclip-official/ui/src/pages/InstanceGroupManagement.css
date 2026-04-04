@@ -92,7 +92,8 @@
   max-height: 20rem;
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .instance-group-management-all-perms-table {
@@ -310,8 +311,9 @@
   max-height: 20rem;
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--card);
+  box-shadow: var(--shadow-sm);
 }
 
 .instance-group-perms-table {
@@ -386,8 +388,9 @@
 .instance-group-management-table-wrap {
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   max-height: 28rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .instance-group-management-table {

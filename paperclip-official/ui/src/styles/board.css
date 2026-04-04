@@ -1,15 +1,15 @@
 /**
  * Board 通用樣式 — Layout、Sidebar、Company Rail、Breadcrumb、Mobile Nav
- * 多個 Page 共用，無 Tailwind。
+ * Phase 3 重設計：深色側邊欄、品牌色 active 狀態、Spring 動畫
  */
 
 /* 離線唯讀提示（Layout 頂部） */
 .offline-banner {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.8125rem;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
   color: var(--foreground);
   background: color-mix(in oklab, var(--muted) 55%, transparent);
   border-bottom: 1px solid var(--border);
@@ -56,22 +56,22 @@
 
 .board-skip-link:focus {
   position: fixed;
-  left: 0.75rem;
-  top: 0.75rem;
+  left: var(--space-3);
+  top: var(--space-3);
   z-index: 200;
   width: auto;
   height: auto;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   margin: 0;
   overflow: visible;
   clip: auto;
   white-space: normal;
   background: var(--background);
   color: var(--foreground);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
-  border-radius: 0.375rem;
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   outline: none;
   border: 2px solid var(--ring);
 }
@@ -81,7 +81,9 @@
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: color-mix(in oklab, black 50%, transparent);
+  background: oklch(0 0 0 / 0.5);
+  backdrop-filter: blur(4px);
+  animation: backdrop-fade-in var(--duration-normal) var(--ease-out);
 }
 
 /* ==========================================================================
@@ -98,7 +100,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: transform 0.1s ease-out;
+  transition: transform var(--duration-slow) var(--ease-spring);
 }
 
 .board-sidebar-wrap-mobile.closed {
@@ -116,7 +118,7 @@
   overflow: hidden;
 }
 
-/* 無 Company Rail 時（僅 instance 導覽等單欄），讓導覽區佔滿剩餘寬度 */
+/* 無 Company Rail 時，讓導覽區佔滿剩餘寬度 */
 .board-sidebar-wrap-mobile .board-sidebar-inner > :only-child {
   flex: 1 1 0%;
   min-width: 0;
@@ -131,17 +133,17 @@
 
 .board-sidebar-collapsible {
   overflow: hidden;
-  transition: width 0.1s ease-out;
+  transition: width var(--duration-slow) var(--ease-spring);
 }
 
 .board-sidebar-footer {
-  border-top: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  padding: 0.5rem 0.75rem;
-  background: var(--background);
+  border-top: 1px solid var(--sidebar-border);
+  border-right: 1px solid var(--sidebar-border);
+  padding: var(--space-2) var(--space-3);
+  background: var(--sidebar);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 .board-sidebar-footer-btn-wrap {
@@ -151,7 +153,15 @@
 
 .board-sidebar-footer-icon-btn {
   flex-shrink: 0;
-  color: var(--muted-foreground);
+  color: oklch(0.55 0.015 270);
+  border-radius: var(--radius-md);
+  transition: color var(--duration-fast) var(--ease-default),
+              background-color var(--duration-fast) var(--ease-default);
+}
+
+.board-sidebar-footer-icon-btn:hover {
+  color: var(--sidebar-foreground);
+  background: var(--sidebar-accent);
 }
 
 .board-sidebar-footer-icon-btn svg {
@@ -159,7 +169,7 @@
   height: 1rem;
 }
 
-/* 無公司、非 instance：無側欄，主內容全寬；底部預留固定列 */
+/* 無公司、非 instance：無側欄，主內容全寬 */
 .board-root-desktop.board-root--no-company-board .board-main-wrap {
   flex: 1 1 0%;
   min-width: 0;
@@ -177,9 +187,9 @@
   z-index: 45;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   background: var(--background);
 }
@@ -203,29 +213,28 @@
   width: 4px;
   min-width: 4px;
   height: 100%;
-  background: var(--border);
+  background: var(--sidebar-border);
   cursor: col-resize;
-  transition: background-color 0.15s;
+  transition: background-color var(--duration-fast) var(--ease-default);
   border: none;
   padding: 0;
 }
 
 .board-resize-handle:hover {
-  background: color-mix(in oklab, var(--primary) 20%, transparent);
+  background: color-mix(in oklab, var(--color-primary-500) 40%, transparent);
 }
 
 .board-resize-handle:focus {
-  background: color-mix(in oklab, var(--primary) 30%, transparent);
+  background: color-mix(in oklab, var(--color-primary-500) 60%, transparent);
   outline: none;
 }
 
 .board-resize-handle:focus-visible {
   box-shadow: 0 0 0 2px var(--ring);
-  outline-offset: 1px;
 }
 
 /* ==========================================================================
-   Company Rail
+   Company Rail — 左側公司選擇欄
    ========================================================================== */
 .board-rail {
   display: flex;
@@ -234,8 +243,8 @@
   width: 72px;
   flex-shrink: 0;
   height: 100%;
-  background: var(--background);
-  border-right: 1px solid var(--border);
+  background: oklch(0.12 0.015 270);  /* 比 sidebar 略深，形成層次感 */
+  border-right: 1px solid var(--sidebar-border);
 }
 
 .board-rail-logo-wrap {
@@ -253,13 +262,13 @@
   justify-content: center;
   width: 100%;
   height: 3rem;
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  transition: background-color 0.15s;
+  border-radius: var(--radius-md);
+  color: var(--sidebar-foreground);
+  transition: background-color var(--duration-fast) var(--ease-default);
 }
 
 .board-rail-logo-link:hover {
-  background: color-mix(in oklab, var(--muted) 50%, transparent);
+  background: var(--sidebar-accent);
 }
 
 .board-rail-logo-icon {
@@ -272,9 +281,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding-top: 0.75rem;
-  padding-bottom: 0.75rem;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
   width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -291,13 +300,14 @@
   justify-content: center;
 }
 
+/* Active 指示條：品牌色左側邊框效果 */
 .board-rail-item-pill {
   position: absolute;
   left: -14px;
-  width: 4px;
-  border-radius: 0 4px 4px 0;
-  background: var(--foreground);
-  transition: height 0.15s;
+  width: 3px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--sidebar-primary);
+  transition: height var(--duration-normal) var(--ease-spring);
 }
 
 .board-rail-item-pill.selected {
@@ -315,7 +325,7 @@
 .board-rail-item-icon-wrap {
   position: relative;
   overflow: visible;
-  transition: transform 0.15s;
+  transition: transform var(--duration-fast) var(--ease-spring), border-radius var(--duration-normal) var(--ease-default);
 }
 
 .board-rail-item-icon-wrap.dragging {
@@ -323,11 +333,12 @@
 }
 
 .board-rail-item-icon-wrap.dragging.shadow {
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-lg);
 }
 
 .board-rail-item-icon-wrap.rounded-sm {
   border-radius: 14px;
+  box-shadow: 0 0 0 2px var(--sidebar-primary), 0 0 0 3px oklch(0.12 0.015 270);
 }
 
 .board-rail-item-icon-wrap.rounded-lg {
@@ -338,6 +349,7 @@
   border-radius: 14px;
 }
 
+/* Live 狀態點（品牌色） */
 .board-rail-live-dot {
   pointer-events: none;
   position: absolute;
@@ -357,8 +369,8 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 9999px;
-  background: #60a5fa;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-400);
   opacity: 0.8;
   animation: board-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -369,9 +381,9 @@
   display: inline-flex;
   height: 10px;
   width: 10px;
-  border-radius: 9999px;
-  background: #3b82f6;
-  box-shadow: 0 0 0 2px var(--background);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-500);
+  box-shadow: 0 0 0 2px oklch(0.12 0.015 270);
 }
 
 .board-rail-inbox-dot {
@@ -382,15 +394,15 @@
   z-index: 10;
   height: 10px;
   width: 10px;
-  border-radius: 9999px;
-  background: #ef4444;
-  box-shadow: 0 0 0 2px var(--background);
+  border-radius: var(--radius-full);
+  background: var(--color-error-text);
+  box-shadow: 0 0 0 2px oklch(0.12 0.015 270);
 }
 
 .board-rail-sep {
   width: 2rem;
   height: 1px;
-  background: var(--border);
+  background: var(--sidebar-border);
   margin-left: auto;
   margin-right: auto;
   flex-shrink: 0;
@@ -400,7 +412,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 0;
+  padding: var(--space-2) 0;
   flex-shrink: 0;
 }
 
@@ -411,16 +423,18 @@
   width: 2.75rem;
   height: 2.75rem;
   border-radius: 22px;
-  border: 2px dashed var(--border);
-  color: var(--muted-foreground);
+  border: 2px dashed oklch(0.30 0.015 270);
+  color: oklch(0.55 0.015 270);
   background: transparent;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, border-radius 0.15s;
+  transition: border-color var(--duration-fast) var(--ease-default),
+              color var(--duration-fast) var(--ease-default),
+              border-radius var(--duration-normal) var(--ease-default);
 }
 
 .board-rail-add-btn:hover {
-  border-color: color-mix(in oklab, var(--foreground) 30%, transparent);
-  color: var(--foreground);
+  border-color: var(--sidebar-foreground);
+  color: var(--sidebar-foreground);
   border-radius: 14px;
 }
 
@@ -431,7 +445,7 @@
 
 @keyframes board-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50% { opacity: 0.4; }
 }
 
 /* ==========================================================================
@@ -442,8 +456,8 @@
   min-width: 0;
   height: 100%;
   min-height: 0;
-  border-right: 1px solid var(--border);
-  background: var(--background);
+  border-right: 1px solid var(--sidebar-border);
+  background: var(--sidebar);
   display: flex;
   flex-direction: column;
 }
@@ -451,46 +465,67 @@
 .board-sidebar-top {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  padding-right: var(--space-3);
   height: 3rem;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--sidebar-border);
 }
 
 .board-sidebar-top-brand {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 2px;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
-  margin-left: 0.25rem;
+  margin-left: var(--space-1);
+  box-shadow: 0 0 0 1.5px oklch(1 0 0 / 0.18), 0 1px 3px oklch(0 0 0 / 0.3);
 }
 
 .board-sidebar-top-title {
   flex: 1 1 0%;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--foreground);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--sidebar-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-left: 0.25rem;
+  padding-left: var(--space-1);
+  letter-spacing: -0.01em;
 }
 
 .board-sidebar-nav {
   flex: 1 1 0%;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 0.5rem 0.75rem;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-2);
+  padding-top: var(--space-3);
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.28 0.012 270) transparent;
+}
+
+.board-sidebar-nav::-webkit-scrollbar {
+  width: 3px;
+}
+.board-sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.board-sidebar-nav::-webkit-scrollbar-thumb {
+  background: oklch(0.28 0.012 270);
+  border-radius: 999px;
+}
+.board-sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.35 0.015 270);
 }
 
 .board-sidebar-nav-section {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: 2px;
 }
 
 .board-sidebar-section {
@@ -498,20 +533,19 @@
 }
 
 .board-sidebar-section-label {
-  padding: 0.375rem 0.75rem;
-  font-size: 10px;
-  font-weight: 500;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-family: ui-monospace, monospace;
-  color: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  letter-spacing: 0.06em;
+  color: oklch(0.50 0.015 270);
 }
 
 .board-sidebar-section-children {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
-  margin-top: 0.125rem;
+  gap: 2px;
+  margin-top: 2px;
 }
 
 /* SidebarProjects / SidebarAgents 共用的 Collapsible 區塊 */
@@ -522,16 +556,19 @@
 .board-sidebar-collapsible-row {
   display: flex;
   align-items: center;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
-  padding-top: 0.375rem;
-  padding-bottom: 0.375rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.board-sidebar-collapsible-row:hover {
+  background: var(--sidebar-accent);
 }
 
 .board-sidebar-collapsible-trigger {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
   flex: 1 1 0%;
   min-width: 0;
   background: none;
@@ -545,8 +582,9 @@
 .board-sidebar-collapsible-chevron {
   width: 0.75rem;
   height: 0.75rem;
-  color: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
-  transition: transform 0.15s, opacity 0.15s;
+  color: oklch(0.45 0.015 270);
+  transition: transform var(--duration-fast) var(--ease-default),
+              opacity var(--duration-fast) var(--ease-default);
   flex-shrink: 0;
 }
 
@@ -564,31 +602,31 @@
 }
 
 .board-sidebar-collapsible-label {
-  font-size: 10px;
-  font-weight: 500;
+  font-size: var(--text-2xs);
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-family: ui-monospace, monospace;
-  color: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  letter-spacing: 0.06em;
+  color: oklch(0.50 0.015 270);
 }
 
 .board-sidebar-collapsible-add-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 0.125rem;
-  color: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-sm);
+  color: oklch(0.45 0.015 270);
   background: none;
   border: none;
   cursor: pointer;
-  transition: color 0.15s, background-color 0.15s;
+  transition: color var(--duration-fast) var(--ease-default),
+              background-color var(--duration-fast) var(--ease-default);
 }
 
 .board-sidebar-collapsible-add-btn:hover {
-  color: var(--foreground);
-  background: color-mix(in oklab, var(--accent) 50%, transparent);
+  color: var(--sidebar-foreground);
+  background: var(--sidebar-accent);
 }
 
 .board-sidebar-collapsible-add-btn svg {
@@ -600,34 +638,34 @@
 .board-sidebar-project-link {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.375rem 0.75rem;
-  font-size: 13px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  padding-left: var(--space-3);
+  font-size: var(--text-sm);
   font-weight: 500;
-  transition: background-color 0.15s, color 0.15s;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-default),
+              color var(--duration-fast) var(--ease-default);
   text-decoration: none;
-  color: inherit;
+  color: oklch(0.70 0.015 270);
 }
 
 .board-sidebar-project-link.active {
-  background: var(--accent);
-  color: var(--foreground);
-}
-
-.board-sidebar-project-link:not(.active) {
-  color: color-mix(in oklab, var(--foreground) 80%, transparent);
+  background: color-mix(in oklab, var(--sidebar-primary) 13%, var(--sidebar-accent));
+  color: var(--sidebar-accent-foreground);
+  box-shadow: inset 3px 0 0 var(--sidebar-primary);
 }
 
 .board-sidebar-project-link:not(.active):hover {
-  background: color-mix(in oklab, var(--accent) 50%, transparent);
-  color: var(--foreground);
+  background: color-mix(in oklab, var(--sidebar-accent) 60%, transparent);
+  color: var(--sidebar-foreground);
 }
 
 .board-sidebar-project-dot {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .board-sidebar-project-name {
@@ -647,11 +685,12 @@
 .board-sidebar-agent-row {
   display: flex;
   align-items: center;
-  gap: 0.125rem;
+  gap: var(--space-px2);
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
-  transition: color 0.15s;
+  color: oklch(0.70 0.015 270);
+  transition: color var(--duration-fast) var(--ease-default);
 }
 
 .board-sidebar-agent-toggle {
@@ -661,23 +700,24 @@
   width: 1.25rem;
   height: 1.5rem;
   flex-shrink: 0;
-  border-radius: 0.125rem;
-  color: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  border-radius: var(--radius-sm);
+  color: oklch(0.45 0.015 270);
   background: none;
   border: none;
   cursor: pointer;
-  transition: color 0.15s, background-color 0.15s;
+  transition: color var(--duration-fast) var(--ease-default),
+              background-color var(--duration-fast) var(--ease-default);
 }
 
 .board-sidebar-agent-toggle:hover {
-  color: var(--foreground);
-  background: color-mix(in oklab, var(--accent) 30%, transparent);
+  color: var(--sidebar-foreground);
+  background: var(--sidebar-accent);
 }
 
 .board-sidebar-agent-toggle svg {
   width: 0.75rem;
   height: 0.75rem;
-  transition: transform 0.15s;
+  transition: transform var(--duration-fast) var(--ease-default);
 }
 
 .board-sidebar-agent-toggle.open svg {
@@ -692,36 +732,42 @@
 .board-sidebar-agent-link {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: var(--space-2);
   flex: 1 1 0%;
   min-width: 0;
-  padding: 0.375rem 0.75rem;
-  padding-right: 0.75rem;
-  border-radius: 0.375rem;
-  transition: background-color 0.15s, color 0.15s;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-default),
+              color var(--duration-fast) var(--ease-default);
   text-decoration: none;
-  color: inherit;
+  color: oklch(0.70 0.015 270);
 }
 
 .board-sidebar-agent-link.active {
-  background: var(--accent);
-  color: var(--foreground);
+  background: color-mix(in oklab, var(--sidebar-primary) 13%, var(--sidebar-accent));
+  color: var(--sidebar-accent-foreground);
+  box-shadow: inset 3px 0 0 var(--sidebar-primary);
 }
 
-.board-sidebar-agent-link:not(.active) {
-  color: color-mix(in oklab, var(--foreground) 80%, transparent);
+.board-sidebar-agent-link.active .board-sidebar-agent-link-icon {
+  color: var(--sidebar-primary);
 }
 
 .board-sidebar-agent-link:not(.active):hover {
-  background: color-mix(in oklab, var(--accent) 50%, transparent);
-  color: var(--foreground);
+  background: color-mix(in oklab, var(--sidebar-accent) 60%, transparent);
+  color: var(--sidebar-foreground);
 }
 
 .board-sidebar-agent-link-icon {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
-  color: var(--muted-foreground);
+  color: oklch(0.50 0.015 270);
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.board-sidebar-agent-link:hover .board-sidebar-agent-link-icon {
+  color: oklch(0.70 0.015 270);
 }
 
 .board-sidebar-agent-link-name {
@@ -735,7 +781,7 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--space-1);
   flex-shrink: 0;
 }
 
@@ -750,8 +796,8 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 9999px;
-  background: #60a5fa;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-400);
   opacity: 0.75;
   animation: board-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -762,18 +808,14 @@
   display: inline-flex;
   width: 8px;
   height: 8px;
-  border-radius: 9999px;
-  background: #3b82f6;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-500);
 }
 
 .board-sidebar-agent-live-count {
-  font-size: 11px;
-  font-weight: 500;
-  color: #2563eb;
-}
-
-.dark .board-sidebar-agent-live-count {
-  color: #60a5fa;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--color-primary-400);
 }
 
 .board-sidebar-agent-children {
@@ -787,23 +829,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 0.125rem;
-  color: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-sm);
+  color: oklch(0.45 0.015 270);
   background: none;
   border: none;
   cursor: pointer;
-  transition: color 0.15s, background-color 0.15s;
+  transition: color var(--duration-fast) var(--ease-default),
+              background-color var(--duration-fast) var(--ease-default);
 }
 
 .board-sidebar-popover-trigger:hover {
-  color: var(--foreground);
-  background: color-mix(in oklab, var(--accent) 50%, transparent);
+  color: var(--sidebar-foreground);
+  background: var(--sidebar-accent);
 }
 
 .board-sidebar-popover-trigger.active {
-  color: var(--foreground);
+  color: var(--sidebar-foreground);
 }
 
 .board-sidebar-popover-trigger svg {
@@ -813,61 +856,73 @@
 
 .board-sidebar-popover-content {
   width: 12rem;
-  padding: 0.25rem;
+  padding: var(--space-1);
 }
 
 .board-sidebar-popover-title {
-  padding: 0.5rem 0.5rem 0.25rem;
-  font-size: 10px;
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: var(--text-2xs);
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.025em;
+  letter-spacing: 0.04em;
   color: var(--muted-foreground);
 }
 
 .board-sidebar-popover-item {
   display: block;
-  padding: 0.375rem 0.5rem;
-  font-size: 0.75rem;
-  border-radius: 0.125rem;
-  transition: background-color 0.15s;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-default);
   text-decoration: none;
   color: inherit;
 }
 
 .board-sidebar-popover-item:hover {
-  background: color-mix(in oklab, var(--accent) 50%, transparent);
+  background: var(--accent);
 }
 
 .board-sidebar-popover-item.active {
   background: var(--accent);
 }
 
+/* 新建 Issue 按鈕（Sidebar 頂部快捷） */
 .board-sidebar-new-issue-btn {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 13px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--muted-foreground);
-  background: none;
-  border: none;
+  color: oklch(0.72 0.04 270);
+  background: color-mix(in oklab, var(--sidebar-primary) 6%, transparent);
+  border: 1px solid color-mix(in oklab, var(--sidebar-primary) 20%, transparent);
   cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-default),
+              color var(--duration-fast) var(--ease-default),
+              border-color var(--duration-fast) var(--ease-default);
   width: 100%;
   text-align: left;
 }
 
 .board-sidebar-new-issue-btn:hover {
-  background: color-mix(in oklab, var(--accent) 50%, transparent);
-  color: var(--foreground);
+  background: color-mix(in oklab, var(--sidebar-primary) 14%, var(--sidebar-accent));
+  border-color: color-mix(in oklab, var(--sidebar-primary) 38%, transparent);
+  color: var(--sidebar-foreground);
 }
 
 .board-sidebar-new-issue-btn-icon {
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;
+  color: var(--sidebar-primary);
+  opacity: 0.85;
+  transition: opacity var(--duration-fast) var(--ease-default);
+}
+
+.board-sidebar-new-issue-btn:hover .board-sidebar-new-issue-btn-icon {
+  opacity: 1;
 }
 
 .board-sidebar-new-issue-btn span {
@@ -875,31 +930,37 @@
   text-overflow: ellipsis;
 }
 
-/* SidebarNavItem：active 由 .active class 控制 */
+/* ==========================================================================
+   SidebarNavItem：主導航項目
+   ========================================================================== */
 .board-nav-item {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 13px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  font-size: var(--text-sm);
   font-weight: 500;
-  transition: background-color 0.15s, color 0.15s;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-default),
+              color var(--duration-fast) var(--ease-default),
+              box-shadow var(--duration-fast) var(--ease-default);
   text-decoration: none;
-  color: inherit;
+  color: oklch(0.68 0.015 270);
 }
 
 .board-nav-item.active {
-  background: var(--accent);
-  color: var(--foreground);
+  background: color-mix(in oklab, var(--sidebar-primary) 13%, var(--sidebar-accent));
+  color: var(--sidebar-accent-foreground);
+  box-shadow: inset 3px 0 0 var(--sidebar-primary);
 }
 
-.board-nav-item:not(.active) {
-  color: color-mix(in oklab, var(--foreground) 80%, transparent);
+.board-nav-item.active .board-nav-item-icon svg {
+  color: var(--sidebar-primary);
 }
 
 .board-nav-item:not(.active):hover {
-  background: color-mix(in oklab, var(--accent) 50%, transparent);
-  color: var(--foreground);
+  background: color-mix(in oklab, var(--sidebar-accent) 60%, transparent);
+  color: var(--sidebar-foreground);
 }
 
 button.board-nav-item {
@@ -912,7 +973,7 @@ button.board-nav-item {
 }
 
 button.board-nav-item:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -924,6 +985,12 @@ button.board-nav-item:disabled {
 .board-nav-item-icon svg {
   width: 1rem;
   height: 1rem;
+  color: oklch(0.52 0.015 270);
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.board-nav-item:hover .board-nav-item-icon svg {
+  color: oklch(0.72 0.015 270);
 }
 
 .board-nav-item-alert-dot {
@@ -932,9 +999,9 @@ button.board-nav-item:disabled {
   top: -2px;
   height: 8px;
   width: 8px;
-  border-radius: 9999px;
-  background: #ef4444;
-  box-shadow: 0 0 0 2px var(--background);
+  border-radius: var(--radius-full);
+  background: var(--color-error-text);
+  box-shadow: 0 0 0 2px var(--sidebar);
 }
 
 .board-nav-item-label {
@@ -947,7 +1014,7 @@ button.board-nav-item:disabled {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--space-1);
 }
 
 .board-nav-item-live-dot {
@@ -961,8 +1028,8 @@ button.board-nav-item:disabled {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 9999px;
-  background: #60a5fa;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-400);
   opacity: 0.75;
   animation: board-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -973,62 +1040,61 @@ button.board-nav-item:disabled {
   display: inline-flex;
   height: 8px;
   width: 8px;
-  border-radius: 9999px;
-  background: #3b82f6;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-500);
 }
 
 .board-nav-item-live-count {
-  font-size: 11px;
-  font-weight: 500;
-  color: #2563eb;
-}
-
-.dark .board-nav-item-live-count {
-  color: #60a5fa;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--color-primary-400);
 }
 
 .board-nav-item-badge {
   margin-left: auto;
-  border-radius: 9999px;
-  padding: 0.125rem 0.375rem;
-  font-size: 0.75rem;
+  border-radius: var(--radius-full);
+  padding: 0.125rem 0.4rem;
+  font-size: var(--text-2xs);
+  font-weight: 600;
   line-height: 1;
 }
 
 .board-nav-item-badge.default {
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: var(--color-primary-500);
+  color: white;
 }
 
 .board-nav-item-badge.danger {
-  background: color-mix(in oklab, #dc2626 90%, transparent);
-  color: #fef2f2;
+  background: color-mix(in oklab, var(--color-error-text) 20%, transparent);
+  color: var(--color-error-text);
+  border: 1px solid color-mix(in oklab, var(--color-error-text) 30%, transparent);
 }
 
 /* Instance sidebar 頂欄 */
 .board-instance-sidebar-title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+  padding-right: var(--space-3);
   height: 3rem;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--sidebar-border);
 }
 
 .board-instance-sidebar-title-icon {
   width: 1rem;
   height: 1rem;
-  color: var(--muted-foreground);
+  color: oklch(0.55 0.015 270);
   flex-shrink: 0;
-  margin-left: 0.25rem;
+  margin-left: var(--space-1);
 }
 
 .board-instance-sidebar-title-text {
   flex: 1 1 0%;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  color: var(--foreground);
+  color: var(--sidebar-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1039,20 +1105,21 @@ button.board-nav-item:disabled {
    ========================================================================== */
 .board-breadcrumb-bar {
   border-bottom: 1px solid var(--border);
-  padding-left: 1rem;
-  padding-right: 1rem;
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
   height: 3rem;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   min-width: 0;
   overflow: hidden;
+  background: var(--background);
 }
 
 @media (min-width: 768px) {
   .board-breadcrumb-bar {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
   }
 }
 
@@ -1060,19 +1127,13 @@ button.board-nav-item:disabled {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: color-mix(in oklab, var(--background) 95%, transparent);
+  background: color-mix(in oklab, var(--background) 85%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .board-breadcrumb-bar-mobile-sticky {
-    background: color-mix(in oklab, var(--background) 85%, transparent);
-  }
-}
-
 .board-breadcrumb-menu-btn {
-  margin-right: 0.5rem;
+  margin-right: var(--space-2);
   flex-shrink: 0;
 }
 
@@ -1082,10 +1143,9 @@ button.board-nav-item:disabled {
 }
 
 .board-breadcrumb-title {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1115,7 +1175,7 @@ button.board-nav-item:disabled {
 }
 
 /* ==========================================================================
-   Main 內容區
+   Main 內容區 — 頁面進入動畫
    ========================================================================== */
 .board-main-wrap {
   display: flex;
@@ -1144,11 +1204,13 @@ button.board-nav-item:disabled {
 
 .board-main {
   flex: 1 1 0%;
-  padding: 1rem;
+  padding: var(--space-4);
   overflow: auto;
+  /* 頁面進入動畫：每次路由切換子內容淡入 */
+  animation: page-enter var(--duration-normal) var(--ease-out) both;
 }
 
-/* 組織圖：佔滿 main 剩餘高度，捲動發生在圖表／樹狀內層，避免與 100vh 疊加超出視窗 */
+/* 組織圖：佔滿 main 剩餘高度 */
 main.board-main:has(.org-chart-page) {
   display: flex;
   flex-direction: column;
@@ -1161,7 +1223,6 @@ main.board-main:has(.org-chart-page) {
   }
 }
 
-/* 手機：main 非 flex 子項時高度由內容撐開，限制組織圖區塊勿超過視窗 */
 main.board-main-mobile:has(.org-chart-page) {
   display: flex;
   flex-direction: column;
@@ -1172,7 +1233,7 @@ main.board-main-mobile:has(.org-chart-page) {
 
 @media (min-width: 768px) {
   .board-main {
-    padding: 1.5rem;
+    padding: var(--space-6);
   }
 }
 
@@ -1191,17 +1252,11 @@ main.board-main-mobile:has(.org-chart-page) {
   right: 0;
   z-index: 30;
   border-top: 1px solid var(--border);
-  background: color-mix(in oklab, var(--background) 95%, transparent);
+  background: color-mix(in oklab, var(--background) 85%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
-  transition: transform 0.2s ease-out;
+  transition: transform var(--duration-normal) var(--ease-out);
   padding-bottom: env(safe-area-inset-bottom);
-}
-
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .board-mobile-nav {
-    background: color-mix(in oklab, var(--background) 85%, transparent);
-  }
 }
 
 @media (min-width: 768px) {
@@ -1222,8 +1277,8 @@ main.board-main-mobile:has(.org-chart-page) {
   display: grid;
   height: 4rem;
   grid-template-columns: repeat(5, 1fr);
-  padding-left: 0.25rem;
-  padding-right: 0.25rem;
+  padding-left: var(--space-1);
+  padding-right: var(--space-1);
 }
 
 .board-mobile-nav-item {
@@ -1233,14 +1288,14 @@ main.board-main-mobile:has(.org-chart-page) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  font-size: 10px;
+  gap: var(--space-1);
+  font-size: var(--text-2xs);
   font-weight: 500;
-  transition: color 0.15s;
+  transition: color var(--duration-fast) var(--ease-default);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: var(--space-1);
   color: var(--muted-foreground);
   text-decoration: none;
 }
@@ -1250,7 +1305,7 @@ main.board-main-mobile:has(.org-chart-page) {
 }
 
 .board-mobile-nav-item.active {
-  color: var(--foreground);
+  color: var(--primary);
 }
 
 .board-mobile-nav-item-icon {
@@ -1266,10 +1321,10 @@ main.board-main-mobile:has(.org-chart-page) {
   position: absolute;
   right: -8px;
   top: -8px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   background: var(--primary);
   padding: 0.125rem 0.375rem;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 1;
   color: var(--primary-foreground);
 }

@@ -30,8 +30,9 @@
 .company-automation-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 1rem 1rem 0.75rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .company-automation-muted {

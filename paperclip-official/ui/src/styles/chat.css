@@ -352,11 +352,11 @@
 }
 
 .chat-list-pin-icon.pinned {
-  color: #eab308;
+  color: oklch(0.72 0.18 85);
 }
 
 .dark .chat-list-pin-icon.pinned {
-  color: #facc15;
+  color: oklch(0.82 0.18 85);
 }
 
 .chat-list-menu-icon {
@@ -965,15 +965,15 @@
   align-items: center;
   gap: 0.25rem;
   font-size: 0.7rem;
-  color: #16a34a;
+  color: var(--color-success-text);
 }
 
 .chat-message-issue-run-card-live-dot-inner {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 9999px;
-  background-color: #22c55e;
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.3);
+  background-color: oklch(0.65 0.22 145);
+  box-shadow: 0 0 0 4px color-mix(in oklab, oklch(0.65 0.22 145) 30%, transparent);
 }
 
 .chat-message-issue-run-card-issue-link {

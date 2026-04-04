@@ -111,21 +111,21 @@
 }
 
 .archive-settings-status-badge.active {
-  background: color-mix(in oklab, #22c55e 10%, transparent);
-  color: #16a34a;
+  background: color-mix(in oklab, oklch(0.65 0.22 145) 10%, transparent);
+  color: var(--color-success-text);
 }
 
 :root.dark .archive-settings-status-badge.active {
-  color: #4ade80;
+  color: oklch(0.72 0.22 145);
 }
 
 .archive-settings-status-badge.paused {
-  background: color-mix(in oklab, #eab308 10%, transparent);
-  color: #ca8a04;
+  background: color-mix(in oklab, var(--color-warning-text) 10%, transparent);
+  color: var(--color-warning-text);
 }
 
 :root.dark .archive-settings-status-badge.paused {
-  color: #facc15;
+  color: oklch(0.82 0.18 85);
 }
 
 .archive-settings-status-badge.archived {

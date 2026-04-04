@@ -316,33 +316,33 @@
 }
 
 .design-guide-badge-invocation[data-invocation="timer"] {
-  background: color-mix(in oklch, #3b82f6 15%, transparent);
-  color: #1d4ed8;
+  background: color-mix(in oklch, var(--color-primary-500) 15%, transparent);
+  color: var(--color-primary-700);
 }
 
 .dark .design-guide-badge-invocation[data-invocation="timer"] {
-  background: color-mix(in oklch, #3b82f6 50%, transparent);
-  color: #93c5fd;
+  background: color-mix(in oklch, var(--color-primary-500) 50%, transparent);
+  color: var(--color-primary-300);
 }
 
 .design-guide-badge-invocation[data-invocation="assignment"] {
-  background: color-mix(in oklch, #8b5cf6 15%, transparent);
-  color: #5b21b6;
+  background: color-mix(in oklch, var(--color-primary-500) 15%, transparent);
+  color: var(--color-primary-700);
 }
 
 .dark .design-guide-badge-invocation[data-invocation="assignment"] {
-  background: color-mix(in oklch, #8b5cf6 50%, transparent);
-  color: #c4b5fd;
+  background: color-mix(in oklch, var(--color-primary-500) 50%, transparent);
+  color: var(--color-primary-300);
 }
 
 .design-guide-badge-invocation[data-invocation="on_demand"] {
-  background: color-mix(in oklch, #06b6d4 15%, transparent);
-  color: #0e7490;
+  background: color-mix(in oklch, var(--color-primary-500) 15%, transparent);
+  color: var(--color-primary-600);
 }
 
 .dark .design-guide-badge-invocation[data-invocation="on_demand"] {
-  background: color-mix(in oklch, #06b6d4 50%, transparent);
-  color: #67e8f9;
+  background: color-mix(in oklch, var(--color-primary-500) 50%, transparent);
+  color: var(--color-primary-300);
 }
 
 .design-guide-badge-invocation[data-invocation="automation"] {
@@ -448,21 +448,21 @@
   border-radius: 9999px;
   transition: width 0.15s, background-color 0.15s;
 }
-.design-guide-progress-bar[data-state="ok"] { background: #4ade80; }
-.design-guide-progress-bar[data-state="warn"] { background: #facc15; }
+.design-guide-progress-bar[data-state="ok"] { background: oklch(0.72 0.22 145); }
+.design-guide-progress-bar[data-state="warn"] { background: oklch(0.82 0.18 85); }
 .design-guide-progress-bar[data-state="over"] { background: #f87171; }
 
 .design-guide-log-viewer {
   background: #0a0a0a;
   border-radius: 0.5rem;
   padding: 0.75rem;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   max-height: 20rem;
   overflow-y: auto;
 }
 .design-guide-log-line { color: var(--foreground); }
-.design-guide-log-warn { color: #facc15; }
+.design-guide-log-warn { color: oklch(0.82 0.18 85); }
 .design-guide-log-error { color: #f87171; }
 .design-guide-log-sys { color: #7dd3fc; }
 .design-guide-log-live {
@@ -482,14 +482,14 @@
   height: 100%;
   width: 100%;
   border-radius: 9999px;
-  background: #22d3ee;
+  background: var(--color-primary-400);
   animation: design-guide-pulse 1.5s ease-in-out infinite;
 }
 @keyframes design-guide-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
-.design-guide-log-live-text { color: #22d3ee; }
+.design-guide-log-live-text { color: var(--color-primary-400); }
 
 .design-guide-property-box {
   border: 1px solid var(--border);

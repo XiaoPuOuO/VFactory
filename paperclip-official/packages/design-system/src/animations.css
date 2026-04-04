@@ -1,0 +1,171 @@
+/**
+ * Paperclip Shared Animations
+ * Keyframes and utility classes for page transitions, list stagger, and feedback.
+ */
+
+/* ===== Keyframes ===== */
+
+/* Page enter: fade + slide up */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* List item stagger: fade + slide up (smaller) */
+@keyframes stagger-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Success checkmark bounce */
+@keyframes success-bounce {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Item delete: fade + collapse */
+@keyframes item-remove {
+  0%   { opacity: 1; max-height: 200px; }
+  40%  { opacity: 0; }
+  100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; overflow: hidden; }
+}
+
+/* New item highlight flash */
+@keyframes item-highlight {
+  0%   { background-color: color-mix(in oklab, var(--primary) 15%, transparent); }
+  100% { background-color: transparent; }
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Spinner rotation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Toast slide in from right */
+@keyframes toast-slide-in {
+  from { transform: translateX(calc(100% + 1rem)); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+/* Toast slide out to right */
+@keyframes toast-slide-out {
+  from { transform: translateX(0); opacity: 1; }
+  to   { transform: translateX(calc(100% + 1rem)); opacity: 0; }
+}
+
+/* Dialog enter */
+@keyframes dialog-enter {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Dialog exit */
+@keyframes dialog-exit {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.97); }
+}
+
+/* Sheet slide in from right */
+@keyframes sheet-slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+/* Sheet slide in from bottom */
+@keyframes sheet-slide-in-bottom {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* Backdrop fade */
+@keyframes backdrop-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Popover scale + fade */
+@keyframes popover-enter {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Counting number animation helper */
+@keyframes count-up {
+  from { --display-count: var(--count-from); }
+  to   { --display-count: var(--count-to); }
+}
+
+/* Dashboard activity row entry */
+@keyframes dashboard-activity-enter {
+  0%   { opacity: 0; transform: translateY(-14px) scale(0.985); filter: blur(4px); }
+  62%  { opacity: 1; transform: translateY(2px) scale(1.002); filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes dashboard-activity-highlight {
+  0%   { box-shadow: inset 2px 0 0 var(--primary); background-color: color-mix(in oklab, var(--accent) 55%, transparent); }
+  100% { box-shadow: inset 0 0 0 transparent; background-color: transparent; }
+}
+
+/* ===== Animation Utility Classes ===== */
+
+.animate-page-enter {
+  animation: page-enter var(--duration-normal) var(--ease-out) both;
+}
+
+.animate-stagger-enter {
+  animation: stagger-enter var(--duration-normal) var(--ease-out) both;
+  animation-delay: calc(var(--stagger-index, 0) * 30ms);
+}
+
+.animate-success-bounce {
+  animation: success-bounce 300ms var(--ease-spring) both;
+}
+
+.animate-item-remove {
+  animation: item-remove 300ms var(--ease-in) both;
+}
+
+.animate-item-highlight {
+  animation: item-highlight 500ms var(--ease-default) both;
+}
+
+/* Existing activity row class — kept for backwards compat */
+.activity-row-enter {
+  animation:
+    dashboard-activity-enter 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    dashboard-activity-highlight 920ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ===== Reduced Motion: cancel animations ===== */
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-enter,
+  .animate-stagger-enter,
+  .animate-success-bounce,
+  .animate-item-remove,
+  .animate-item-highlight,
+  .activity-row-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

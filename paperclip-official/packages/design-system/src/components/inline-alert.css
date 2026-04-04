@@ -1,0 +1,47 @@
+/* InlineAlert — 4 semantic variants */
+
+[data-slot="inline-alert"] {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+[data-slot="inline-alert"] svg {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.125rem;
+}
+
+[data-slot="inline-alert"][data-variant="success"] {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+}
+
+[data-slot="inline-alert"][data-variant="warning"] {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-text);
+}
+
+[data-slot="inline-alert"][data-variant="error"] {
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
+  color: var(--color-error-text);
+}
+
+[data-slot="inline-alert"][data-variant="info"] {
+  background: var(--color-info-bg);
+  border-color: var(--color-info-border);
+  color: var(--color-info-text);
+}
+
+[data-slot="inline-alert-title"] {
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}

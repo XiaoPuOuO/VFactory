@@ -46,18 +46,18 @@
   align-items: center;
   gap: 0.5rem;
   border-radius: 9999px;
-  border: 1px solid color-mix(in oklch, #06b6d4 25%, transparent);
-  background: color-mix(in oklch, #06b6d4 8%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-primary-500) 25%, transparent);
+  background: color-mix(in oklch, var(--color-primary-500) 8%, transparent);
   padding: 0.25rem 0.75rem;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: #0e7490;
+  color: var(--color-primary-600);
 }
 
 .dark .ux-lab-badge {
-  color: #67e8f9;
+  color: var(--color-primary-300);
 }
 
 .ux-lab-title {
@@ -90,14 +90,14 @@
 }
 
 .ux-lab-surface-btn:hover {
-  border-color: color-mix(in oklch, #06b6d4 20%, transparent);
-  background: color-mix(in oklch, #06b6d4 4%, transparent);
+  border-color: color-mix(in oklch, var(--color-primary-500) 20%, transparent);
+  background: color-mix(in oklch, var(--color-primary-500) 4%, transparent);
 }
 
 .ux-lab-surface-btn.active {
-  border-color: color-mix(in oklch, #06b6d4 35%, transparent);
-  background: color-mix(in oklch, #06b6d4 10%, transparent);
-  box-shadow: 0 12px 24px rgba(6, 182, 212, 0.12);
+  border-color: color-mix(in oklch, var(--color-primary-500) 35%, transparent);
+  background: color-mix(in oklch, var(--color-primary-500) 10%, transparent);
+  box-shadow: 0 12px 24px color-mix(in oklch, var(--color-primary-500) 12%, transparent);
 }
 
 .ux-lab-surface-btn-inner {
@@ -110,11 +110,11 @@
   border-radius: 0.5rem;
   border: 1px solid color-mix(in oklch, currentColor 15%, transparent);
   padding: 0.5rem;
-  color: #0e7490;
+  color: var(--color-primary-600);
 }
 
 .dark .ux-lab-surface-icon-wrap {
-  color: #67e8f9;
+  color: var(--color-primary-300);
 }
 
 .ux-lab-surface-eyebrow {
@@ -278,14 +278,14 @@
 .live-widget-preview {
   overflow: hidden;
   border-radius: 0.75rem;
-  border: 1px solid color-mix(in oklch, #06b6d4 25%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-primary-500) 25%, transparent);
   background: color-mix(in oklch, var(--background) 85%, transparent);
-  box-shadow: 0 20px 50px rgba(6, 182, 212, 0.1);
+  box-shadow: 0 20px 50px color-mix(in oklch, var(--color-primary-500) 10%, transparent);
 }
 
 .live-widget-header {
   border-bottom: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
-  background: color-mix(in oklch, #06b6d4 5%, transparent);
+  background: color-mix(in oklch, var(--color-primary-500) 5%, transparent);
   padding: 1rem 1.25rem;
 }
 
@@ -294,11 +294,11 @@
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #0e7490;
+  color: var(--color-primary-600);
 }
 
 .dark .live-widget-title {
-  color: #67e8f9;
+  color: var(--color-primary-300);
 }
 
 .live-widget-subtitle {
@@ -379,8 +379,8 @@
 }
 
 .dashboard-preview-card.streaming {
-  border-color: color-mix(in oklch, #06b6d4 25%, transparent);
-  background: color-mix(in oklch, #06b6d4 4%, transparent);
+  border-color: color-mix(in oklch, var(--color-primary-500) 25%, transparent);
+  background: color-mix(in oklch, var(--color-primary-500) 4%, transparent);
 }
 
 .dashboard-preview-header {
@@ -410,8 +410,8 @@
 }
 
 .dashboard-preview-dot.streaming {
-  background: #06b6d4;
-  box-shadow: 0 0 0 6px rgba(34, 211, 238, 0.12);
+  background: var(--color-primary-500);
+  box-shadow: 0 0 0 6px color-mix(in oklch, var(--color-primary-400) 12%, transparent);
 }
 
 .dashboard-preview-meta {
@@ -427,11 +427,11 @@
   background: color-mix(in oklch, var(--background) 60%, transparent);
   padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
-  color: #0e7490;
+  color: var(--color-primary-600);
 }
 
 .dark .dashboard-preview-issue-ref {
-  color: #67e8f9;
+  color: var(--color-primary-300);
 }
 
 .dashboard-preview-body {

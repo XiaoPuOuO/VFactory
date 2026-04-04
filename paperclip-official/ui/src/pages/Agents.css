@@ -35,6 +35,7 @@
   padding: 0.375rem 0.5rem;
   font-size: 0.75rem;
   border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   background: var(--background);
   color: var(--muted-foreground);
   cursor: pointer;
@@ -71,8 +72,9 @@
   z-index: 50;
   width: 14rem;
   border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   background: var(--popover);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-md);
   padding: 0.25rem;
 }
 
@@ -164,6 +166,8 @@
 .agents-view-toggle {
   display: flex;
   border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .agents-view-toggle button {
@@ -191,10 +195,16 @@
 
 .agents-list-wrap {
   border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .agents-org-wrap {
   border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
   padding: 0.25rem 0;
 }
 
@@ -253,7 +263,7 @@
 .agents-org-node-adapter {
   font-size: 0.75rem;
   color: var(--muted-foreground);
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   width: 3.5rem;
   text-align: right;
 }
@@ -291,7 +301,7 @@
 .agents-list-adapter {
   font-size: 0.75rem;
   color: var(--muted-foreground);
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   width: 3.5rem;
   text-align: right;
 }
@@ -324,21 +334,21 @@
 }
 
 .agents-status-dot[data-status="running"] span {
-  background: #22d3ee;
+  background: var(--color-primary-400);
   animation: agents-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
 .agents-status-dot[data-status="active"] span {
-  background: #4ade80;
+  background: oklch(0.72 0.22 145);
 }
 
 .agents-status-dot[data-status="paused"] span,
 .agents-status-dot[data-status="idle"] span {
-  background: #facc15;
+  background: oklch(0.82 0.18 85);
 }
 
 .agents-status-dot[data-status="pending_approval"] span {
-  background: #fbbf24;
+  background: oklch(0.80 0.17 85);
 }
 
 .agents-status-dot[data-status="error"] span {
@@ -350,11 +360,11 @@
 }
 
 .dark .agents-status-dot[data-status="running"] span {
-  background: #22d3ee;
+  background: var(--color-primary-400);
 }
 
 .dark .agents-status-dot[data-status="active"] span {
-  background: #4ade80;
+  background: oklch(0.72 0.22 145);
 }
 
 .dark .agents-status-dot[data-status="error"] span {
@@ -367,13 +377,13 @@
   gap: 0.375rem;
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
-  background: color-mix(in oklab, #3b82f6 10%, transparent);
+  background: color-mix(in oklab, var(--color-primary-500) 10%, transparent);
   text-decoration: none;
   transition: background 0.15s;
 }
 
 .agents-live-run-link:hover {
-  background: color-mix(in oklab, #3b82f6 20%, transparent);
+  background: color-mix(in oklab, var(--color-primary-500) 20%, transparent);
 }
 
 .agents-live-run-dot {
@@ -387,7 +397,7 @@
   position: absolute;
   inset: 0;
   border-radius: 9999px;
-  background: #60a5fa;
+  background: var(--color-primary-400);
   opacity: 0.75;
   animation: agents-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
@@ -399,17 +409,17 @@
   height: 0.5rem;
   width: 0.5rem;
   border-radius: 9999px;
-  background: #3b82f6;
+  background: var(--color-primary-500);
 }
 
 .agents-live-run-label {
   font-size: 11px;
   font-weight: 500;
-  color: #2563eb;
+  color: var(--color-primary-600);
 }
 
 .dark .agents-live-run-label {
-  color: #60a5fa;
+  color: var(--color-primary-400);
 }
 
 @keyframes agents-ping {

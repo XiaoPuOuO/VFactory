@@ -90,16 +90,16 @@
 }
 
 .org-chart-tree-dot[data-status="running"] {
-  background: #22d3ee;
+  background: var(--color-primary-400);
 }
 
 .org-chart-tree-dot[data-status="active"] {
-  background: #4ade80;
+  background: oklch(0.72 0.22 145);
 }
 
 .org-chart-tree-dot[data-status="paused"],
 .org-chart-tree-dot[data-status="idle"] {
-  background: #facc15;
+  background: oklch(0.82 0.18 85);
 }
 
 .org-chart-tree-dot[data-status="error"] {

@@ -71,6 +71,9 @@
 
 .goal-detail-projects-list {
   border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .goal-detail-progress {
@@ -101,8 +104,8 @@
   gap: 1rem;
   padding: 1rem;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md, 8px);
-  background: var(--muted, rgba(0, 0, 0, 0.02));
+  border-radius: var(--radius-md);
+  background: var(--muted);
 }
 
 .goal-detail-progress-stat {
@@ -155,7 +158,7 @@
   padding: 0;
   list-style: none;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -175,7 +178,7 @@
 }
 
 .goal-detail-progress-subgoal-link:hover {
-  background: var(--accent, rgba(0, 0, 0, 0.04));
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
 }
 
 .goal-detail-progress-subgoal-title {
@@ -185,7 +188,7 @@
 
 .goal-detail-progress-projects-list {
   border: 1px solid var(--border);
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 

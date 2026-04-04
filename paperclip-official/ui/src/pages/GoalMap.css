@@ -8,7 +8,8 @@
   position: relative;
   background: color-mix(in oklab, var(--muted) 20%, transparent);
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .goal-map-zoom-buttons {
@@ -60,15 +61,15 @@
   position: absolute;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   user-select: none;
   transition: box-shadow 0.15s, border-color 0.15s;
 }
 
 .goal-map-card:hover {
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-md);
   border-color: color-mix(in oklab, var(--foreground) 20%, transparent);
 }
 

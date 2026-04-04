@@ -1,0 +1,29 @@
+/**
+ * @paperclipai/design-system — Design System Entry Point
+ * Import order matters: tokens → base → animations → components.
+ */
+
+/* Layer 0: Design Tokens */
+@import "./tokens.css";
+
+/* Layer 1: Base Reset & Font */
+@import "./base.css";
+
+/* Shared Animations & Keyframes */
+@import "./animations.css";
+
+/* Layer 3: UI Components */
+@import "./components/button.css";
+@import "./components/input.css";
+@import "./components/card.css";
+@import "./components/badge.css";
+@import "./components/skeleton.css";
+@import "./components/spinner.css";
+@import "./components/dialog.css";
+@import "./components/sheet.css";
+@import "./components/toast.css";
+@import "./components/popover.css";
+@import "./components/tabs.css";
+@import "./components/tooltip.css";
+@import "./components/inline-alert.css";
+@import "./components/empty-state.css";

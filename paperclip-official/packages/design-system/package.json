@@ -1,0 +1,13 @@
+{
+  "name": "@paperclipai/design-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Paperclip Design System — Design Tokens + UI Component CSS",
+  "main": "src/index.css",
+  "exports": {
+    ".": "./src/index.css",
+    "./tokens": "./src/tokens.css",
+    "./base": "./src/base.css"
+  },
+  "keywords": ["paperclip", "design-system", "css"]
+}

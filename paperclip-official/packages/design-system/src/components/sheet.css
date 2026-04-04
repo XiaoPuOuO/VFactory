@@ -1,0 +1,60 @@
+/* Sheet (Drawer) — slide in from right or bottom */
+
+[data-slot="sheet-overlay"] {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  background: oklch(0 0 0 / 0.5);
+  backdrop-filter: blur(4px);
+  animation: backdrop-fade-in var(--duration-normal) var(--ease-out);
+}
+
+[data-slot="sheet-content"] {
+  position: fixed;
+  z-index: var(--z-dialog);
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+}
+
+[data-slot="sheet-content"][data-side="right"] {
+  inset: 0 0 0 auto;
+  width: min(24rem, 100vw - 2rem);
+  border-left: 1px solid var(--border);
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+  animation: sheet-slide-in-right var(--duration-slow) var(--ease-out);
+}
+
+[data-slot="sheet-content"][data-side="bottom"] {
+  inset: auto 0 0 0;
+  max-height: 85vh;
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  animation: sheet-slide-in-bottom var(--duration-slow) var(--ease-out);
+}
+
+[data-slot="sheet-header"] {
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border);
+}
+
+[data-slot="sheet-title"] {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+[data-slot="sheet-description"] {
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  margin-top: var(--space-1);
+}
+
+[data-slot="sheet-footer"] {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

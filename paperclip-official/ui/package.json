@@ -22,6 +22,7 @@
     "@paperclipai/adapter-opencode-local": "workspace:*",
     "@paperclipai/adapter-pi-local": "workspace:*",
     "@paperclipai/adapter-utils": "workspace:*",
+    "@paperclipai/design-system": "workspace:*",
     "@paperclipai/shared": "workspace:*",
     "@radix-ui/react-slot": "^1.2.4",
     "@tanstack/query-sync-storage-persister": "^5.90.27",

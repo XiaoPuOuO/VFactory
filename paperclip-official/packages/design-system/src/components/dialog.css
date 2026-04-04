@@ -1,0 +1,56 @@
+/* Dialog — backdrop blur + scale enter */
+
+[data-slot="dialog-overlay"] {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  background: oklch(0 0 0 / 0.5);
+  backdrop-filter: blur(4px);
+  animation: backdrop-fade-in var(--duration-normal) var(--ease-out);
+}
+
+[data-slot="dialog-content"] {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: var(--z-dialog);
+  transform: translate(-50%, -50%);
+  max-width: min(32rem, 100vw - 3rem);
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow-xl);
+  padding: var(--space-6);
+  animation: dialog-enter var(--duration-normal) var(--ease-out);
+  transition: max-width var(--duration-normal) var(--ease-out);
+}
+
+[data-slot="dialog-content"][data-state="closed"] {
+  animation: dialog-exit var(--duration-fast) var(--ease-in);
+}
+
+[data-slot="dialog-header"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+[data-slot="dialog-title"] {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+[data-slot="dialog-description"] {
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+}
+
+[data-slot="dialog-footer"] {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}

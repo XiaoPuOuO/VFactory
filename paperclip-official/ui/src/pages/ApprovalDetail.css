@@ -18,7 +18,7 @@
 }
 
 .dark .approval-detail-banner {
-  border-color: color-mix(in oklab, #22c55e 40%, transparent);
+  border-color: color-mix(in oklab, oklch(0.65 0.22 145) 40%, transparent);
   background: color-mix(in oklab, #166534 20%, transparent);
 }
 
@@ -43,17 +43,17 @@
 .approval-detail-banner-icon {
   width: 1rem;
   height: 1rem;
-  color: #16a34a;
+  color: var(--color-success-text);
 }
 
 .dark .approval-detail-banner-icon {
-  color: #4ade80;
+  color: oklch(0.72 0.22 145);
 }
 
 .approval-detail-banner-sparkle {
   width: 0.75rem;
   height: 0.75rem;
-  color: #22c55e;
+  color: oklch(0.65 0.22 145);
   position: absolute;
   right: -0.5rem;
   top: -0.25rem;
@@ -84,8 +84,8 @@
 }
 
 .approval-detail-banner-cta {
-  border-color: #4ade80;
-  color: #166534;
+  border-color: oklch(0.72 0.22 145);
+  color: var(--color-success-text);
 }
 
 .approval-detail-banner-cta:hover:not(:disabled) {
@@ -93,7 +93,7 @@
 }
 
 .dark .approval-detail-banner-cta {
-  border-color: color-mix(in oklab, #22c55e 50%, transparent);
+  border-color: color-mix(in oklab, oklch(0.65 0.22 145) 50%, transparent);
   color: #dcfce7;
 }
 

@@ -1,0 +1,20 @@
+/* Tooltip */
+
+[data-slot="tooltip-content"] {
+  z-index: calc(var(--z-dialog) + 10);
+  border-radius: var(--radius-sm);
+  background: var(--color-neutral-900);
+  color: white;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  box-shadow: var(--shadow-md);
+  animation: popover-enter 100ms var(--ease-out);
+  pointer-events: none;
+  max-width: 20rem;
+}
+
+.dark [data-slot="tooltip-content"] {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-900);
+}

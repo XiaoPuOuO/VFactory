@@ -255,6 +255,8 @@ importers:
         specifier: ^3.0.5
         version: 3.2.4(@types/debug@4.1.12)(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.3)
 
+  packages/design-system: {}
+
   packages/shared:
     dependencies:
       js-yaml:
@@ -451,6 +453,9 @@ importers:
       '@paperclipai/adapter-utils':
         specifier: workspace:*
         version: link:../packages/adapter-utils
+      '@paperclipai/design-system':
+        specifier: workspace:*
+        version: link:../packages/design-system
       '@paperclipai/shared':
         specifier: workspace:*
         version: link:../packages/shared

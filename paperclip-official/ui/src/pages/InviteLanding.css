@@ -89,7 +89,7 @@
 }
 
 .dark .invite-landing-diag-item[data-level="warn"] p:first-child {
-  color: #fbbf24;
+  color: oklch(0.80 0.17 85);
 }
 
 .invite-landing-join-tabs {

@@ -1,0 +1,20 @@
+/* Skeleton — shimmer loading placeholder */
+
+[data-slot="skeleton"] {
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    color-mix(in oklab, var(--muted) 60%, var(--card)) 40%,
+    var(--muted) 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="skeleton"] {
+    animation: none;
+    background: var(--muted);
+  }
+}
