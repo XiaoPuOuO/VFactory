@@ -1,13 +1,29 @@
 {
   "name": "@paperclipai/design-system",
   "version": "0.1.0",
-  "private": true,
-  "description": "Paperclip Design System — Design Tokens + UI Component CSS",
-  "main": "src/index.css",
+  "description": "Paperclip Design System — Design Tokens + UI Component CSS (Vanilla CSS, data-slot contract)",
+  "license": "MIT",
+  "author": "Paperclip AI",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paperclipai/paperclip.git",
+    "directory": "paperclip-official/packages/design-system"
+  },
+  "keywords": ["paperclip", "design-system", "css", "design-tokens", "oklch"],
+  "sideEffects": ["**/*.css"],
+  "main": "./src/index.css",
+  "files": ["src"],
   "exports": {
     ".": "./src/index.css",
     "./tokens": "./src/tokens.css",
-    "./base": "./src/base.css"
+    "./base": "./src/base.css",
+    "./layout": "./src/components/layout.css",
+    "./table": "./src/components/table.css",
+    "./form-field": "./src/components/form-field.css",
+    "./search-field": "./src/components/search-field.css",
+    "./switch": "./src/components/switch.css"
   },
-  "keywords": ["paperclip", "design-system", "css"]
+  "publishConfig": {
+    "access": "public"
+  }
 }

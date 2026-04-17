@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   Bot,
   Code,
+  Cpu,
   Gem,
   MousePointer2,
   Sparkles,
@@ -35,7 +36,8 @@ type AdvancedAdapterType =
   | "opencode_local"
   | "pi_local"
   | "cursor"
-  | "openclaw_gateway";
+  | "openclaw_gateway"
+  | "local_self_hosted_llm";
 
 const ADVANCED_ADAPTER_OPTIONS: Array<{
   value: AdvancedAdapterType;
@@ -73,6 +75,12 @@ const ADVANCED_ADAPTER_OPTIONS: Array<{
     label: "OpenClaw Gateway",
     icon: Bot,
     desc: "Invoke OpenClaw via gateway protocol",
+  },
+  {
+    value: "local_self_hosted_llm",
+    label: "Local Self-Hosted LLM",
+    icon: Cpu,
+    desc: "OpenAI-compatible endpoint (Ollama / LM Studio / vLLM)",
   },
 ];
 
@@ -124,6 +132,8 @@ export function NewAgentDialog() {
         return t("cursor");
       case "openclaw_gateway":
         return t("openclawGateway");
+      case "local_self_hosted_llm":
+        return t("localSelfHostedLlm");
     }
   }
 
@@ -149,6 +159,8 @@ export function NewAgentDialog() {
         return t("localCursorAgent");
       case "openclaw_gateway":
         return t("invokeOpenClawViaGateway");
+      case "local_self_hosted_llm":
+        return t("localSelfHostedLlmAgent");
     }
   }
 

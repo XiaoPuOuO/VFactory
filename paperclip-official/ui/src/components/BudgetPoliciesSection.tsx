@@ -79,7 +79,7 @@ export function BudgetPoliciesSection({ companyId }: { companyId: string }) {
       setLimitCents("");
       setBillingCode("");
       queryClient.invalidateQueries({ queryKey: queryKeys.budgetPolicies(companyId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.costs(companyId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.costsAllRanges(companyId) });
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);

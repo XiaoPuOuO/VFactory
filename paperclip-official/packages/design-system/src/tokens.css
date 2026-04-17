@@ -5,29 +5,29 @@
  */
 
 :root {
-  /* ===== Color: Brand Primary (hue 270 blue-purple) ===== */
-  --color-primary-50:  oklch(0.97  0.015 270);
-  --color-primary-100: oklch(0.93  0.04  270);
-  --color-primary-200: oklch(0.82  0.10  270);
-  --color-primary-300: oklch(0.70  0.18  270);
-  --color-primary-400: oklch(0.65  0.20  270);
-  --color-primary-500: oklch(0.55  0.24  270);
-  --color-primary-600: oklch(0.48  0.23  270);
-  --color-primary-700: oklch(0.45  0.22  270);
-  --color-primary-900: oklch(0.35  0.18  270);
+  /* ===== Color: Brand Primary（藍紫略帶暖調，避免純工具灰冷感） ===== */
+  --color-primary-50:  oklch(0.97  0.018 272);
+  --color-primary-100: oklch(0.93  0.045 272);
+  --color-primary-200: oklch(0.82  0.11 272);
+  --color-primary-300: oklch(0.70  0.19 272);
+  --color-primary-400: oklch(0.65  0.21 272);
+  --color-primary-500: oklch(0.55  0.25 272);
+  --color-primary-600: oklch(0.48  0.24 272);
+  --color-primary-700: oklch(0.45  0.23 272);
+  --color-primary-900: oklch(0.35  0.19 272);
 
-  /* ===== Color: Neutral (hue 270 tinted grays) ===== */
-  --color-neutral-50:  oklch(0.985 0.005 270);
-  --color-neutral-100: oklch(0.96  0.008 270);
-  --color-neutral-200: oklch(0.92  0.010 270);
-  --color-neutral-300: oklch(0.85  0.012 270);
-  --color-neutral-400: oklch(0.70  0.015 270);
-  --color-neutral-500: oklch(0.55  0.015 270);
-  --color-neutral-600: oklch(0.45  0.015 270);
-  --color-neutral-700: oklch(0.40  0.015 270);
-  --color-neutral-800: oklch(0.28  0.015 270);
-  --color-neutral-900: oklch(0.20  0.015 270);
-  --color-neutral-950: oklch(0.145 0.015 270);
+  /* ===== Color: Neutral（與主色同相和，微色偏避免純灰面板） ===== */
+  --color-neutral-50:  oklch(0.985 0.006 275);
+  --color-neutral-100: oklch(0.96  0.009 275);
+  --color-neutral-200: oklch(0.92  0.011 275);
+  --color-neutral-300: oklch(0.85  0.013 275);
+  --color-neutral-400: oklch(0.70  0.016 275);
+  --color-neutral-500: oklch(0.55  0.016 275);
+  --color-neutral-600: oklch(0.45  0.016 275);
+  --color-neutral-700: oklch(0.40  0.016 275);
+  --color-neutral-800: oklch(0.28  0.016 275);
+  --color-neutral-900: oklch(0.20  0.016 275);
+  --color-neutral-950: oklch(0.145 0.016 275);
 
   /* ===== Color: Semantic (soft) ===== */
   --color-success-text:   oklch(0.48 0.15 145);
@@ -62,6 +62,19 @@
   --text-3xl:  1.875rem;
   --text-4xl:  2.25rem;
 
+  /**
+   * Typography roles（HIG：標題／內文／輔助層級；混排中文時至少 body-sm 起跳於密級 UI）
+   */
+  --text-role-display:  var(--text-4xl);
+  --text-role-title-xl: var(--text-3xl);
+  --text-role-title-lg: var(--text-2xl);
+  --text-role-title:    var(--text-xl);
+  --text-role-title-sm: var(--text-lg);
+  --text-role-body:     var(--text-base);
+  --text-role-body-sm:  var(--text-sm);
+  --text-role-caption:  var(--text-xs);
+  --text-role-micro:    var(--text-2xs);
+
   --leading-tight:   1.25;
   --leading-normal:  1.5;
   --leading-relaxed: 1.7;
@@ -94,10 +107,35 @@
   --shadow-lg: 0 10px 15px -3px oklch(0 0 0 / 0.08), 0 4px 6px -4px oklch(0 0 0 / 0.04);
   --shadow-xl: 0 20px 25px -5px oklch(0 0 0 / 0.08), 0 8px 10px -6px oklch(0 0 0 / 0.04);
 
-  /* ===== Z-Index ===== */
+  /* ===== Z-Index（殼層：sticky < 底欄 < drawer 背板 < drawer < dialog） ===== */
+  --z-board-breadcrumb-sticky: 20;
+  --z-board-mobile-nav: 30;
+  --z-drawer-backdrop: 35;
   --z-sidebar: 40;
-  --z-dialog:  50;
-  --z-toast:   2147483647;
+  --z-mobile-drawer: 45;
+  --z-dialog: 50;
+  --z-toast: 2147483647;
+
+  /**
+   * Breakpoints — 供文件與元件共通參考；media query 請使用相同數值（如 46.5rem = 744px）。
+   * sm：大螢手機；md：平板／iPad mini portrait；lg：筆電；xl／2xl：寬螢與電視級。
+   */
+  --breakpoint-sm: 30rem;
+  --breakpoint-md: 46.5rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
+
+  /* ===== Layout（容器、堆疊、網格） ===== */
+  --layout-container-max: 72rem;
+  --layout-container-narrow-max: 42rem;
+  --layout-container-wide-max: min(100%, 96rem);
+  --layout-container-padding-x: var(--space-4);
+  --layout-stack-gap-sm: var(--space-2);
+  --layout-stack-gap-md: var(--space-4);
+  --layout-stack-gap-lg: var(--space-6);
+  --layout-grid-gap: var(--space-4);
+  --layout-split-gap: var(--space-4);
 
   /* ===== Animation ===== */
   --duration-fast:   120ms;

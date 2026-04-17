@@ -489,6 +489,8 @@ Paperclip/
         └── promptTemplate/               ← 選用之版本化提示詞範本（Markdown）
 ```
 
+執行期治理載入順序：Paperclip 會先固定注入 `paperclip-official/AgentSetting`，再將所選 project workspace 自己的 `AgentSetting` 疊加為 add-on。若兩邊定義了同名 skill，則以 project workspace 版本覆蓋。
+
 ---
 
 ## 來源與授權

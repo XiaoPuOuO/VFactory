@@ -18,3 +18,10 @@ export const billingCheckoutSchema = z.object({
 });
 
 export type BillingCheckoutInput = z.infer<typeof billingCheckoutSchema>;
+
+/** 公司帳單頁直接切換方案（不經金流）。 */
+export const billingSwitchPlanSchema = z.object({
+  planSlug: z.string().min(1).max(128),
+});
+
+export type BillingSwitchPlanInput = z.infer<typeof billingSwitchPlanSchema>;

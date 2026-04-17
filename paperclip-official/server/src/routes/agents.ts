@@ -307,6 +307,9 @@ export function agentRoutes(db: Db, storage: StorageService) {
     if (adapterType === "cursor" && !asNonEmptyString(next.model)) {
       next.model = DEFAULT_CURSOR_LOCAL_MODEL;
     }
+    if (adapterType === "local_self_hosted_llm" && !asNonEmptyString(next.baseUrl)) {
+      next.baseUrl = "http://127.0.0.1:11434/v1";
+    }
     return ensureGatewayDeviceKey(adapterType, next);
   }
 
@@ -402,6 +405,36 @@ export function agentRoutes(db: Db, storage: StorageService) {
     adapterType: string | null | undefined,
     adapterConfig: Record<string, unknown>,
   ) {
+    if (adapterType === "local_self_hosted_llm") {
+      const baseUrl = asNonEmptyString(adapterConfig.baseUrl);
+      const model = asNonEmptyString(adapterConfig.model);
+      if (!baseUrl) {
+        throw unprocessable(
+          "Invalid local_self_hosted_llm adapterConfig: baseUrl is required and must be a non-empty string",
+        );
+      }
+      if (!model) {
+        throw unprocessable(
+          "Invalid local_self_hosted_llm adapterConfig: model is required and must be a non-empty string",
+        );
+      }
+      let parsed: URL;
+      try {
+        parsed = new URL(baseUrl);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        throw unprocessable(
+          `Invalid local_self_hosted_llm adapterConfig: baseUrl must be a valid URL (${reason})`,
+        );
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        throw unprocessable(
+          `Invalid local_self_hosted_llm adapterConfig: baseUrl must use http: or https: protocol (received ${parsed.protocol})`,
+        );
+      }
+      return;
+    }
+
     if (adapterType !== "opencode_local") return;
     const { config: runtimeConfig } = await secretsSvc.resolveAdapterConfigForRuntime(companyId, adapterConfig);
     const runtimeEnv = asRecord(runtimeConfig.env) ?? {};
@@ -1417,7 +1450,10 @@ export function agentRoutes(db: Db, storage: StorageService) {
       assertNonAdminApiKeyRequired(requestedAdapterType, normalizedEffectiveAdapterConfig, req);
       patchData.adapterConfig = normalizedEffectiveAdapterConfig;
     }
-    if (touchesAdapterConfiguration && requestedAdapterType === "opencode_local") {
+    if (
+      touchesAdapterConfiguration &&
+      (requestedAdapterType === "opencode_local" || requestedAdapterType === "local_self_hosted_llm")
+    ) {
       const effectiveAdapterConfig = asRecord(patchData.adapterConfig) ?? {};
       await assertAdapterConfigConstraints(
         existing.companyId,

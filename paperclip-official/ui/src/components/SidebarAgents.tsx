@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
@@ -24,6 +24,11 @@ import {
 } from "@/components/ui/popover";
 import { Link } from "@/lib/router";
 import type { Agent } from "@paperclipai/shared";
+import {
+  readStoredTriState,
+  SIDEBAR_AGENTS_OPEN_KEY,
+  writeStoredTriState,
+} from "../lib/navConfig";
 import { Filter } from "lucide-react";
 
 /** 樹節點：由內到外（上層在上，下層在下、縮排）。 */
@@ -139,9 +144,25 @@ function SidebarAgentNode({
   );
 }
 
-export function SidebarAgents() {
+export function SidebarAgents({ pinnedFullNav = false }: { pinnedFullNav?: boolean }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() =>
+    readStoredTriState(SIDEBAR_AGENTS_OPEN_KEY, pinnedFullNav),
+  );
+  const prevPinned = useRef(pinnedFullNav);
+
+  useEffect(() => {
+    if (pinnedFullNav && !prevPinned.current) {
+      setOpen(true);
+      writeStoredTriState(SIDEBAR_AGENTS_OPEN_KEY, true);
+    }
+    prevPinned.current = pinnedFullNav;
+  }, [pinnedFullNav]);
+
+  const handleOpenChange = useCallback((v: boolean) => {
+    setOpen(v);
+    writeStoredTriState(SIDEBAR_AGENTS_OPEN_KEY, v);
+  }, []);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const { selectedCompanyId } = useCompany();
   const { openNewAgent } = useDialog();
@@ -201,7 +222,7 @@ export function SidebarAgents() {
   );
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible open={open} onOpenChange={handleOpenChange}>
       <div className={["board-sidebar-collapsible-group", open && "open"].filter(Boolean).join(" ")}>
         <div className="board-sidebar-collapsible-row">
           <CollapsibleTrigger className="board-sidebar-collapsible-trigger">

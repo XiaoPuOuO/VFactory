@@ -2,7 +2,12 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { companies } from "@paperclipai/db";
-import { billingCheckoutSchema, type BillingCheckoutInput } from "@paperclipai/shared";
+import {
+  billingCheckoutSchema,
+  billingSwitchPlanSchema,
+  type BillingCheckoutInput,
+  type BillingSwitchPlanInput,
+} from "@paperclipai/shared";
 import { billingFacade } from "../billing/facade.js";
 import { loadBillingFactoryConfigFromEnv } from "../billing/factory.js";
 import { validate } from "../middleware/validate.js";
@@ -12,10 +17,21 @@ function publicBaseUrl(): string {
   return (process.env.PAPERCLIP_PUBLIC_URL ?? "").replace(/\/$/, "");
 }
 
+function formatUnknownRouteError(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  if (typeof err === "string") {
+    return err;
+  }
+  return "Request failed";
+}
+
 export function billingRoutes(db: Db) {
   const router = Router();
   const bill = billingFacade(db);
   const cfg = loadBillingFactoryConfigFromEnv();
+  const selfServeDisabledMessage = "Self-serve billing is currently disabled";
 
   router.get("/companies/:companyId/billing/plans", async (req, res) => {
     assertBoard(req);
@@ -42,6 +58,9 @@ export function billingRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     await assertCompanyAccess(req, companyId, db);
     const body = req.body as BillingCheckoutInput;
+
+    res.status(403).json({ error: selfServeDisabledMessage });
+    return;
 
     const base = publicBaseUrl();
     if (!base) {
@@ -79,16 +98,36 @@ export function billingRoutes(db: Db) {
         cancelUrl,
       });
       res.status(200).json(session);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(400).json({ error: message });
+    } catch (err: unknown) {
+      res.status(400).json({ error: formatUnknownRouteError(err) });
     }
   });
+
+  router.post(
+    "/companies/:companyId/billing/switch-plan",
+    validate(billingSwitchPlanSchema),
+    async (req, res) => {
+      assertBoard(req);
+      const companyId = req.params.companyId as string;
+      await assertCompanyAccess(req, companyId, db);
+      const body = req.body as BillingSwitchPlanInput;
+      res.status(403).json({ error: selfServeDisabledMessage });
+      return;
+      try {
+        await bill.switchPlanWithoutPayment(companyId, body.planSlug);
+        res.status(200).json({ ok: true });
+      } catch (err: unknown) {
+        res.status(400).json({ error: formatUnknownRouteError(err) });
+      }
+    },
+  );
 
   router.post("/companies/:companyId/billing/portal", async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
     await assertCompanyAccess(req, companyId, db);
+    res.status(403).json({ error: selfServeDisabledMessage });
+    return;
     const base = publicBaseUrl();
     const [co] = await db
       .select({ issuePrefix: companies.issuePrefix })
@@ -110,9 +149,8 @@ export function billingRoutes(db: Db) {
         return;
       }
       res.json({ url });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(400).json({ error: message });
+    } catch (err: unknown) {
+      res.status(400).json({ error: formatUnknownRouteError(err) });
     }
   });
 

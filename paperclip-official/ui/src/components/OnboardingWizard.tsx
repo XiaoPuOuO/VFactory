@@ -69,6 +69,7 @@ import {
   Terminal,
   Sparkles,
   MousePointer2,
+  Cpu,
   Check,
   Loader2,
   FolderOpen,
@@ -87,6 +88,7 @@ type AdapterType =
   | "opencode_local"
   | "pi_local"
   | "cursor"
+  | "local_self_hosted_llm"
   | "process"
   | "http"
   | "openclaw_gateway";
@@ -128,7 +130,7 @@ export function OnboardingWizard() {
     enabled: Boolean(createdCompanyId) && onboardingOpen,
   });
   const allowedAdapterTypes = allowedAdapterData?.adapterTypes ?? null;
-  const canUseAllAdapters = (allowedAdapterTypes?.length ?? 0) >= 10;
+  const canUseAllAdapters = (allowedAdapterTypes?.length ?? 0) >= 11;
 
   const [step, setStep] = useState<Step>(initialStep);
   const [loading, setLoading] = useState(false);
@@ -164,6 +166,7 @@ export function OnboardingWizard() {
   const [args, setArgs] = useState("");
   const [url, setUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [llmBaseUrl, setLlmBaseUrl] = useState(defaultCreateValues.baseUrl);
   const [adapterEnvResult, setAdapterEnvResult] =
     useState<AdapterEnvironmentTestResult | null>(null);
   const [adapterEnvError, setAdapterEnvError] = useState<string | null>(null);
@@ -283,7 +286,8 @@ export function OnboardingWizard() {
     adapterType === "gemini_local" ||
     adapterType === "gemini_remote" ||
     adapterType === "opencode_local" ||
-    adapterType === "cursor";
+    adapterType === "cursor" ||
+    adapterType === "local_self_hosted_llm";
   const effectiveAdapterCommand =
     command.trim() ||
     (adapterType === "codex_local" || adapterType === "codex_remote"
@@ -300,7 +304,7 @@ export function OnboardingWizard() {
     if (step !== 2) return;
     setAdapterEnvResult(null);
     setAdapterEnvError(null);
-  }, [step, adapterType, cwd, model, command, args, url]);
+  }, [step, adapterType, cwd, model, command, args, url, llmBaseUrl]);
 
   const selectedModel = (adapterModels ?? []).find((m) => m.id === model);
   const hasAnthropicApiKeyOverrideCheck =
@@ -372,6 +376,9 @@ export function OnboardingWizard() {
     setCommand("");
     setArgs("");
     setUrl("");
+    setApiKey("");
+    setLlmBaseUrl(defaultCreateValues.baseUrl);
+    setShowMoreAdapters(false);
     setAdapterEnvResult(null);
     setAdapterEnvError(null);
     setAdapterEnvLoading(false);
@@ -393,8 +400,19 @@ export function OnboardingWizard() {
 
   function buildAdapterConfig(apiKeySecretRef?: { keyName: string; secretId: string } | null): Record<string, unknown> {
     const adapter = getUIAdapter(adapterType);
+    const localSelfHostedOverrides =
+      adapterType === "local_self_hosted_llm"
+        ? {
+            baseUrl: llmBaseUrl.trim() || defaultCreateValues.baseUrl,
+            envBindings:
+              apiKey.trim().length > 0
+                ? { ...defaultCreateValues.envBindings, apiKey: apiKey.trim() }
+                : defaultCreateValues.envBindings,
+          }
+        : {};
     const config = adapter.buildAdapterConfig({
       ...defaultCreateValues,
+      ...localSelfHostedOverrides,
       adapterType,
       cwd,
       model:
@@ -597,7 +615,9 @@ export function OnboardingWizard() {
   const apiKeyValidationError = requiresApiKey
     ? (apiKey.trim() ? validateApiKeyFormat(adapterType, apiKey) : "API Key is required.")
     : null;
-  const canProceedStep2 = !requiresApiKey || (apiKey.trim() !== "" && !apiKeyValidationError);
+  const canProceedStep2 =
+    (!requiresApiKey || (apiKey.trim() !== "" && !apiKeyValidationError)) &&
+    (adapterType !== "local_self_hosted_llm" || Boolean(model.trim()));
 
   async function handleStep2Next() {
     if (!createdCompanyId) return;
@@ -639,6 +659,13 @@ export function OnboardingWizard() {
               throw createErr;
             }
           }
+        }
+      }
+
+      if (adapterType === "local_self_hosted_llm") {
+        if (!model.trim()) {
+          setError(t("onboarding:localSelfHostedModelRequired"));
+          return;
         }
       }
 
@@ -1075,6 +1102,12 @@ export function OnboardingWizard() {
                               { value: "opencode_local" as const, labelKey: "openCode" as const, descKey: "localMultiProviderAgent" as const, icon: OpenCodeLogoIcon },
                               { value: "pi_local" as const, labelKey: "pi" as const, descKey: "localPiAgent" as const, icon: Terminal },
                               { value: "cursor" as const, labelKey: "cursor" as const, descKey: "localCursorAgent" as const, icon: MousePointer2 },
+                              {
+                                value: "local_self_hosted_llm" as const,
+                                labelKey: "localSelfHostedLlm" as const,
+                                descKey: "localSelfHostedLlmAgent" as const,
+                                icon: Cpu,
+                              },
                               { value: "openclaw_gateway" as const, labelKey: "openclawGateway" as const, descKey: "invokeOpenClawViaGateway" as const, icon: Bot, comingSoon: true, disabledLabelKey: "configureOpenClawInApp" as const },
                             ].map((opt) => {
                               const isActive = adapterType === opt.value;
@@ -1093,6 +1126,10 @@ export function OnboardingWizard() {
                                     setAdapterType(opt.value as AdapterType);
                                     if (opt.value === "cursor" && !model) setModel(DEFAULT_CURSOR_LOCAL_MODEL);
                                     else if (opt.value === "opencode_local") { if (!model.includes("/")) setModel(""); }
+                                    else if (opt.value === "local_self_hosted_llm") {
+                                      setModel("");
+                                      setLlmBaseUrl((u) => (u.trim() ? u : defaultCreateValues.baseUrl));
+                                    }
                                     else if (opt.value !== "cursor") setModel("");
                                   }}
                                 >
@@ -1222,8 +1259,23 @@ export function OnboardingWizard() {
                     adapterType === "gemini_remote" ||
                     adapterType === "opencode_local" ||
                     adapterType === "pi_local" ||
-                    adapterType === "cursor") && (
+                    adapterType === "cursor" ||
+                    adapterType === "local_self_hosted_llm") && (
                     <div className="onboarding-wizard-space-y-3">
+                      {adapterType === "local_self_hosted_llm" && (
+                        <div>
+                          <label className="onboarding-wizard-label-block">
+                            {t("onboarding:localSelfHostedBaseUrl")}
+                          </label>
+                          <input
+                            className="onboarding-wizard-input onboarding-wizard-input-mono"
+                            placeholder={t("onboarding:localSelfHostedBaseUrlPlaceholder")}
+                            value={llmBaseUrl}
+                            onChange={(e) => setLlmBaseUrl(e.target.value)}
+                            autoComplete="off"
+                          />
+                        </div>
+                      )}
                       {canSetWorkingDirectory && (
                         <div>
                           <div className="onboarding-wizard-cwd-label-row">
@@ -1245,9 +1297,16 @@ export function OnboardingWizard() {
                         </div>
                       )}
                       <div>
-                        <label className="onboarding-wizard-label-block">
-                          {t("onboarding:model")}
-                        </label>
+                        <div className="onboarding-wizard-cwd-label-row">
+                          <label className="onboarding-wizard-label-block" style={{ marginBottom: 0 }}>
+                            {adapterType === "local_self_hosted_llm"
+                              ? t("onboarding:localSelfHostedModel")
+                              : t("onboarding:model")}
+                          </label>
+                          {adapterType === "local_self_hosted_llm" ? (
+                            <HintIcon text={t("onboarding:localSelfHostedModelHint")} />
+                          ) : null}
+                        </div>
                         <Popover
                           open={modelOpen}
                           onOpenChange={(next) => {
@@ -1324,9 +1383,28 @@ export function OnboardingWizard() {
                                 {t("onboarding:noModelsDiscovered")}
                               </p>
                             )}
-                          </PopoverContent>
+                            </PopoverContent>
                         </Popover>
                       </div>
+                      {adapterType === "local_self_hosted_llm" && (
+                        <div>
+                          <div className="onboarding-wizard-cwd-label-row">
+                            <label className="onboarding-wizard-label-block" htmlFor="onboarding-local-llm-api-key">
+                              {t("onboarding:localSelfHostedApiKey")}
+                            </label>
+                            <HintIcon text={t("onboarding:localSelfHostedApiKeyHint")} />
+                          </div>
+                          <input
+                            id="onboarding-local-llm-api-key"
+                            type="password"
+                            autoComplete="off"
+                            className="onboarding-wizard-input onboarding-wizard-api-key-input"
+                            placeholder={t("common:optional")}
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1388,7 +1466,9 @@ export function OnboardingWizard() {
                         <div className="onboarding-wizard-env-debug">
                           <p className="onboarding-wizard-font-medium">{t("onboarding:manualDebug")}</p>
                           <p className="onboarding-wizard-env-debug mono">
-                            {adapterType === "cursor"
+                            {adapterType === "local_self_hosted_llm"
+                              ? `curl -sS "${(llmBaseUrl.trim() || defaultCreateValues.baseUrl).replace(/\/$/, "")}/models"`
+                              : adapterType === "cursor"
                               ? `${effectiveAdapterCommand} -p --mode ask --output-format json \"Respond with hello.\"`
                               : adapterType === "codex_local"
                               ? `${effectiveAdapterCommand} exec --json -`
@@ -1399,9 +1479,11 @@ export function OnboardingWizard() {
                               : `${effectiveAdapterCommand} --print - --output-format stream-json --verbose`}
                           </p>
                           <p className="onboarding-wizard-muted">
-                            {t("onboarding:promptRespondHello")}
+                            {adapterType === "local_self_hosted_llm"
+                              ? t("onboarding:localSelfHostedEnvFailHint")
+                              : t("onboarding:promptRespondHello")}
                           </p>
-                          {adapterType === "cursor" ||
+                          {adapterType === "local_self_hosted_llm" ? null : adapterType === "cursor" ||
                           adapterType === "codex_local" ||
                           adapterType === "codex_remote" ||
                           adapterType === "gemini_local" ||

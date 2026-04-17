@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "@/lib/router";
+import { Link, useNavigate, useParams } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { goalsApi } from "../api/goals";
 import { projectsApi } from "../api/projects";
@@ -20,10 +20,24 @@ import { formatCents, formatTokens, projectUrl } from "../lib/utils";
 import { Button } from "@/components/ui/button";
 import "./GoalDetail.css";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus } from "lucide-react";
+import { MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { ISSUE_STATUSES, type Goal, type GoalProgressIssueStatusCounts } from "@paperclipai/shared";
 import { ApiError } from "../api/client";
 import { useToast } from "../context/ToastContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 function issueStatusSummaryLine(
   counts: GoalProgressIssueStatusCounts,
@@ -41,6 +55,7 @@ export function GoalDetail() {
   const { t } = useTranslation(["goals", "project"]);
   const { t: tStatus } = useTranslation("status");
   const { goalId } = useParams<{ goalId: string }>();
+  const navigate = useNavigate();
   const { selectedCompanyId, setSelectedCompanyId } = useCompany();
   const { openNewGoal } = useDialog();
   const { openPanel, closePanel } = usePanel();
@@ -48,6 +63,7 @@ export function GoalDetail() {
   const queryClient = useQueryClient();
   const [costPreset, setCostPreset] = useState<"mtd" | "all">("mtd");
   const { pushToast } = useToast();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const {
     data: goal,
@@ -134,6 +150,28 @@ export function GoalDetail() {
     },
   });
 
+  const deleteGoal = useMutation({
+    mutationFn: () => goalsApi.remove(goalId!),
+    onSuccess: (deleted) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.goals.list(deleted.companyId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.goals.detail(deleted.id) });
+      queryClient.invalidateQueries({ queryKey: ["goals", "progress", deleted.id] });
+      pushToast({
+        title: t("deletedToastTitle"),
+        body: t("deletedToastBody", { title: deleted.title }),
+        tone: "success",
+      });
+      navigate("/goals");
+    },
+    onError: (err) => {
+      pushToast({
+        title: t("deleteFailedToastTitle"),
+        body: err instanceof Error ? err.message : String(err),
+        tone: "error",
+      });
+    },
+  });
+
   const uploadImage = useMutation({
     mutationFn: async (file: File) => {
       if (!resolvedCompanyId) throw new Error("No company selected");
@@ -182,6 +220,32 @@ export function GoalDetail() {
         <div className="goal-detail-meta-row">
           <span className="goal-detail-level">{goal.level}</span>
           {displayGoalStatus ? <StatusBadge status={displayGoalStatus} /> : null}
+          <div className="goal-detail-meta-actions">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t("moreActionsAria", { title: goal.title })}
+                >
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="goal-detail-menu-icon" />
+                  {t("deleteGoal")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <InlineEditor
@@ -351,6 +415,28 @@ export function GoalDetail() {
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="goal-delete-dialog" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{t("deleteConfirmTitle")}</DialogTitle>
+            <DialogDescription>{t("deleteConfirmBody", { title: goal.title })}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="goal-delete-dialog-footer">
+            <Button type="button" variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deleteGoal.isPending}>
+              {t("deleteCancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteGoal.isPending}
+              onClick={() => deleteGoal.mutate()}
+            >
+              {deleteGoal.isPending ? t("deleting") : t("deleteConfirmAction")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -49,6 +49,8 @@ export const help: Record<string, string> = {
   bootstrapPrompt: "Optional prompt prepended on the first run to bootstrap the agent's environment or habits.",
   payloadTemplateJson: "Optional JSON merged into remote adapter request payloads before VFactory adds its standard wake and workspace fields.",
   webhookUrl: "The URL that receives POST requests when the agent is invoked.",
+  baseUrl:
+    "OpenAI-compatible endpoint base for a self-hosted local model, e.g. http://127.0.0.1:11434/v1",
   heartbeatInterval: "Run this agent automatically on a timer. Useful for periodic tasks like checking for new work.",
   intervalSec: "Seconds between automatic heartbeat invocations.",
   timeoutSec: "Maximum seconds a run can take before being terminated. 0 means no timeout.",
@@ -71,6 +73,7 @@ export const adapterLabels: Record<string, string> = {
   cursor: "Cursor (local)",
   process: "Process",
   http: "HTTP",
+  local_self_hosted_llm: "Local Self-Hosted LLM",
 };
 
 export const roleLabels = AGENT_ROLE_LABELS as Record<string, string>;

@@ -1,4 +1,9 @@
-import type { BillingCheckoutInput, CompanyBillingStatus, PlanSummary } from "@paperclipai/shared";
+import type {
+  BillingCheckoutInput,
+  BillingSwitchPlanInput,
+  CompanyBillingStatus,
+  PlanSummary,
+} from "@paperclipai/shared";
 import { api } from "./client";
 
 export type CheckoutSessionResponse =
@@ -12,6 +17,8 @@ export const billingApi = {
     api.get<CompanyBillingStatus>(`/companies/${companyId}/billing`),
   checkout: (companyId: string, body: BillingCheckoutInput) =>
     api.post<CheckoutSessionResponse>(`/companies/${companyId}/billing/checkout`, body),
+  switchPlan: (companyId: string, body: BillingSwitchPlanInput) =>
+    api.post<{ ok: boolean }>(`/companies/${companyId}/billing/switch-plan`, body),
   portal: (companyId: string, returnUrl?: string) =>
     api.post<{ url: string }>(`/companies/${companyId}/billing/portal`, returnUrl ? { returnUrl } : {}),
 };

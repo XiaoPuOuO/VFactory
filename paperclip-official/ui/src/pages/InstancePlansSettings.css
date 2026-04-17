@@ -2,7 +2,7 @@
  * InstancePlansSettings — 方案管理 (Apple HIG Premium Aesthetic + Grid Layout)
  */
 .instance-plans-page {
-  max-width: 64rem;
+  max-width: var(--layout-container-max);
   margin: 0 auto;
   display: flex;
   flex-direction: column;

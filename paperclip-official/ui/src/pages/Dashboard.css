@@ -8,93 +8,87 @@
 .dashboard-page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-}
-
-.dashboard-error {
-  font-size: 0.875rem;
-  color: var(--destructive);
+  gap: var(--layout-stack-gap-lg);
 }
 
 /* ---------------------------------------------------------------------------
-   警示橫幅（無 Agent 時）
+   頁首（標題 + 輔助說明）
    --------------------------------------------------------------------------- */
-.dashboard-alert {
+.dashboard-page-header {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.dashboard-page-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: var(--leading-tight);
+  color: var(--foreground);
+}
+
+.dashboard-page-subtitle {
+  margin: 0;
+  max-width: 42rem;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--muted-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+   主欄 + 側欄（XL：Live agents sticky；窄螢：側欄在主欄下方）
+   --------------------------------------------------------------------------- */
+.dashboard-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-stack-gap-lg);
+  min-width: 0;
+}
+
+@media (min-width: 80rem) {
+  .dashboard-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+    align-items: start;
+    gap: var(--layout-grid-gap);
+  }
+}
+
+.dashboard-layout-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-stack-gap-lg);
+  min-width: 0;
+}
+
+.dashboard-layout-aside {
+  min-width: 0;
+}
+
+@media (min-width: 80rem) {
+  .dashboard-layout-aside {
+    position: sticky;
+    top: var(--space-2);
+    max-height: min(85dvh, calc(100dvh - 6rem));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* 無 Agent 橫幅：inline-alert + Button 橫向排列 */
+.dashboard-inline-alert-row {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--color-warning-border);
-  background: var(--color-warning-bg);
+  gap: var(--space-3);
 }
 
-.dark .dashboard-alert {
-  border-color: color-mix(in oklab, var(--color-warning-border) 40%, transparent);
-  background: color-mix(in oklab, oklch(0.15 0.06 75) 60%, transparent);
-}
-
-.dashboard-alert-inner {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-}
-
-.dashboard-alert-icon {
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-  color: var(--color-warning-text);
-}
-
-.dark .dashboard-alert-icon {
-  color: oklch(0.80 0.15 85);
-}
-
-.dashboard-alert-text {
-  font-size: 0.875rem;
-  color: oklch(0.38 0.10 60);
-}
-
-.dark .dashboard-alert-text {
-  color: oklch(0.96 0.04 85);
-}
-
-.dashboard-alert-action {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: oklch(0.50 0.13 65);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  flex-shrink: 0;
-}
-
-.dashboard-alert-action:hover {
-  color: oklch(0.38 0.10 60);
-}
-
-.dark .dashboard-alert-action {
-  color: oklch(0.85 0.15 85);
-}
-
-.dark .dashboard-alert-action:hover {
-  color: oklch(0.96 0.04 85);
-}
-
-/* ---------------------------------------------------------------------------
-   區塊標題（Recent Activity、Recent Tasks、Agents）
-   --------------------------------------------------------------------------- */
-.dashboard-section-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--muted-foreground);
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-  margin-bottom: 0.75rem;
+.dashboard-inline-alert-row [data-slot="inline-alert"] {
+  flex: 1 1 min(100%, 18rem);
+  min-width: 0;
 }
 
 /* ---------------------------------------------------------------------------
@@ -103,114 +97,13 @@
 .dashboard-metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.25rem;
+  gap: var(--layout-grid-gap);
 }
 
-@media (min-width: 640px) {
-  .dashboard-metrics-grid {
-    gap: 0.5rem;
-  }
-}
-
-@media (min-width: 1280px) {
+@media (min-width: 80rem) {
   .dashboard-metrics-grid {
     grid-template-columns: repeat(4, 1fr);
   }
-}
-
-/* 指標卡（MetricCard） */
-.dashboard-metric-card {
-  height: 100%;
-  text-decoration: none;
-  color: inherit;
-}
-
-.dashboard-metric-card-inner {
-  height: 100%;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  transition: background-color 0.15s;
-}
-
-@media (min-width: 640px) {
-  .dashboard-metric-card-inner {
-    padding: 1.25rem;
-  }
-}
-
-.dashboard-metric-card.clickable .dashboard-metric-card-inner:hover {
-  background: color-mix(in oklab, var(--accent) 50%, transparent);
-  cursor: pointer;
-}
-
-.dashboard-metric-card-body {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.dashboard-metric-card-content {
-  flex: 1 1 0%;
-  min-width: 0;
-}
-
-.dashboard-metric-card-value {
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  font-variant-numeric: tabular-nums;
-}
-
-@media (min-width: 640px) {
-  .dashboard-metric-card-value {
-    font-size: 1.875rem;
-  }
-}
-
-.dashboard-metric-card-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--muted-foreground);
-  margin-top: 0.25rem;
-}
-
-@media (min-width: 640px) {
-  .dashboard-metric-card-label {
-    font-size: 0.875rem;
-  }
-}
-
-.dashboard-metric-card-desc {
-  font-size: 0.75rem;
-  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
-  margin-top: 0.375rem;
-}
-
-.dashboard-metric-card-desc-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.dashboard-governance-hint {
-  font-size: 0.6875rem;
-  line-height: 1.35;
-  color: color-mix(in oklab, var(--foreground) 78%, transparent);
-}
-
-@media (max-width: 639px) {
-  .dashboard-metric-card-desc {
-    display: none;
-  }
-}
-
-.dashboard-metric-card-icon {
-  width: 1rem;
-  height: 1rem;
-  color: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
-  flex-shrink: 0;
-  margin-top: 0.375rem;
 }
 
 /* ---------------------------------------------------------------------------
@@ -219,20 +112,20 @@
 .dashboard-charts-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+  gap: var(--layout-grid-gap);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 64rem) {
   .dashboard-charts-grid {
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
 .dashboard-trends-grid {
-  margin-top: 0.75rem;
+  margin-top: 0;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 64rem) {
   .dashboard-trends-grid {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -256,19 +149,22 @@
 }
 
 .dashboard-chart-card-title {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--foreground);
 }
 
 .dashboard-chart-card-subtitle {
-  font-size: 10px;
-  color: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: color-mix(in oklab, var(--muted-foreground) 75%, transparent);
 }
 
 .dashboard-chart-card-right {
-  font-size: 10px;
-  color: color-mix(in oklab, var(--muted-foreground) 80%, transparent);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: color-mix(in oklab, var(--muted-foreground) 85%, transparent);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -286,7 +182,8 @@
 }
 
 .dashboard-chart-date-label {
-  font-size: 9px;
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
@@ -303,7 +200,8 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 9px;
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
   color: var(--muted-foreground);
 }
 
@@ -348,11 +246,11 @@
    --------------------------------------------------------------------------- */
 .dashboard-two-col {
   display: grid;
-  gap: 1rem;
+  gap: var(--layout-grid-gap);
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 46.5rem) {
   .dashboard-two-col {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -411,7 +309,7 @@
   gap: 0.5rem;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 30rem) {
   .dashboard-issue-link-inner {
     align-items: center;
     gap: 0.75rem;
@@ -422,7 +320,7 @@
   flex-shrink: 0;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 30rem) {
   .dashboard-issue-link-status-mobile {
     display: none;
   }
@@ -436,7 +334,7 @@
   gap: 0.25rem;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 30rem) {
   .dashboard-issue-link-content {
     flex-direction: row;
     flex-wrap: wrap;
@@ -452,7 +350,7 @@
   font-size: 0.875rem;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 30rem) {
   .dashboard-issue-link-title {
     order: 2;
     flex: 1 1 0%;
@@ -471,7 +369,7 @@
   flex-wrap: wrap;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 30rem) {
   .dashboard-issue-link-meta {
     order: 1;
     flex-shrink: 0;
@@ -482,7 +380,7 @@
   display: none;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 30rem) {
   .dashboard-issue-link-meta-icon {
     display: inline-flex;
   }
@@ -499,7 +397,7 @@
   color: var(--muted-foreground);
 }
 
-@media (min-width: 640px) {
+@media (min-width: 30rem) {
   .dashboard-issue-link-dot-mobile {
     display: none;
   }
@@ -511,7 +409,7 @@
   flex-shrink: 0;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 30rem) {
   .dashboard-issue-link-time {
     order: 999;
   }
@@ -577,7 +475,67 @@
 .dashboard-skeleton-page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--layout-stack-gap-lg);
+}
+
+.dashboard-skeleton-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dashboard-skeleton-header-title {
+  height: 1.75rem;
+  max-width: 12rem;
+  width: 100%;
+}
+
+.dashboard-skeleton-header-sub {
+  height: 0.875rem;
+  max-width: 24rem;
+  width: 100%;
+}
+
+.dashboard-skeleton-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-stack-gap-lg);
+  min-width: 0;
+}
+
+@media (min-width: 80rem) {
+  .dashboard-skeleton-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+    align-items: start;
+    gap: var(--layout-grid-gap);
+  }
+}
+
+.dashboard-skeleton-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-stack-gap-lg);
+  min-width: 0;
+}
+
+.dashboard-skeleton-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+@media (min-width: 80rem) {
+  .dashboard-skeleton-aside {
+    position: sticky;
+    top: var(--space-2);
+  }
+}
+
+.dashboard-skeleton-aside-card {
+  height: 12rem;
+  width: 100%;
 }
 
 .dashboard-skeleton-page [data-slot="skeleton"] {
@@ -596,10 +554,10 @@
 .dashboard-skeleton-metrics {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.5rem;
+  gap: var(--layout-grid-gap);
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 80rem) {
   .dashboard-skeleton-metrics {
     grid-template-columns: repeat(4, 1fr);
   }
@@ -613,10 +571,10 @@
 .dashboard-skeleton-charts {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+  gap: var(--layout-grid-gap);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 64rem) {
   .dashboard-skeleton-charts {
     grid-template-columns: repeat(4, 1fr);
   }
@@ -629,11 +587,11 @@
 
 .dashboard-skeleton-two-col {
   display: grid;
-  gap: 1rem;
+  gap: var(--layout-grid-gap);
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 46.5rem) {
   .dashboard-skeleton-two-col {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -645,17 +603,8 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Active Agents Panel
+   Active Agents Panel（標題由 PageSection / page-section-title）
    --------------------------------------------------------------------------- */
-.dashboard-agents-panel h3 {
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-  color: var(--muted-foreground);
-}
-
 .dashboard-agents-panel-empty {
   border-radius: 0.75rem;
   border: 1px solid var(--border);
@@ -673,16 +622,34 @@
   gap: 0.5rem;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 30rem) {
   .dashboard-agents-panel-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
+    gap: var(--layout-grid-gap);
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 80rem) {
   .dashboard-agents-panel-grid {
     grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* 主版面側欄內固定單欄，避免 22rem 寬仍套用 4 欄網格 */
+.dashboard-layout-aside .dashboard-agents-panel-grid {
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+@media (min-width: 30rem) {
+  .dashboard-layout-aside .dashboard-agents-panel-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 80rem) {
+  .dashboard-layout-aside .dashboard-agents-panel-grid {
+    grid-template-columns: 1fr;
   }
 }
 

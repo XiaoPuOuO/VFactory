@@ -312,7 +312,10 @@ export function accessService(db: Db) {
     return false;
   }
 
-  /** 回傳該使用者在該公司內可使用的 adapter 類型（依 model.* 權限）。 */
+  /**
+   * 回傳該使用者在該公司內可使用的 adapter 類型（依 `ADAPTER_TYPE_TO_MODEL_PERMISSION` 的 model.* 權限）。
+   * 例如 `local_self_hosted_llm` 對應 `model.local_self_hosted_llm`；具備該 grant、公司 owner/admin 默認範圍、或 instance `*` 時會列入。
+   */
   async function getAllowedAdapterTypes(
     companyId: string,
     userId: string | null | undefined,

@@ -16,27 +16,7 @@
     <!-- PAPERCLIP_FAVICON_END -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <script>
-      (() => {
-        const key = "paperclip.theme";
-        const darkThemeColor = "#18181b";
-        const lightThemeColor = "#ffffff";
-        try {
-          const stored = window.localStorage.getItem(key);
-          const theme = stored === "light" || stored === "dark" ? stored : "dark";
-          const isDark = theme === "dark";
-          document.documentElement.classList.toggle("dark", isDark);
-          document.documentElement.style.colorScheme = isDark ? "dark" : "light";
-          const themeColorMeta = document.querySelector('meta[name="theme-color"]');
-          if (themeColorMeta) {
-            themeColorMeta.setAttribute("content", isDark ? darkThemeColor : lightThemeColor);
-          }
-        } catch {
-          document.documentElement.classList.add("dark");
-          document.documentElement.style.colorScheme = "dark";
-        }
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

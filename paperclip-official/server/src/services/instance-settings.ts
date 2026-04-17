@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { instanceSettings } from "@paperclipai/db";
 import {
+  INSTANCE_SETTING_KEY_BILLING_IGNORE_PLAN_USAGE_CAPS,
   INSTANCE_SETTING_KEY_COMPLIANCE_DEFAULT_RETENTION_DAYS,
   INSTANCE_SETTING_KEY_DEFAULT_COMPANY_PATH,
 } from "@paperclipai/shared";
@@ -82,10 +83,46 @@ export function instanceSettingsService(db: Db) {
     return Math.trunc(value);
   }
 
+  /** 為 true 時：resolveCompanyEffectiveLimits 不採用方案之 tokenLimit／priceLimitCents。 */
+  async function getBillingIgnorePlanUsageCaps(): Promise<boolean> {
+    const row = await db
+      .select({ value: instanceSettings.value })
+      .from(instanceSettings)
+      .where(eq(instanceSettings.key, INSTANCE_SETTING_KEY_BILLING_IGNORE_PLAN_USAGE_CAPS))
+      .then((rows) => rows[0] ?? null);
+    const v = row?.value?.trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  }
+
+  async function setBillingIgnorePlanUsageCaps(enabled: boolean): Promise<boolean> {
+    const now = new Date();
+    if (!enabled) {
+      await db
+        .delete(instanceSettings)
+        .where(eq(instanceSettings.key, INSTANCE_SETTING_KEY_BILLING_IGNORE_PLAN_USAGE_CAPS));
+      return false;
+    }
+    await db
+      .insert(instanceSettings)
+      .values({
+        key: INSTANCE_SETTING_KEY_BILLING_IGNORE_PLAN_USAGE_CAPS,
+        value: "1",
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [instanceSettings.key],
+        set: { value: "1", updatedAt: now },
+      });
+    return true;
+  }
+
   return {
     getDefaultCompanyPath,
     setDefaultCompanyPath,
     getComplianceDefaultRetentionDays,
     setComplianceDefaultRetentionDays,
+    getBillingIgnorePlanUsageCaps,
+    setBillingIgnorePlanUsageCaps,
   };
 }

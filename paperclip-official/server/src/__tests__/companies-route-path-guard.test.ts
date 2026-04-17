@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import { companyRoutes } from "../routes/companies.js";
 
 vi.mock("../services/index.js", () => ({
+  costService: () => ({
+    invalidateBillingRelatedCaches: vi.fn(),
+  }),
   companyService: () => ({
     list: vi.fn(),
     stats: vi.fn(),

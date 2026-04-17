@@ -1,0 +1,12 @@
+/**
+ * PageSection — 頁內區塊標題 + 內容堆疊（對齊 design-system 權杖）
+ */
+
+.page-section-title {
+  font-size: var(--text-role-caption);
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  margin: 0;
+}

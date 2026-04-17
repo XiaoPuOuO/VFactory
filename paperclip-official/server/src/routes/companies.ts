@@ -1,8 +1,9 @@
 import { Router } from "express";
+import { coerceZeroCompanyLimitsToNull } from "../lib/company-limit-fields.js";
 import path from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companies, companyMemberships, tenantMemberships } from "@paperclipai/db";
+import { companies, companyMemberships, companySubscriptions, tenantMemberships } from "@paperclipai/db";
 import {
   companyPortabilityExportSchema,
   companyPortabilityImportSchema,
@@ -12,9 +13,11 @@ import {
   DEFAULT_OWNER_GRANTS,
   importPoliciesFromCompanySchema,
   updateAutomationRuleSchema,
+  updateCompanyManualSubscriptionSchema,
   updateCompanySchema,
   upsertCompanyHireApprovalPolicySchema,
 } from "@paperclipai/shared";
+import { findPlanById, upsertCompanySubscription } from "../billing/subscription-store.js";
 import { forbidden } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import {
@@ -23,6 +26,7 @@ import {
   companyApprovalPolicyService,
   companyPortabilityService,
   companyService,
+  costService,
   governanceService,
   logActivity,
 } from "../services/index.js";
@@ -33,6 +37,7 @@ import { assertCompanyPermission } from "./company-permission.js";
 export function companyRoutes(db: Db) {
   const router = Router();
   const svc = companyService(db);
+  const costs = costService(db);
   const portability = companyPortabilityService(db);
   const access = accessService(db);
   const governance = governanceService(db);
@@ -254,6 +259,97 @@ export function companyRoutes(db: Db) {
     },
   );
 
+  /**
+   * 此站管理員手動指定公司方案與有效期限（含永久）。
+   * payment_provider=manual；current_period_end=null 表示永久。
+   */
+  router.patch(
+    "/:companyId/manual-subscription",
+    validate(updateCompanyManualSubscriptionSchema),
+    async (req, res) => {
+      assertBoard(req);
+      assertInstanceSetting(req);
+      const companyId = req.params.companyId as string;
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        res.status(400).json({ error: "Tenant context required" });
+        return;
+      }
+      const company = await svc.getById(companyId);
+      if (!company || company.tenantId !== tenantId) {
+        res.status(404).json({ error: "Company not found" });
+        return;
+      }
+      const rawEnd = req.body.currentPeriodEnd as string | null;
+      let periodEnd: Date | null = null;
+      if (rawEnd !== null) {
+        const d = new Date(rawEnd);
+        if (Number.isNaN(d.getTime())) {
+          res.status(400).json({ error: "Invalid currentPeriodEnd" });
+          return;
+        }
+        periodEnd = d;
+      }
+      const plan = await findPlanById(db, req.body.planId as string);
+      if (!plan?.active) {
+        res.status(400).json({ error: "Invalid or inactive plan" });
+        return;
+      }
+      const existingSub = await db
+        .select({ paymentProvider: companySubscriptions.paymentProvider })
+        .from(companySubscriptions)
+        .where(eq(companySubscriptions.companyId, companyId))
+        .then((rows) => rows[0] ?? null);
+      if (existingSub && existingSub.paymentProvider !== "manual") {
+        res.status(409).json({
+          error:
+            "此公司已有金流訂閱紀錄（Stripe／綠界），請勿以手動方案覆寫。請使用帳單／客服流程處理，或於資料庫排除該訂閱列後再試。",
+          code: "BILLING_SUBSCRIPTION_CONFLICT",
+        });
+        return;
+      }
+      await upsertCompanySubscription(db, {
+        companyId,
+        planId: plan.id,
+        paymentProvider: "manual",
+        status: "active",
+        externalCustomerId: null,
+        externalSubscriptionId: null,
+        currentPeriodEnd: periodEnd,
+        metadata: {
+          assignedVia: "instance_company_management",
+          updatedAt: new Date().toISOString(),
+          updatedByUserId: req.actor.userId ?? null,
+        },
+      });
+      await costs.invalidateBillingRelatedCaches(companyId);
+      await logActivity(db, {
+        companyId,
+        actorType: "user",
+        actorId: req.actor.userId ?? "board",
+        action: "company.manual_subscription_updated",
+        entityType: "company",
+        entityId: companyId,
+        details: {
+          planId: plan.id,
+          planSlug: plan.slug,
+          currentPeriodEnd: periodEnd?.toISOString() ?? null,
+        },
+      });
+      res.json({
+        ok: true,
+        subscription: {
+          planId: plan.id,
+          planSlug: plan.slug,
+          planName: plan.name,
+          currentPeriodEnd: periodEnd?.toISOString() ?? null,
+          paymentProvider: "manual",
+          status: "active",
+        },
+      });
+    },
+  );
+
   router.get("/:companyId", async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;
@@ -396,10 +492,16 @@ export function companyRoutes(db: Db) {
             return rest;
           })()
         : body;
-    const company = await svc.update(companyId, patchData);
+    const company = await svc.update(companyId, coerceZeroCompanyLimitsToNull(patchData as Record<string, unknown>));
     if (!company) {
       res.status(404).json({ error: "Company not found" });
       return;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(body, "tokenLimit") ||
+      Object.prototype.hasOwnProperty.call(body, "priceLimitCents")
+    ) {
+      await costs.invalidateBillingRelatedCaches(companyId);
     }
     await logActivity(db, {
       companyId,

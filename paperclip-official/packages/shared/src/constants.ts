@@ -61,6 +61,7 @@ export const AGENT_ADAPTER_TYPES = [
   "pi_local",
   "cursor",
   "openclaw_gateway",
+  "local_self_hosted_llm",
 ] as const;
 export type AgentAdapterType = (typeof AGENT_ADAPTER_TYPES)[number];
 
@@ -309,6 +310,13 @@ export const INSTANCE_SETTING_KEY_DEFAULT_COMPANY_PATH = "default_company_path";
 export const INSTANCE_SETTING_KEY_COMPLIANCE_DEFAULT_RETENTION_DAYS =
   "compliance_default_retention_days";
 
+/**
+ * 為 "1" / "true" / "yes"（不分大小寫）時：合併有效上限時忽略方案 entitlements 的 tokenLimit／priceLimitCents，
+ * 僅保留公司覆寫；無覆寫則不套用方案配額（自建／BYOK 常用）。
+ */
+export const INSTANCE_SETTING_KEY_BILLING_IGNORE_PLAN_USAGE_CAPS =
+  "billing_ignore_plan_usage_caps";
+
 export const INSTANCE_USER_ROLES = ["instance_admin"] as const;
 export type InstanceUserRole = (typeof INSTANCE_USER_ROLES)[number];
 
@@ -336,6 +344,7 @@ export const MODEL_PERMISSION_KEYS = [
   "model.opencode.local",
   "model.pi.local",
   "model.openclaw_gateway",
+  "model.local_self_hosted_llm",
 ] as const;
 export type ModelPermissionKey = (typeof MODEL_PERMISSION_KEYS)[number];
 
@@ -369,6 +378,7 @@ export const ADAPTER_TYPE_TO_MODEL_PERMISSION: Record<string, ModelPermissionKey
   opencode_local: "model.opencode.local",
   pi_local: "model.pi.local",
   openclaw_gateway: "model.openclaw_gateway",
+  local_self_hosted_llm: "model.local_self_hosted_llm",
 };
 
 /** 公司建立者（owner）預設擁有的權限，用於 ensureMembership 後呼叫 setPrincipalGrants。 */

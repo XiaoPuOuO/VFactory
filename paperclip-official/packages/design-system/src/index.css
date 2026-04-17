@@ -12,9 +12,16 @@
 /* Shared Animations & Keyframes */
 @import "./animations.css";
 
+/* Layout primitives (before components that may depend on spacing tokens) */
+@import "./components/layout.css";
+
 /* Layer 3: UI Components */
 @import "./components/button.css";
 @import "./components/input.css";
+@import "./components/form-field.css";
+@import "./components/search-field.css";
+@import "./components/switch.css";
+@import "./components/table.css";
 @import "./components/card.css";
 @import "./components/badge.css";
 @import "./components/skeleton.css";

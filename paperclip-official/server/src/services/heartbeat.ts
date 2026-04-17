@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, not, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -67,6 +68,10 @@ import {
 } from "./execution-workspace-policy.js";
 import { redactCurrentUserText, redactCurrentUserValue } from "../log-redaction.js";
 import { notifyAgentExecutionFailureEmail } from "./agent-execution-failure-email.js";
+import {
+  getBundledGovernanceWorkspaceCwd,
+  getGovernanceWorkspaceCwds,
+} from "./governance-roots.js";
 
 const MAX_LIVE_LOG_CHUNK_BYTES = 8 * 1024;
 const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 10;
@@ -221,6 +226,20 @@ function withProjectGovernancePromptTemplate(
   return `${governancePrefix}${baseTemplate}`;
 }
 
+export function resolveHeartbeatInstructionPaths(args: {
+  dedicatedInstructionPaths?: Array<string | null | undefined>;
+  bundledPath?: string | null;
+  workspacePath?: string | null;
+}): string[] {
+  const ordered = [
+    ...(args.dedicatedInstructionPaths ?? []),
+    args.bundledPath,
+    args.workspacePath,
+  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+  return ordered.filter((value, index, arr) => arr.indexOf(value) === index);
+}
+
 async function resolveWorkspaceAgentsFallbackPath(workspaceCwd: string): Promise<string | null> {
   return resolveAgentsFallbackPathWithMtimeCache(workspaceCwd, async () => {
     let cursor = path.resolve(workspaceCwd);
@@ -245,18 +264,72 @@ async function resolveWorkspaceAgentsFallbackPath(workspaceCwd: string): Promise
   });
 }
 
+async function resolveBundledAgentsFallbackPath(): Promise<string | null> {
+  const bundledWorkspaceCwd = getBundledGovernanceWorkspaceCwd();
+  const candidate = path.join(bundledWorkspaceCwd, AGENT_SETTING_DIR, WORKSPACE_AGENTS_FALLBACK_FILE);
+  try {
+    const stat = await fs.stat(candidate);
+    return stat.isFile() ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildMergedAgentInstructionsContent(
+  sources: Array<{ filePath: string; content: string }>,
+): string {
+  return sources
+    .map(({ filePath, content }) =>
+      [
+        `# Paperclip governance instructions`,
+        `Source: ${filePath}`,
+        `Resolve relative file references from ${path.dirname(filePath)}/.`,
+        "",
+        content.trim(),
+        "",
+      ].join("\n"),
+    )
+    .join("\n");
+}
+
+async function createMergedAgentInstructionsFile(
+  sources: Array<{ filePath: string; content: string }>,
+): Promise<string> {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-governance-"));
+  const mergedPath = path.join(tempDir, "AGENTS.merged.md");
+  await fs.writeFile(mergedPath, buildMergedAgentInstructionsContent(sources), "utf8");
+  return mergedPath;
+}
+
 async function applyHeartbeatInstructionFallback(
   resolvedConfig: Record<string, unknown>,
   workspaceCwd: string,
 ): Promise<void> {
-  const hasDedicatedInstructions = KNOWN_INSTRUCTIONS_PATH_KEYS.some((key) => {
+  const dedicatedInstructionPaths = KNOWN_INSTRUCTIONS_PATH_KEYS.map((key) => {
     const value = resolvedConfig[key];
-    return typeof value === "string" && value.trim().length > 0;
-  });
-  if (hasDedicatedInstructions) return;
+    return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+  }).filter((value): value is string => typeof value === "string" && value.length > 0);
 
-  const fallbackPath = await resolveWorkspaceAgentsFallbackPath(workspaceCwd);
-  if (fallbackPath) resolvedConfig.instructionsFilePath = fallbackPath;
+  const bundledPath = await resolveBundledAgentsFallbackPath();
+  const workspacePath = await resolveWorkspaceAgentsFallbackPath(workspaceCwd);
+  const mergedPaths = resolveHeartbeatInstructionPaths({
+    dedicatedInstructionPaths,
+    bundledPath,
+    workspacePath,
+  });
+  if (mergedPaths.length === 0) return;
+  if (mergedPaths.length === 1) {
+    resolvedConfig.instructionsFilePath = mergedPaths[0];
+    return;
+  }
+
+  const sources = await Promise.all(
+    mergedPaths.map(async (filePath) => ({
+      filePath,
+      content: await fs.readFile(filePath, "utf8"),
+    })),
+  );
+  resolvedConfig.instructionsFilePath = await createMergedAgentInstructionsFile(sources);
 }
 
 /** 從 run.contextSnapshot 讀出 taskKey，供 live event payload 與 client 判斷是否為聊天觸發。 */
@@ -1532,6 +1605,7 @@ export function heartbeatService(db: Db, storage?: StorageService) {
 
     const skillInjection = await buildSkillInjectionPrompt({
       workspaceCwd: executionWorkspace.cwd,
+      governanceWorkspaceCwds: getGovernanceWorkspaceCwds(executionWorkspace.cwd),
       context,
       agentId: agent.id,
       companyId: agent.companyId,

@@ -1,0 +1,98 @@
+/**
+ * MetricCard — 與 Dashboard 指標網格搭配（class 前綴維持 dashboard-metric-card* 以降低遷移風險）
+ */
+
+.dashboard-metric-card {
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+}
+
+.dashboard-metric-card-inner {
+  height: 100%;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.15s;
+}
+
+@media (min-width: 30rem) {
+  .dashboard-metric-card-inner {
+    padding: 1.25rem;
+  }
+}
+
+.dashboard-metric-card.clickable .dashboard-metric-card-inner:hover {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+  cursor: pointer;
+}
+
+.dashboard-metric-card-body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.dashboard-metric-card-content {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.dashboard-metric-card-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 30rem) {
+  .dashboard-metric-card-value {
+    font-size: 1.875rem;
+  }
+}
+
+.dashboard-metric-card-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  margin-top: 0.25rem;
+}
+
+@media (min-width: 30rem) {
+  .dashboard-metric-card-label {
+    font-size: 0.875rem;
+  }
+}
+
+.dashboard-metric-card-desc {
+  font-size: 0.75rem;
+  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  margin-top: 0.375rem;
+}
+
+.dashboard-metric-card-desc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dashboard-governance-hint {
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: color-mix(in oklab, var(--foreground) 78%, transparent);
+}
+
+/* 與舊 639px 以下隱藏說明對齊：39.9375rem ≈ 639px @16px root */
+@media (max-width: 39.9375rem) {
+  .dashboard-metric-card-desc {
+    display: none;
+  }
+}
+
+.dashboard-metric-card-icon {
+  width: 1rem;
+  height: 1rem;
+  color: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+  flex-shrink: 0;
+  margin-top: 0.375rem;
+}

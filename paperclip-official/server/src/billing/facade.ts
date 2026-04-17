@@ -21,7 +21,11 @@ import { resolveCompanyEffectiveLimits } from "../services/billing/entitlements.
 import { planSelectableByCompany } from "../services/billing/plan-visibility.js";
 import { costService } from "../services/costs.js";
 import { logger } from "../middleware/logger.js";
-import { findPlanBySlug, upsertCompanySubscription } from "./subscription-store.js";
+import {
+  assertPlanSelectableByCompany,
+  findPlanBySlug,
+  upsertCompanySubscription,
+} from "./subscription-store.js";
 
 function stripeSubscriptionPeriodEnd(sub: Stripe.Subscription): Date | null {
   const s = sub as unknown as { current_period_end?: number; currentPeriodEnd?: number };
@@ -164,6 +168,30 @@ export function billingFacade(db: Db, cfg: BillingFactoryConfig = loadBillingFac
       const providerId = input.paymentProvider ?? cfg.defaultPaymentProvider;
       const payment = createPaymentProvider(db, cfg, providerId);
       return payment.createCheckoutSession(input);
+    },
+
+    /**
+     * 公司帳單頁「直接切換方案」：不經金流，以 manual 供應商寫入訂閱（開發／內測用）。
+     * 正式上線若改回僅限結帳，可移除此端點或改由環境旗標關閉。
+     */
+    switchPlanWithoutPayment: async (companyId: string, planSlug: string): Promise<void> => {
+      const plan = await findPlanBySlug(db, planSlug);
+      if (!plan) {
+        throw new Error("Plan not found");
+      }
+      assertPlanSelectableByCompany(plan, companyId);
+      await upsertCompanySubscription(db, {
+        companyId,
+        planId: plan.id,
+        paymentProvider: "manual",
+        status: "active",
+        externalCustomerId: null,
+        externalSubscriptionId: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        metadata: { source: "company_billing_switch_plan" },
+      });
+      await afterSubscriptionMutation(db, companyId);
     },
 
     createPortalUrl: async (companyId: string, returnUrl: string): Promise<string | null> => {

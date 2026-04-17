@@ -57,6 +57,8 @@ export const API = {
   instanceSettingsDefaultCompanyPath: `${API_PREFIX}/instance/settings/default-company-path`,
   /** 實例預設合規留存天數 GET/PUT /api/instance/settings/compliance-default-retention */
   instanceSettingsComplianceDefaultRetention: `${API_PREFIX}/instance/settings/compliance-default-retention`,
+  /** 忽略方案 Token／花費配額（僅公司覆寫仍生效）GET/PUT /api/instance/settings/billing-ignore-plan-usage-caps */
+  instanceSettingsBillingIgnorePlanUsageCaps: `${API_PREFIX}/instance/settings/billing-ignore-plan-usage-caps`,
   /** Agent 跨聊天記憶：POST /companies/:id/agents/me/memories（agent 寫入）；GET/DELETE /companies/:id/agents/:agentId/memories（board 或 agent 本人） */
   agentMemories: (companyId: string, agentId: string) =>
     `${API_PREFIX}/companies/${companyId}/agents/${agentId}/memories`,

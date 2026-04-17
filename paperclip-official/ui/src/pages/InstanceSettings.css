@@ -2,7 +2,7 @@
  * InstanceSettings 頁面 — 原生 CSS（無 Tailwind）
  */
 .instance-settings-page {
-  max-width: 42rem;
+  max-width: var(--layout-container-narrow-max);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;

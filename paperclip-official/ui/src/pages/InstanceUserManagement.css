@@ -2,7 +2,7 @@
  * InstanceUserManagement 頁面 — 此站設定 > 用戶管理
  */
 .instance-user-management-page {
-  max-width: 64rem;
+  max-width: var(--layout-container-max);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;

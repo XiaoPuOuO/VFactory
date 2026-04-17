@@ -53,6 +53,7 @@ import {
 } from "@paperclipai/adapter-pi-local";
 import { processAdapter } from "./process/index.js";
 import { httpAdapter } from "./http/index.js";
+import { localSelfHostedLlmAdapter } from "./local-self-hosted-llm/index.js";
 
 const claudeLocalAdapter: ServerAdapterModule = {
   type: "claude_local",
@@ -173,6 +174,7 @@ const adaptersByType = new Map<string, ServerAdapterModule>(
     geminiLocalAdapter,
     geminiRemoteAdapter,
     openclawGatewayAdapter,
+    localSelfHostedLlmAdapter,
     processAdapter,
     httpAdapter,
   ].map((a) => [a.type, a]),

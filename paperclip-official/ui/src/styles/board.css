@@ -58,7 +58,7 @@
   position: fixed;
   left: var(--space-3);
   top: var(--space-3);
-  z-index: 200;
+  z-index: calc(var(--z-dialog) + 10);
   width: auto;
   height: auto;
   padding: var(--space-2) var(--space-3);
@@ -80,7 +80,7 @@
 .board-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-drawer-backdrop);
   background: oklch(0 0 0 / 0.5);
   backdrop-filter: blur(4px);
   animation: backdrop-fade-in var(--duration-normal) var(--ease-out);
@@ -96,7 +96,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 50;
+  z-index: var(--z-mobile-drawer);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -184,7 +184,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 45;
+  z-index: var(--z-board-mobile-nav);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -526,6 +526,47 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* 主要區塊之間略增呼吸，降低側欄擁擠感 */
+.board-sidebar-nav-group-gap {
+  margin-top: var(--space-2);
+}
+
+.board-sidebar-more-content {
+  padding-bottom: var(--space-1);
+}
+
+.board-sidebar-pin-row {
+  margin-top: auto;
+  flex-shrink: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--sidebar-border);
+}
+
+.board-sidebar-pin-btn {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: oklch(0.52 0.015 270);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+.board-sidebar-pin-btn:hover {
+  background: var(--sidebar-accent);
+  color: var(--sidebar-foreground);
+}
+
+.board-sidebar-pin-btn[aria-pressed="true"] {
+  color: var(--sidebar-primary);
+  font-weight: 600;
 }
 
 .board-sidebar-section {
@@ -1116,7 +1157,7 @@ button.board-nav-item:disabled {
   background: var(--background);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 46.5rem) {
   .board-breadcrumb-bar {
     padding-left: var(--space-6);
     padding-right: var(--space-6);
@@ -1126,7 +1167,7 @@ button.board-nav-item:disabled {
 .board-breadcrumb-bar-mobile-sticky {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: var(--z-board-breadcrumb-sticky);
   background: color-mix(in oklab, var(--background) 85%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -1217,7 +1258,7 @@ main.board-main:has(.org-chart-page) {
   min-height: 0;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 46.5rem) {
   main.board-main:has(.org-chart-page) {
     overflow: hidden;
   }
@@ -1231,7 +1272,7 @@ main.board-main-mobile:has(.org-chart-page) {
   overflow: hidden;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 46.5rem) {
   .board-main {
     padding: var(--space-6);
   }
@@ -1250,7 +1291,7 @@ main.board-main-mobile:has(.org-chart-page) {
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 30;
+  z-index: var(--z-board-mobile-nav);
   border-top: 1px solid var(--border);
   background: color-mix(in oklab, var(--background) 85%, transparent);
   -webkit-backdrop-filter: blur(12px);
@@ -1259,7 +1300,7 @@ main.board-main-mobile:has(.org-chart-page) {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 46.5rem) {
   .board-mobile-nav {
     display: none;
   }

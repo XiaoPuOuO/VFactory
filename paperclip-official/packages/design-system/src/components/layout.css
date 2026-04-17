@@ -1,0 +1,86 @@
+/**
+ * Layout primitives — 語意化容器、堆疊、網格、分割欄。
+ * 與 board 殼層並存：頁面內容區優先使用 .ds-*，避免 magic margin。
+ */
+
+.ds-container {
+  width: 100%;
+  max-width: var(--layout-container-max);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--layout-container-padding-x);
+  padding-right: var(--layout-container-padding-x);
+  box-sizing: border-box;
+}
+
+.ds-container--narrow {
+  max-width: var(--layout-container-narrow-max);
+}
+
+.ds-container--wide {
+  max-width: var(--layout-container-wide-max);
+}
+
+.ds-container--flush {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.ds-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-stack-gap-md);
+  min-width: 0;
+}
+
+.ds-stack--sm {
+  gap: var(--layout-stack-gap-sm);
+}
+
+.ds-stack--md {
+  gap: var(--layout-stack-gap-md);
+}
+
+.ds-stack--lg {
+  gap: var(--layout-stack-gap-lg);
+}
+
+.ds-grid {
+  display: grid;
+  gap: var(--layout-grid-gap);
+  min-width: 0;
+}
+
+.ds-grid--2 {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 46.5rem) {
+  .ds-grid--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.ds-split {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-split-gap);
+  min-width: 0;
+}
+
+@media (min-width: 46.5rem) {
+  .ds-split {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .ds-split > *:first-child {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .ds-split > *:last-child {
+    flex: 0 1 min(40%, 22rem);
+    min-width: 0;
+  }
+}

@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { goals, issues } from "@paperclipai/db";
+import { costEvents, goals, issues, projects } from "@paperclipai/db";
 
 type GoalReader = Pick<Db, "select">;
 type DbWrite = Pick<Db, "select" | "update">;
@@ -134,11 +134,39 @@ export function goalService(db: Db) {
         .returning()
         .then((rows) => rows[0] ?? null),
 
-    remove: (id: string) =>
-      db
-        .delete(goals)
-        .where(eq(goals.id, id))
-        .returning()
-        .then((rows) => rows[0] ?? null),
+    remove: async (id: string) => {
+      return db.transaction(async (tx) => {
+        // NOTE: goal 可能被多個可選 FK 參照（issues/projects/cost_events/...）與自身 parentId 參照。
+        // 這裡採用「解除關聯（set null）」策略，保留歷史 issue / cost event / project 記錄。
+        const now = new Date();
+
+        // 解除 issues -> goal 關聯
+        await tx
+          .update(issues)
+          .set({ goalId: null, updatedAt: now })
+          .where(eq(issues.goalId, id));
+
+        // 解除 projects -> goal 關聯（legacy goalId 欄位）
+        await tx
+          .update(projects)
+          .set({ goalId: null, updatedAt: now })
+          .where(eq(projects.goalId, id));
+
+        // 解除 cost events -> goal 關聯（保留帳務歷史）
+        await tx
+          .update(costEvents)
+          .set({ goalId: null })
+          .where(eq(costEvents.goalId, id));
+
+        // 解除 goals 自身 parentId 參照，避免刪除父目標被子目標 FK 阻擋
+        await tx
+          .update(goals)
+          .set({ parentId: null, updatedAt: now })
+          .where(eq(goals.parentId, id));
+
+        const [row] = await tx.delete(goals).where(eq(goals.id, id)).returning();
+        return row ?? null;
+      });
+    },
   };
 }

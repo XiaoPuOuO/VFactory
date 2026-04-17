@@ -366,6 +366,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     adapterType === "gemini_remote" ||
     adapterType === "opencode_local" ||
     adapterType === "cursor";
+  /** Self-hosted HTTP LLM: environment test + prompt/cwd like local CLIs, but no generic CLI command block. */
+  const isLocalOrSelfHostedLlm = isLocal || adapterType === "local_self_hosted_llm";
   const uiAdapter = useMemo(() => getUIAdapter(adapterType), [adapterType]);
 
   // Fetch adapter models for the effective adapter type
@@ -614,7 +616,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 }}
               />
             </Field>
-            {isLocal && (
+            {isLocalOrSelfHostedLlm && (
               <Field label={t("agents:promptTemplate")} hint={t("agents:helpPromptTemplate")}>
                 <MarkdownEditor
                   value={eff(
@@ -683,6 +685,11 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                     nextValues.model = DEFAULT_CURSOR_LOCAL_MODEL;
                   } else if (t === "opencode_local") {
                     nextValues.model = "";
+                  } else if (t === "local_self_hosted_llm") {
+                    nextValues.baseUrl = "http://127.0.0.1:11434/v1";
+                    nextValues.model = "";
+                    nextValues.envBindings = { ...nextValues.envBindings };
+                    delete nextValues.envBindings.apiKey;
                   }
                   set!(nextValues);
                 } else {
@@ -709,6 +716,9 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                             dangerouslyBypassApprovalsAndSandbox:
                               DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX,
                           }
+                        : {}),
+                      ...(t === "local_self_hosted_llm"
+                        ? { baseUrl: "http://127.0.0.1:11434/v1", apiKey: undefined }
                         : {}),
                     },
                   }));
@@ -785,7 +795,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
           })()}
 
           {/* Working directory (admin only) */}
-          {isLocal && canSetWorkingDirectory && (
+          {isLocalOrSelfHostedLlm && canSetWorkingDirectory && (
             <Field label={t("agents:workingDirectory")} hint={t("agents:helpCwd")}>
               <div className="ui-agent-form-cwd-wrap">
                 <FolderOpen className="ui-agent-form-icon-md ui-agent-form-muted" aria-hidden />
@@ -808,7 +818,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
           )}
 
           {/* Prompt template (create mode only — edit mode shows this in Identity) */}
-          {isLocal && isCreate && (
+          {isLocalOrSelfHostedLlm && isCreate && (
             <Field label={t("agents:promptTemplate")} hint={t("agents:helpPromptTemplate")}>
               <MarkdownEditor
                 value={val!.promptTemplate}
@@ -1153,6 +1163,7 @@ const ENABLED_ADAPTER_TYPES = new Set([
   "gemini_remote",
   "opencode_local",
   "cursor",
+  "local_self_hosted_llm",
 ]);
 
 /** Display list includes all real adapter types plus UI-only coming-soon entries. */

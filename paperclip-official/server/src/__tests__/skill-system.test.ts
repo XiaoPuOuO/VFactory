@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseSkillInvocations } from "../services/skill-invocation-parser.js";
 import { buildSkillInjectionPrompt, buildWakeContextHaystack } from "../services/skill-injection.js";
 import { parseSkillFrontmatterFromMarkdown } from "@paperclipai/shared";
@@ -328,6 +329,188 @@ body
     }
   });
 
+  it("bundled governance skills are always injected before project workspace add-ons", async () => {
+    const bundledRoot = await makeTempDir("paperclip-skill-bundled-");
+    const workspaceRoot = await makeTempDir("paperclip-skill-workspace-");
+    try {
+      await writeSkill(
+        bundledRoot,
+        "bundled-passive",
+        `---
+name: bundled-passive
+description: bundled passive
+mode: passive
+prompt: |
+  Bundled passive company={{companyId}} agent={{agentId}}
+---
+body
+`,
+      );
+      await writeSkill(
+        bundledRoot,
+        "shared-passive",
+        `---
+name: shared-passive
+description: bundled shared
+mode: passive
+prompt: |
+  Bundled shared company={{companyId}} agent={{agentId}}
+---
+body
+`,
+      );
+      await writeSkill(
+        workspaceRoot,
+        "workspace-passive",
+        `---
+name: workspace-passive
+description: workspace passive
+mode: passive
+prompt: |
+  Workspace passive company={{companyId}} agent={{agentId}}
+---
+body
+`,
+      );
+      await writeSkill(
+        workspaceRoot,
+        "shared-passive",
+        `---
+name: shared-passive
+description: workspace shared
+mode: passive
+prompt: |
+  Workspace shared company={{companyId}} agent={{agentId}}
+---
+body
+`,
+      );
+
+      const injection = await buildSkillInjectionPrompt({
+        workspaceCwd: workspaceRoot,
+        governanceWorkspaceCwds: [bundledRoot, workspaceRoot],
+        agentId: "agent-1",
+        companyId: "company-1",
+        context: { wakeReason: "chat_message" },
+      });
+
+      const textOut = injection ?? "";
+      expect(textOut).toContain("Bundled passive company=company-1 agent=agent-1");
+      expect(textOut).toContain("Workspace passive company=company-1 agent=agent-1");
+      expect(textOut).toContain("Workspace shared company=company-1 agent=agent-1");
+      expect(textOut).not.toContain("Bundled shared company=company-1 agent=agent-1");
+    } finally {
+      await fs.rm(bundledRoot, { recursive: true, force: true });
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("injects a lightweight available-skills catalog in chat light mode", async () => {
+    const tmpRoot = await makeTempDir("paperclip-skill-chat-light-");
+    try {
+      await writeSkill(
+        tmpRoot,
+        "passive-catalog",
+        `---
+name: passive-catalog
+description: passive catalog skill
+mode: passive
+prompt: |
+  Passive catalog company={{companyId}} agent={{agentId}}
+---
+body
+`,
+      );
+      await writeSkill(
+        tmpRoot,
+        "active-catalog",
+        `---
+name: active-catalog
+description: active catalog skill
+mode: active
+arguments: []
+prompt: |
+  Active catalog
+---
+body
+`,
+      );
+
+      const injection = await buildSkillInjectionPrompt({
+        workspaceCwd: tmpRoot,
+        agentId: "agent-1",
+        companyId: "company-1",
+        context: { wakeReason: "chat_message" },
+        chatLightMode: true,
+      });
+
+      const textOut = injection ?? "";
+      expect(textOut).toContain("## Available Skills");
+      expect(textOut).toContain("- active-catalog: active catalog skill");
+      expect(textOut).toContain("- passive-catalog: passive catalog skill");
+      expect(textOut).not.toContain("## Passive Skills");
+      expect(textOut).not.toContain("Passive catalog company=company-1 agent=agent-1");
+    } finally {
+      await fs.rm(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a partial available-skills catalog when chat light catalog exceeds max length", async () => {
+    const tmpRoot = await makeTempDir("paperclip-skill-catalog-truncate-");
+    try {
+      for (let index = 0; index < 120; index += 1) {
+        const suffix = String(index).padStart(3, "0");
+        await writeSkill(
+          tmpRoot,
+          `catalog-${suffix}`,
+          `---
+name: catalog-${suffix}
+description: This is a deliberately long catalog description for skill ${suffix} so the chat-light catalog exceeds the maximum prompt budget and must be truncated safely without disappearing entirely.
+mode: active
+arguments: []
+prompt: |
+  Catalog skill ${suffix}
+---
+body
+`,
+        );
+      }
+
+      const injection = await buildSkillInjectionPrompt({
+        workspaceCwd: tmpRoot,
+        agentId: "agent-1",
+        companyId: "company-1",
+        context: { wakeReason: "chat_message" },
+        chatLightMode: true,
+      });
+
+      const textOut = injection ?? "";
+      expect(textOut).toContain("## Available Skills");
+      expect(textOut).toContain("- catalog-000:");
+      expect(textOut).toContain("- catalog-050:");
+      expect(textOut.length).toBeLessThanOrEqual(20_000);
+    } finally {
+      await fs.rm(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("includes later official skills in chat light catalog after compression", async () => {
+    const paperclipOfficialRoot = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+    const injection = await buildSkillInjectionPrompt({
+      workspaceCwd: paperclipOfficialRoot,
+      agentId: "agent-1",
+      companyId: "company-1",
+      context: { wakeReason: "chat_message" },
+      chatLightMode: true,
+    });
+
+    const textOut = injection ?? "";
+    expect(textOut).toContain("## Available Skills");
+    expect(textOut).toContain("- django-tdd:");
+    expect(textOut).toContain("- para-memory-files:");
+    expect(textOut.length).toBeLessThanOrEqual(20_000);
+  });
+
   it("injects workflow notice when skill uses checkpoint / branching flow", async () => {
     const tmpRoot = await makeTempDir("paperclip-skill-workflow-");
     try {
@@ -376,6 +559,23 @@ flow:
     } finally {
       await fs.rm(tmpRoot, { recursive: true, force: true });
     }
+  });
+
+  it("parses and injects uiux-inspection skill from repo AgentSetting", async () => {
+    const paperclipOfficialRoot = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+    const injection = await buildSkillInjectionPrompt({
+      workspaceCwd: paperclipOfficialRoot,
+      agentId: "agent-1",
+      companyId: "company-1",
+      context: {
+        skillInvocations: [{ name: "uiux-inspection", args: [] }],
+      },
+    });
+
+    expect(injection).not.toBeNull();
+    const textOut = injection ?? "";
+      expect(textOut).toContain("UI/UX Inspection");
+      expect(textOut).toContain("## 1. Goal And User Assumptions");
   });
 });
 

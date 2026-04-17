@@ -76,10 +76,22 @@ export interface CostSummary {
   utilizationPercent: number;
   /** 當月累計 token 使用量（input + output）。 */
   tokenUsage?: number;
-  /** 公司層級 Token 上限；null 表示未設定。 */
+  /**
+   * 公司層級 Token **有效**上限（方案 entitlements 與公司覆寫合併後）；用於儀表／是否超標判斷。
+   * null 表示未設上限（無方案與公司雙方限制）。
+   */
   tokenLimit?: number | null;
-  /** 公司層級花費上限（分）；null 表示未設定。 */
+  /**
+   * 公司層級花費 **有效**上限（分）；語意同 tokenLimit。
+   */
   priceLimitCents?: number | null;
+  /**
+   * 公司資料表上的 Token 覆寫值（不含方案合併）；null 表示未覆寫、沿用方案。
+   * Costs 頁「公司上限」表單應綁定此欄，勿用 tokenLimit（否則清除覆寫後會顯示方案預設值）。
+   */
+  tokenLimitOverride?: number | null;
+  /** 公司資料表上的花費覆寫值（分）；語意同 tokenLimitOverride。 */
+  priceLimitCentsOverride?: number | null;
   /** 過去 N 天內的預算／Token／Price 觸發紀錄。 */
   breachEvents?: LimitBreachEvent[];
   /** 簡易月預測與週對週異常（UTC）。 */

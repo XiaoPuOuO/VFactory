@@ -16,23 +16,35 @@ export function PageSkeleton({ variant = "list" }: PageSkeletonProps) {
   if (variant === "dashboard") {
     return (
       <div className="dashboard-skeleton-page">
-        <Skeleton className="dashboard-skeleton-banner" />
-
-        <div className="dashboard-skeleton-metrics">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="dashboard-skeleton-metric" />
-          ))}
+        <div className="dashboard-skeleton-header">
+          <Skeleton className="dashboard-skeleton-header-title" />
+          <Skeleton className="dashboard-skeleton-header-sub" />
         </div>
 
-        <div className="dashboard-skeleton-charts">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="dashboard-skeleton-chart" />
-          ))}
-        </div>
+        <div className="dashboard-skeleton-layout">
+          <div className="dashboard-skeleton-main">
+            <div className="dashboard-skeleton-metrics">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="dashboard-skeleton-metric" />
+              ))}
+            </div>
 
-        <div className="dashboard-skeleton-two-col">
-          <Skeleton className="dashboard-skeleton-block" />
-          <Skeleton className="dashboard-skeleton-block" />
+            <div className="dashboard-skeleton-charts">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="dashboard-skeleton-chart" />
+              ))}
+            </div>
+
+            <div className="dashboard-skeleton-two-col">
+              <Skeleton className="dashboard-skeleton-block" />
+              <Skeleton className="dashboard-skeleton-block" />
+            </div>
+          </div>
+
+          <div className="dashboard-skeleton-aside">
+            <Skeleton className="dashboard-skeleton-aside-card" />
+            <Skeleton className="dashboard-skeleton-aside-card" />
+          </div>
         </div>
       </div>
     );

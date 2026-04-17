@@ -1,24 +1,7 @@
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Activity,
-  Inbox,
-  CircleDot,
-  Target,
-  LayoutDashboard,
-  DollarSign,
-  Scale,
-  History,
-  Search,
-  SquarePen,
-  Network,
-  Map,
-  Settings,
-  MessageCircle,
-  Calendar,
-  Zap,
-  BookText,
-  CreditCard,
-} from "lucide-react";
+import { useLocation } from "@/lib/router";
+import { Search, SquarePen, ChevronRight, Inbox, LayoutDashboard } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarSection } from "./SidebarSection";
 import { SidebarNavItem } from "./SidebarNavItem";
@@ -30,9 +13,28 @@ import { heartbeatsApi } from "../api/heartbeats";
 import { queryKeys } from "../lib/queryKeys";
 import { useInboxBadge } from "../hooks/useInboxBadge";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  fullModeCompanyNavItems,
+  fullModeWorkNavItems,
+  isPathInSecondaryNav,
+  primaryNavItems,
+  readSidebarExpanded,
+  readStoredTriState,
+  secondaryCompanyNavItems,
+  secondaryWorkNavItems,
+  SIDEBAR_MORE_OPEN_KEY,
+  writeSidebarExpanded,
+  writeStoredTriState,
+} from "../lib/navConfig";
 
 export function Sidebar() {
   const { t } = useTranslation();
+  const location = useLocation();
   const { openNewIssue } = useDialog();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const inboxBadge = useInboxBadge(selectedCompanyId);
@@ -43,6 +45,27 @@ export function Sidebar() {
     refetchInterval: 10_000,
   });
   const liveRunCount = liveRuns?.length ?? 0;
+
+  const secondaryActive = useMemo(
+    () => isPathInSecondaryNav(location.pathname),
+    [location.pathname],
+  );
+
+  const [pinnedFullNav, setPinnedFullNav] = useState(readSidebarExpanded);
+  const [moreOpen, setMoreOpen] = useState(() =>
+    readStoredTriState(SIDEBAR_MORE_OPEN_KEY, secondaryActive),
+  );
+
+  function setMoreOpenPersist(v: boolean) {
+    setMoreOpen(v);
+    writeStoredTriState(SIDEBAR_MORE_OPEN_KEY, v);
+  }
+
+  function togglePin() {
+    const next = !pinnedFullNav;
+    setPinnedFullNav(next);
+    writeSidebarExpanded(next);
+  }
 
   function openSearch() {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
@@ -70,7 +93,7 @@ export function Sidebar() {
         </Button>
       </div>
 
-      <nav className="board-sidebar-nav">
+      <nav className="board-sidebar-nav" aria-label={t("nav.sidebarNav")}>
         <div className="board-sidebar-nav-section">
           <button
             type="button"
@@ -80,7 +103,12 @@ export function Sidebar() {
             <SquarePen className="board-sidebar-new-issue-btn-icon" />
             <span>{t("nav.newIssue")}</span>
           </button>
-          <SidebarNavItem to="/dashboard" label={t("nav.dashboard")} icon={LayoutDashboard} liveCount={liveRunCount} />
+          <SidebarNavItem
+            to="/dashboard"
+            label={t("nav.dashboard")}
+            icon={LayoutDashboard}
+            liveCount={liveRunCount}
+          />
           <SidebarNavItem
             to="/inbox"
             label={t("nav.inbox")}
@@ -91,29 +119,99 @@ export function Sidebar() {
           />
         </div>
 
-        <SidebarSection label={t("nav.work")}>
-          <SidebarNavItem to="chat" label={t("nav.chat")} icon={MessageCircle} />
-          <SidebarNavItem to="/issues" label={t("nav.issues")} icon={CircleDot} />
-          <SidebarNavItem to="/goals" label={t("nav.goals")} icon={Target} />
-          <SidebarNavItem to="/schedules" label={t("nav.schedules")} icon={Calendar} />
-          <SidebarNavItem to="/company/workflows" label={t("nav.skills")} icon={BookText} />
-          <SidebarNavItem to="/runs" label={t("nav.runQuality")} icon={Activity} />
-        </SidebarSection>
+        {pinnedFullNav ? (
+          <>
+            <div className="board-sidebar-nav-section board-sidebar-nav-group-gap">
+              <SidebarSection label={t("nav.work")}>
+                {fullModeWorkNavItems.map((item) => (
+                  <SidebarNavItem
+                    key={item.id}
+                    to={item.path}
+                    label={t(`nav.${item.labelKey}`)}
+                    icon={item.icon}
+                  />
+                ))}
+              </SidebarSection>
+            </div>
+            <SidebarProjects pinnedFullNav={pinnedFullNav} />
+            <SidebarAgents pinnedFullNav={pinnedFullNav} />
+            <div className="board-sidebar-nav-section board-sidebar-nav-group-gap">
+              <SidebarSection label={t("nav.company")}>
+                {fullModeCompanyNavItems.map((item) => (
+                  <SidebarNavItem
+                    key={item.id}
+                    to={item.path}
+                    label={t(`nav.${item.labelKey}`)}
+                    icon={item.icon}
+                  />
+                ))}
+              </SidebarSection>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="board-sidebar-nav-section board-sidebar-nav-group-gap">
+              {primaryNavItems.slice(2).map((item) => (
+                <SidebarNavItem
+                  key={item.id}
+                  to={item.path}
+                  label={t(`nav.${item.labelKey}`)}
+                  icon={item.icon}
+                />
+              ))}
+            </div>
+            <Collapsible open={moreOpen} onOpenChange={setMoreOpenPersist}>
+              <div
+                className={["board-sidebar-collapsible-group", moreOpen && "open"].filter(Boolean).join(" ")}
+              >
+                <div className="board-sidebar-collapsible-row">
+                  <CollapsibleTrigger
+                    className="board-sidebar-collapsible-trigger"
+                    aria-label={t("nav.moreNav")}
+                  >
+                    <ChevronRight className="board-sidebar-collapsible-chevron" />
+                    <span className="board-sidebar-collapsible-label">{t("nav.more")}</span>
+                  </CollapsibleTrigger>
+                </div>
+              </div>
+              <CollapsibleContent>
+                <div className="board-sidebar-more-content board-sidebar-nav-group-gap">
+                  <SidebarSection label={t("nav.work")}>
+                    {secondaryWorkNavItems.map((item) => (
+                      <SidebarNavItem
+                        key={item.id}
+                        to={item.path}
+                        label={t(`nav.${item.labelKey}`)}
+                        icon={item.icon}
+                      />
+                    ))}
+                  </SidebarSection>
+                  <SidebarSection label={t("nav.company")}>
+                    {secondaryCompanyNavItems.map((item) => (
+                      <SidebarNavItem
+                        key={item.id}
+                        to={item.path}
+                        label={t(`nav.${item.labelKey}`)}
+                        icon={item.icon}
+                      />
+                    ))}
+                  </SidebarSection>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </>
+        )}
 
-        <SidebarProjects />
-
-        <SidebarAgents />
-
-        <SidebarSection label={t("nav.company")}>
-          <SidebarNavItem to="/org" label={t("nav.orgChart")} icon={Network} />
-          <SidebarNavItem to="/goal-map" label={t("nav.goalMap")} icon={Map} />
-          <SidebarNavItem to="/governance" label={t("nav.governance")} icon={Scale} />
-          <SidebarNavItem to="/company/automation" label={t("nav.automation")} icon={Zap} />
-          <SidebarNavItem to="/costs" label={t("nav.costs")} icon={DollarSign} />
-          <SidebarNavItem to="/company/billing" label={t("nav.billing")} icon={CreditCard} />
-          <SidebarNavItem to="/activity" label={t("nav.activity")} icon={History} />
-          <SidebarNavItem to="/company/settings" label={t("nav.settings")} icon={Settings} />
-        </SidebarSection>
+        <div className="board-sidebar-pin-row">
+          <button
+            type="button"
+            className="board-sidebar-pin-btn"
+            onClick={togglePin}
+            aria-pressed={pinnedFullNav}
+          >
+            {pinnedFullNav ? t("nav.useCompactNav") : t("nav.pinFullSidebar")}
+          </button>
+        </div>
       </nav>
     </aside>
   );

@@ -28,4 +28,14 @@ describe("mergePlanEntitlementsWithCompanyOverrides", () => {
     expect(r.tokenLimit).toBeNull();
     expect(r.priceLimitCents).toBeNull();
   });
+
+  it("treats company token 0 as inherit plan (same as null), not a literal cap of zero", () => {
+    const r = mergePlanEntitlementsWithCompanyOverrides(0, null, { tokenLimit: 1_000_000 });
+    expect(r.tokenLimit).toBe(1_000_000);
+  });
+
+  it("treats company price 0 as inherit plan", () => {
+    const r = mergePlanEntitlementsWithCompanyOverrides(null, 0, { priceLimitCents: 99 });
+    expect(r.priceLimitCents).toBe(99);
+  });
 });

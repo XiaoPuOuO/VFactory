@@ -39,6 +39,7 @@ const SUPPORTED_ADVANCED_ADAPTER_TYPES = new Set<CreateConfigValues["adapterType
   "pi_local",
   "cursor",
   "openclaw_gateway",
+  "local_self_hosted_llm",
 ]);
 
 function createValuesForAdapterType(
@@ -55,6 +56,9 @@ function createValuesForAdapterType(
   } else if (adapterType === "cursor") {
     nextValues.model = DEFAULT_CURSOR_LOCAL_MODEL;
   } else if (adapterType === "opencode_local") {
+    nextValues.model = "";
+  } else if (adapterType === "local_self_hosted_llm") {
+    nextValues.baseUrl = "http://127.0.0.1:11434/v1";
     nextValues.model = "";
   }
   return nextValues;

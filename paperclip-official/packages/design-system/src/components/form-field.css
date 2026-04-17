@@ -1,0 +1,41 @@
+/**
+ * Form field grouping — label、hint、error；與 [data-slot="input"] 並用。
+ */
+
+.ds-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.ds-field__label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.ds-field__hint {
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--muted-foreground);
+}
+
+.ds-field__error {
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--color-error-text);
+}
+
+.ds-field[data-invalid="true"] [data-slot="input"],
+.ds-field[data-invalid="true"] [data-slot="textarea"] {
+  border-color: var(--color-error-border);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--color-error-text) 25%, transparent);
+}
+
+.ds-field[data-invalid="true"] [data-slot="input"]:focus-visible,
+.ds-field[data-invalid="true"] [data-slot="textarea"]:focus-visible {
+  outline-color: var(--color-error-text);
+}

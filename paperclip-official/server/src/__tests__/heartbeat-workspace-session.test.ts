@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
 import {
+  buildMergedAgentInstructionsContent,
   readContextProjectId,
+  resolveHeartbeatInstructionPaths,
   resolveRuntimeSessionParamsForWorkspace,
   shouldResetTaskSessionForWake,
   type ResolvedWorkspaceForRun,
@@ -159,5 +161,58 @@ describe("shouldResetTaskSessionForWake", () => {
         wakeTriggerDetail: "callback",
       }),
     ).toBe(false);
+  });
+});
+
+describe("buildMergedAgentInstructionsContent", () => {
+  it("keeps bundled instructions first and appends workspace add-on instructions", () => {
+    const merged = buildMergedAgentInstructionsContent([
+      {
+        filePath: "/repo/paperclip-official/AgentSetting/AGENTS.md",
+        content: "Bundled instructions",
+      },
+      {
+        filePath: "/workspace/AgentSetting/AGENTS.md",
+        content: "Workspace instructions",
+      },
+    ]);
+
+    expect(merged).toContain("Source: /repo/paperclip-official/AgentSetting/AGENTS.md");
+    expect(merged).toContain("Source: /workspace/AgentSetting/AGENTS.md");
+    expect(merged.indexOf("Bundled instructions")).toBeLessThan(
+      merged.indexOf("Workspace instructions"),
+    );
+  });
+});
+
+describe("resolveHeartbeatInstructionPaths", () => {
+  it("prepends dedicated instructions before bundled and workspace governance", () => {
+    expect(
+      resolveHeartbeatInstructionPaths({
+        dedicatedInstructionPaths: ["/company/agents/ceo/AGENTS.md"],
+        bundledPath: "/repo/paperclip-official/AgentSetting/AGENTS.md",
+        workspacePath: "/workspace/AgentSetting/AGENTS.md",
+      }),
+    ).toEqual([
+      "/company/agents/ceo/AGENTS.md",
+      "/repo/paperclip-official/AgentSetting/AGENTS.md",
+      "/workspace/AgentSetting/AGENTS.md",
+    ]);
+  });
+
+  it("deduplicates repeated instruction paths while preserving order", () => {
+    expect(
+      resolveHeartbeatInstructionPaths({
+        dedicatedInstructionPaths: [
+          "/repo/paperclip-official/AgentSetting/AGENTS.md",
+          "/repo/paperclip-official/AgentSetting/AGENTS.md",
+        ],
+        bundledPath: "/repo/paperclip-official/AgentSetting/AGENTS.md",
+        workspacePath: "/workspace/AgentSetting/AGENTS.md",
+      }),
+    ).toEqual([
+      "/repo/paperclip-official/AgentSetting/AGENTS.md",
+      "/workspace/AgentSetting/AGENTS.md",
+    ]);
   });
 });

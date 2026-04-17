@@ -140,11 +140,14 @@ export function Costs() {
   const updateLimitsMutation = useMutation({
     mutationFn: (body: { tokenLimit?: number | null; priceLimitCents?: number | null }) =>
       costsApi.updateLimits(selectedCompanyId!, body),
-    onSuccess: () => {
+    onSuccess: async () => {
       setLimitsUpdateError(null);
-      // 伺服器可能會 clamp/round 實際數值；重新允許 useEffect 將 inputs 同步為回傳值。
+      // 先等 costs 查詢 refetch 完成再解除同步，否則 useEffect 會用快取內舊 summary 覆寫輸入並把 limitsSynced 設回 true，
+      // refetch 完成後便不再同步，造成「儲存成功但數字跳回舊值」。
+      await queryClient.refetchQueries({ queryKey: queryKeys.costsAllRanges(selectedCompanyId!) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(selectedCompanyId!) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.org(selectedCompanyId!) });
       setLimitsSynced(false);
-      queryClient.invalidateQueries({ queryKey: queryKeys.costs(selectedCompanyId!) });
     },
     onError: (err) => {
       const message =
@@ -161,8 +164,13 @@ export function Costs() {
   useEffect(() => {
     if (data?.summary && !limitsSynced) {
       const s = data.summary;
-      setTokenLimitInput(s.tokenLimit != null ? String(s.tokenLimit) : "");
-      setPriceLimitInput(s.priceLimitCents != null ? String(s.priceLimitCents) : "");
+      /** 僅同步「公司覆寫」；勿用 tokenLimit／priceLimitCents（合併後有效值，清除覆寫會變回方案數字）。 */
+      setTokenLimitInput(
+        s.tokenLimitOverride != null ? String(s.tokenLimitOverride) : "",
+      );
+      setPriceLimitInput(
+        s.priceLimitCentsOverride != null ? String(s.priceLimitCentsOverride) : "",
+      );
       setLimitsSynced(true);
     }
   }, [data?.summary, limitsSynced, selectedCompanyId]);
@@ -659,17 +667,18 @@ export function Costs() {
                   size="sm"
                   disabled={updateLimitsMutation.isPending}
                   onClick={() => {
-                    const tokenLimit =
+                    const rawToken =
                       tokenLimitInput.trim() === ""
                         ? null
                         : Math.max(0, parseInt(tokenLimitInput, 10) || 0);
-                    const priceLimitCents =
+                    const rawPrice =
                       priceLimitInput.trim() === ""
                         ? null
                         : Math.max(0, parseInt(priceLimitInput, 10) || 0);
+                    /** 0 與留空同義：不設公司覆寫（後端亦同）；勿把 0 當成「無上限」。 */
                     updateLimitsMutation.mutate({
-                      tokenLimit: tokenLimitInput.trim() === "" ? null : tokenLimit,
-                      priceLimitCents: priceLimitInput.trim() === "" ? null : priceLimitCents,
+                      tokenLimit: rawToken === null || rawToken === 0 ? null : rawToken,
+                      priceLimitCents: rawPrice === null || rawPrice === 0 ? null : rawPrice,
                     });
                   }}
                 >

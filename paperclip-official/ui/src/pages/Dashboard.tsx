@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "../api/dashboard";
 import { activityApi } from "../api/activity";
@@ -14,16 +13,14 @@ import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
 import { MetricCard } from "../components/MetricCard";
 import { EmptyState } from "../components/EmptyState";
-import { StatusIcon } from "../components/StatusIcon";
-import { PriorityIcon } from "../components/PriorityIcon";
 import { ActivityRow } from "../components/ActivityRow";
-import { Identity } from "../components/Identity";
-import { timeAgo } from "../lib/timeAgo";
-import { formatRelativeTime } from "../lib/formatRelativeTime";
 import { formatCents } from "../lib/utils";
 
 import "./Dashboard.css";
-import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard } from "lucide-react";
+import { AlertCircle, AlertTriangle, Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PageSection } from "../components/PageSection";
+import { DashboardRecentIssueRow } from "../components/DashboardRecentIssueRow";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import {
   ChartCard,
@@ -208,28 +205,44 @@ export function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      {error && <p className="dashboard-error">{error.message}</p>}
-
-      {hasNoAgents && (
-        <div className="dashboard-alert">
-          <div className="dashboard-alert-inner">
-            <Bot className="dashboard-alert-icon" />
-            <p className="dashboard-alert-text">{t("dashboard.noAgents")}</p>
+      {error && (
+        <div data-slot="inline-alert" data-variant="error" role="alert">
+          <AlertCircle aria-hidden />
+          <div>
+            <div data-slot="inline-alert-title">{t("dashboard.loadErrorTitle")}</div>
+            {error.message}
           </div>
-          <button
-            type="button"
-            onClick={() => openOnboarding({ initialStep: 2, companyId: selectedCompanyId! })}
-            className="dashboard-alert-action"
-          >
-            {t("dashboard.createAgentHere")}
-          </button>
         </div>
       )}
 
-      <ActiveAgentsPanel companyId={selectedCompanyId!} />
+      {hasNoAgents && (
+        <div className="dashboard-inline-alert-row">
+          <div data-slot="inline-alert" data-variant="warning" role="status">
+            <AlertTriangle aria-hidden />
+            <div>
+              <div data-slot="inline-alert-title">{t("dashboard.noAgentsAlertTitle")}</div>
+              {t("dashboard.noAgents")}
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => openOnboarding({ initialStep: 2, companyId: selectedCompanyId! })}
+          >
+            {t("dashboard.createAgentHere")}
+          </Button>
+        </div>
+      )}
 
-      {data && (
-        <>
+      <header className="dashboard-page-header">
+        <h1 className="dashboard-page-title">{t("dashboard.title")}</h1>
+        <p className="dashboard-page-subtitle">{t("dashboard.pageSubtitle")}</p>
+      </header>
+
+      <div className="dashboard-layout">
+        <div className="dashboard-layout-main">
+          {data ? (
+            <>
           <div className="dashboard-metrics-grid">
             <MetricCard
               icon={Bot}
@@ -347,74 +360,53 @@ export function Dashboard() {
           <div className="dashboard-two-col">
             {recentActivity.length > 0 && (
               <div className="dashboard-two-col-cell">
-                <h3 className="dashboard-section-title">{t("dashboard.recentActivity")}</h3>
-                <div className="dashboard-panel">
-                  {recentActivity.map((event) => (
-                    <ActivityRow
-                      key={event.id}
-                      event={event}
-                      agentMap={agentMap}
-                      entityNameMap={entityNameMap}
-                      entityTitleMap={entityTitleMap}
-                      className={animatedActivityIds.has(event.id) ? "activity-row-enter" : undefined}
-                    />
-                  ))}
-                </div>
+                <PageSection title={t("dashboard.recentActivity")}>
+                  <div className="dashboard-panel">
+                    {recentActivity.map((event) => (
+                      <ActivityRow
+                        key={event.id}
+                        event={event}
+                        agentMap={agentMap}
+                        entityNameMap={entityNameMap}
+                        entityTitleMap={entityTitleMap}
+                        className={animatedActivityIds.has(event.id) ? "activity-row-enter" : undefined}
+                      />
+                    ))}
+                  </div>
+                </PageSection>
               </div>
             )}
 
             <div className="dashboard-two-col-cell">
-              <h3 className="dashboard-section-title">{t("dashboard.recentTasks")}</h3>
-              {recentIssues.length === 0 ? (
-                <div className="dashboard-panel-empty">
-                  <p className="dashboard-panel-empty-text">{t("dashboard.noTasksYet")}</p>
-                </div>
-              ) : (
-                <div className="dashboard-panel">
-                  {recentIssues.slice(0, 10).map((issue) => (
-                    <Link
-                      key={issue.id}
-                      to={`/issues/${issue.identifier ?? issue.id}`}
-                      className="dashboard-issue-link"
-                    >
-                      <div className="dashboard-issue-link-inner">
-                        <span className="dashboard-issue-link-status-mobile">
-                          <StatusIcon status={issue.status} />
-                        </span>
-                        <span className="dashboard-issue-link-content">
-                          <span className="dashboard-issue-link-title">{issue.title}</span>
-                          <span className="dashboard-issue-link-meta">
-                            <span className="dashboard-issue-link-meta-icon">
-                              <PriorityIcon priority={issue.priority} />
-                            </span>
-                            <span className="dashboard-issue-link-meta-icon">
-                              <StatusIcon status={issue.status} />
-                            </span>
-                            <span className="dashboard-issue-link-id">
-                              {issue.identifier ?? issue.id.slice(0, 8)}
-                            </span>
-                            {issue.assigneeAgentId && (() => {
-                              const name = agentName(issue.assigneeAgentId);
-                              return name
-                                ? <span className="dashboard-issue-link-meta-icon"><Identity name={name} size="sm" /></span>
-                                : null;
-                            })()}
-                            <span className="dashboard-issue-link-dot-mobile">&middot;</span>
-                            <span className="dashboard-issue-link-time">
-                              {formatRelativeTime(t, issue.updatedAt)}
-                            </span>
-                          </span>
-                        </span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
+              <PageSection title={t("dashboard.recentTasks")}>
+                {recentIssues.length === 0 ? (
+                  <div className="dashboard-panel-empty">
+                    <p className="dashboard-panel-empty-text">{t("dashboard.noTasksYet")}</p>
+                  </div>
+                ) : (
+                  <div className="dashboard-panel">
+                    {recentIssues.slice(0, 10).map((issue) => (
+                      <DashboardRecentIssueRow
+                        key={issue.id}
+                        issue={issue}
+                        assigneeName={
+                          issue.assigneeAgentId ? agentName(issue.assigneeAgentId) : null
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </PageSection>
             </div>
           </div>
+            </>
+          ) : null}
+        </div>
 
-        </>
-      )}
+        <aside className="dashboard-layout-aside" aria-label={t("dashboard.agentsSection")}>
+          <ActiveAgentsPanel companyId={selectedCompanyId!} />
+        </aside>
+      </div>
     </div>
   );
 }

@@ -1,9 +1,12 @@
 import { useState } from "react";
 import "./DesignGuide.css";
 import {
+  AlertCircle,
+  AlertTriangle,
   BookOpen,
   Bot,
   Check,
+  CheckCircle2,
   ChevronDown,
   CircleDot,
   Command as CommandIcon,
@@ -11,6 +14,7 @@ import {
   Hexagon,
   History,
   Inbox,
+  Info,
   LayoutDashboard,
   ListTodo,
   Mail,
@@ -187,6 +191,7 @@ export function DesignGuide() {
     { key: "status", label: "Status", value: "Active" },
     { key: "priority", label: "Priority", value: "High" },
   ]);
+  const [dsSwitchOn, setDsSwitchOn] = useState(false);
 
   return (
     <div className="design-guide-root">
@@ -229,6 +234,89 @@ export function DesignGuide() {
             </div>
           </SubSection>
         </div>
+      </Section>
+
+      {/* ============================================================ */}
+      {/*  VISUAL CONTRACT — inventory, breakpoints, alerts, layout    */}
+      {/* ============================================================ */}
+      <Section title="Visual contract & inventory">
+        <p className="design-guide-prose">
+          完整路由 × 狀態矩陣與元件對照見{" "}
+          <code className="design-guide-code-path">paperclip-official/documents/ui-commercial-upgrade-inventory.md</code>
+          。本頁作為可商業化 UI 的實機基準；新增 primitive 或路由時請同步更新該文件與下方示範。
+        </p>
+        <SubSection title="Responsive breakpoints（權杖）">
+          <p className="design-guide-prose">
+            斷點變數定義於 design-system <code>tokens.css</code>：<code>--breakpoint-sm</code> 至{" "}
+            <code>--breakpoint-2xl</code>。請以 <code>min-width</code> 與流體欄寬為主，避免固定寬造成水平捲動；複雜後台在窄螢採單欄降級。
+          </p>
+          <div className="design-guide-breakpoint-chips" aria-label="Breakpoint reference">
+            {[
+              ["sm", "var(--breakpoint-sm)"],
+              ["md", "var(--breakpoint-md)"],
+              ["lg", "var(--breakpoint-lg)"],
+              ["xl", "var(--breakpoint-xl)"],
+              ["2xl", "var(--breakpoint-2xl)"],
+            ].map(([name, raw]) => (
+              <span key={String(name)} className="design-guide-breakpoint-chip">
+                <span className="design-guide-breakpoint-chip-label">{String(name)}</span>
+                <span className="design-guide-breakpoint-chip-value">{raw}</span>
+              </span>
+            ))}
+          </div>
+        </SubSection>
+        <SubSection title="Inline alerts（success / warning / error / info）">
+          <div className="design-guide-vstack-3">
+            <div data-slot="inline-alert" data-variant="success" role="status">
+              <CheckCircle2 aria-hidden />
+              <div>
+                <div data-slot="inline-alert-title">操作成功</div>
+                變更已儲存，無需重新載入頁面。
+              </div>
+            </div>
+            <div data-slot="inline-alert" data-variant="warning" role="status">
+              <AlertTriangle aria-hidden />
+              <div>
+                <div data-slot="inline-alert-title">請留意</div>
+                此動作可能影響其他使用者正在進行的工作流程。
+              </div>
+            </div>
+            <div data-slot="inline-alert" data-variant="error" role="alert">
+              <AlertCircle aria-hidden />
+              <div>
+                <div data-slot="inline-alert-title">無法完成</div>
+                請檢查網路連線或稍後再試；若問題持續請聯絡管理員。
+              </div>
+            </div>
+            <div data-slot="inline-alert" data-variant="info" role="status">
+              <Info aria-hidden />
+              <div>
+                <div data-slot="inline-alert-title">說明</div>
+                僅具檢視權限時，部分按鈕會停用或隱藏。
+              </div>
+            </div>
+          </div>
+        </SubSection>
+        <SubSection title="Layout primitives（ds-*）">
+          <p className="design-guide-prose">
+            容器與堆疊請優先使用 <code>.ds-container</code>、<code>.ds-stack</code>、<code>.ds-grid</code>、<code>.ds-split</code>，減少頁面散落 magic margin。
+          </p>
+          <div className="ds-container ds-container--narrow design-guide-ds-demo">
+            <div className="ds-stack ds-stack--lg">
+              <p className="design-guide-prose design-guide-prose-flush">
+                <code>.ds-container.ds-container--narrow</code> + <code>.ds-stack.ds-stack--lg</code>
+              </p>
+              <div className="ds-grid ds-grid--2">
+                <div className="design-guide-ds-tile">欄 A</div>
+                <div className="design-guide-ds-tile">欄 B</div>
+              </div>
+              <div className="ds-split">
+                <div className="design-guide-ds-tile">主要區</div>
+                <div className="design-guide-ds-tile design-guide-ds-tile--muted">次要區（可於窄螢改為單欄）</div>
+              </div>
+            </div>
+          </div>
+        </SubSection>
       </Section>
 
       {/* ============================================================ */}
@@ -513,6 +601,87 @@ export function DesignGuide() {
             </div>
           </SubSection>
         </div>
+      </Section>
+
+      {/* ============================================================ */}
+      {/*  DS PRIMITIVES: table, field, search, switch                  */}
+      {/* ============================================================ */}
+      <Section title="Design-system primitives">
+        <p className="design-guide-prose">
+          下列樣式來自 <code className="design-guide-code-path">@paperclipai/design-system</code>，可在列表與表單頁逐步取代散落 margin／寬度。
+        </p>
+        <SubSection title="Table (.ds-table-wrap, .ds-table, .ds-table--zebra)">
+          <div className="ds-table-wrap">
+            <table className="ds-table ds-table--zebra">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" className="ds-table__numeric">
+                    Hours
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Design tokens</td>
+                  <td>Done</td>
+                  <td className="ds-table__numeric">12</td>
+                </tr>
+                <tr>
+                  <td>Layout shell</td>
+                  <td>In progress</td>
+                  <td className="ds-table__numeric">8</td>
+                </tr>
+                <tr>
+                  <td>QA checklist</td>
+                  <td>Backlog</td>
+                  <td className="ds-table__numeric">3</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </SubSection>
+        <SubSection title="Field (.ds-field, hint, error)">
+          <div className="ds-stack ds-stack--md design-guide-max-w-md">
+            <div className="ds-field">
+              <label className="ds-field__label" htmlFor="dg-field-ok">
+                Project name
+              </label>
+              <span className="ds-field__hint">Shown on the board; you can change it later.</span>
+              <Input id="dg-field-ok" placeholder="My project" />
+            </div>
+            <div className="ds-field" data-invalid="true">
+              <label className="ds-field__label" htmlFor="dg-field-err">
+                Email
+              </label>
+              <Input id="dg-field-err" placeholder="you@example.com" aria-invalid />
+              <span className="ds-field__error">Enter a valid email address.</span>
+            </div>
+          </div>
+        </SubSection>
+        <SubSection title="Search (.ds-search)">
+          <div className="ds-search design-guide-search-demo">
+            <Search aria-hidden />
+            <input type="search" placeholder="Search issues…" aria-label="Search demo" />
+          </div>
+        </SubSection>
+        <SubSection title="Switch ([data-slot=&quot;switch&quot;])">
+          <div className="design-guide-checkbox-row">
+            <button
+              type="button"
+              role="switch"
+              data-slot="switch"
+              aria-checked={dsSwitchOn}
+              onClick={() => setDsSwitchOn((v) => !v)}
+            >
+              <span data-slot="switch-thumb" aria-hidden />
+            </button>
+            <span className="design-guide-foreground-label">
+              Notifications {dsSwitchOn ? "on" : "off"}
+            </span>
+          </div>
+        </SubSection>
       </Section>
 
       {/* ============================================================ */}

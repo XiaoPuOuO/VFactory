@@ -2,7 +2,8 @@ import { pgTable, uuid, text, timestamp, boolean, jsonb, index } from "drizzle-o
 import { companies } from "./companies.js";
 import { plans } from "./plans.js";
 
-export const paymentProviderEnum = ["stripe", "ecpay"] as const;
+/** manual：此站管理員於公司管理手動指定方案，不經金流供應商。 */
+export const paymentProviderEnum = ["stripe", "ecpay", "manual"] as const;
 export type PaymentProviderId = (typeof paymentProviderEnum)[number];
 
 /** 訂閱狀態（供應商無關）。 */

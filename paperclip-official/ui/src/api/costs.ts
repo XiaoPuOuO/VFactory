@@ -1,5 +1,6 @@
 import type {
   BudgetPolicy,
+  Company,
   CostSummary,
   CostByAgent,
   CostByBillingCode,
@@ -58,7 +59,7 @@ export const costsApi = {
   byRequestDepth: (companyId: string, from?: string, to?: string) =>
     api.get<CostByRequestDepth[]>(`/companies/${companyId}/costs/by-request-depth${dateParams(from, to)}`),
   updateLimits: (companyId: string, body: UpdateLimitsBody) =>
-    api.patch<unknown>(`/companies/${companyId}/limits`, body),
+    api.patch<Company>(`/companies/${companyId}/limits`, body),
 
   listBudgetPolicies: (companyId: string) =>
     api.get<BudgetPolicy[]>(`/companies/${companyId}/budget-policies`),

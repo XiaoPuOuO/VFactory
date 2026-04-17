@@ -6,6 +6,7 @@ import { geminiLocalUIAdapter } from "./gemini-local";
 import { openCodeLocalUIAdapter } from "./opencode-local";
 import { piLocalUIAdapter } from "./pi-local";
 import { openClawGatewayUIAdapter } from "./openclaw-gateway";
+import { localSelfHostedLlmUIAdapter } from "./local-self-hosted-llm";
 import { processUIAdapter } from "./process";
 import { httpUIAdapter } from "./http";
 
@@ -21,6 +22,7 @@ const adaptersByType = new Map<string, UIAdapterModule>(
     piLocalUIAdapter,
     cursorLocalUIAdapter,
     openClawGatewayUIAdapter,
+    localSelfHostedLlmUIAdapter,
     processUIAdapter,
     httpUIAdapter,
   ].map((a) => [a.type, a]),

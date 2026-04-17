@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "@/lib/router";
+import "./MetricCard.css";
 
 interface MetricCardProps {
   icon: LucideIcon;

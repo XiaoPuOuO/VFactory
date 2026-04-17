@@ -129,6 +129,7 @@ export const queryKeys = {
   instanceSettings: {
     defaultCompanyPath: ["instance", "settings", "default-company-path"] as const,
     complianceDefaultRetention: ["instance", "settings", "compliance-default-retention"] as const,
+    billingIgnorePlanUsageCaps: ["instance", "settings", "billing-ignore-plan-usage-caps"] as const,
   },
   secrets: {
     list: (companyId: string) => ["secrets", companyId] as const,
@@ -141,6 +142,11 @@ export const queryKeys = {
   activity: (companyId: string) => ["activity", companyId] as const,
   costs: (companyId: string, from?: string, to?: string) =>
     ["costs", companyId, from, to] as const,
+  /**
+   * 供 invalidate/refetch：命中該公司所有日期區間的 costs 查詢。
+   * 勿單獨使用 costs(companyId) — 會變成 ["costs", id, undefined, undefined]，與實際 queryKey 的 from/to 字串比對失敗，快取不會更新。
+   */
+  costsAllRanges: (companyId: string) => ["costs", companyId] as const,
   billing: {
     plans: (companyId: string) => ["billing", "plans", companyId] as const,
     company: (companyId: string) => ["billing", "company", companyId] as const,

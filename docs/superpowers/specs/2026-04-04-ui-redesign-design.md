@@ -371,18 +371,20 @@ packages/ui/                  ← 可發佈 npm package: @paperclipai/ui
 
 ### 6.2 漸進式揭露導覽
 
-**預設狀態（新用戶）：**
-- 顯示 6 個核心項目：Dashboard / Issues / Agents / Projects / Chat / Inbox
-- 底部顯示「＋ 更多」折疊按鈕
+**預設狀態（精簡導覽）：**
+- 頂部 CTA：新增議題；接著 **Dashboard**、**Inbox**（badge 保留）。
+- **主列常顯**：Dashboard、Inbox、Issues、Goals、Chat、專案列表、員工列表、**核准**、**方案與帳單**、**設定**、**成本**（路徑見 `navConfig.primaryNavItems`）。精簡模式下**不**顯示側欄專案樹／AI 階層樹；細項以列表頁與 ⌘K 為主。
+- **「更多」**折疊區（`paperclip.sidebar.moreOpen`）：內分「工作」與「公司」小標。
+  - 工作：Schedules、Workflows、Run quality。
+  - 公司：Org chart、Goal map、Governance、Automation、Activity。
+- 底部 **「固定顯示完整側邊欄」**（`aria-pressed`）；精簡模式下顯示為可切回精簡導覽。
 
-**展開狀態（手動）：**
-- 點「更多」展開完整導覽
-- 額外項目：Goals / Approvals / Costs / Schedules / Governance / Activity
-- 顯示「固定」按鈕
+**固定完整狀態（工程師模式）：**
+- 寫入 `localStorage` key：`paperclip.sidebar.expanded`。
+- 工作區列出上列所有工作項（含 Approvals）；公司區八項全列；並顯示**側欄專案樹**（可拖排排序）與 **AI 員工階層樹**（可篩模型），作為免經列表頁的快速鑽入；收合狀態寫入 `paperclip.sidebar.projectsOpen` / `paperclip.sidebar.agentsOpen`。
+- **拖排自訂側欄項目順序**：仍為規格中的後續項目（Phase C），尚未實作。
 
-**固定狀態（工程師模式）：**
-- 展開狀態持久化（localStorage key: `paperclip.sidebar.expanded`）
-- 支援拖排自訂項目順序
+**指令面板（⌘K）：** 頁面跳轉清單由 `ui/src/lib/navConfig.ts` 的 `allBoardNavItemsForPalette` 單一來源產生，與側欄路徑一致。
 
 ### 6.3 響應式斷點
 

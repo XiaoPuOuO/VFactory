@@ -68,16 +68,27 @@ label {
   touch-action: manipulation;
 }
 
-/* ===== Accessible Touch Targets ===== */
+/**
+ * 觸控目標：粗指標裝置上表單控制項至少 44px 高；圖示按鈕由 button.css 的 padding／min 寬高維持可點區。
+ */
 @media (pointer: coarse) {
-  button,
-  [role="button"],
-  input,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
   select,
   textarea,
   [data-slot="select-trigger"] {
     min-height: 44px;
   }
+}
+
+/**
+ * 可選：需強制 44px 點擊區的連結／自訂控制項（導覽 CTA 等）。
+ */
+.ds-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ===== Focus Visible — Brand-color ring ===== */

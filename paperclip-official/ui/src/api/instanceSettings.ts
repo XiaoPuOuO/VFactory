@@ -16,4 +16,18 @@ export const instanceSettingsApi = {
       "/instance/settings/compliance-default-retention",
       { complianceDefaultRetentionDays },
     ),
+  getBillingIgnorePlanUsageCaps: () =>
+    api.get<{ billingIgnorePlanUsageCaps: boolean }>(
+      "/instance/settings/billing-ignore-plan-usage-caps",
+    ),
+  setBillingIgnorePlanUsageCaps: (billingIgnorePlanUsageCaps: boolean) =>
+    api.put<{ billingIgnorePlanUsageCaps: boolean }>(
+      "/instance/settings/billing-ignore-plan-usage-caps",
+      { billingIgnorePlanUsageCaps },
+    ),
+  /** 公司管理手動指定方案：啟用中方案列表（admin.setting） */
+  getPlanAssignOptions: () =>
+    api.get<{ plans: { id: string; slug: string; name: string }[] }>(
+      "/instance/settings/plan-assign-options",
+    ),
 };

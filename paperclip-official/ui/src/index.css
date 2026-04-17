@@ -419,26 +419,39 @@ a.paperclip-project-mention-chip {
 .app-gate-wrap {
   margin-left: auto;
   margin-right: auto;
-  max-width: 36rem;
-  padding-top: 2.5rem;
-  padding-bottom: 2.5rem;
+  max-width: var(--layout-container-narrow-max);
+  padding: var(--space-10) var(--layout-container-padding-x);
+  box-sizing: border-box;
+}
+
+.app-gate-wrap--viewport {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--space-6);
+  padding-bottom: var(--space-6);
 }
 
 .app-gate-card {
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: var(--card);
-  padding: 1.5rem;
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
 }
 
 .app-gate-title {
-  font-size: 1.25rem;
+  font-size: var(--text-role-title);
   font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--foreground);
 }
 
 .app-gate-desc {
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
+  margin-top: var(--space-2);
+  font-size: var(--text-role-body-sm);
+  line-height: var(--leading-normal);
   color: var(--muted-foreground);
 }
 
@@ -552,16 +565,17 @@ a.paperclip-project-mention-chip {
 .app-not-found-wrap {
   margin-left: auto;
   margin-right: auto;
-  max-width: 42rem;
-  padding-top: 2.5rem;
-  padding-bottom: 2.5rem;
+  max-width: var(--layout-container-narrow-max);
+  padding: var(--space-10) var(--layout-container-padding-x);
+  box-sizing: border-box;
 }
 
 .app-not-found-card {
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: var(--card);
-  padding: 1.5rem;
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
 }
 
 .app-not-found-header {

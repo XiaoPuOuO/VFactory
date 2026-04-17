@@ -2,7 +2,7 @@
  * InstanceGroupManagement 頁面 — 此站設定 > 群組管理
  */
 .instance-group-management-page {
-  max-width: 64rem;
+  max-width: var(--layout-container-max);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -210,7 +210,7 @@
 
 /* 管理權限 modal 重新設計：較寬版面、說明區、已選摘要、表格樣式 */
 .instance-group-perms-modal-content {
-  max-width: 42rem;
+  max-width: var(--layout-container-narrow-max);
   width: calc(100vw - 2rem);
 }
 

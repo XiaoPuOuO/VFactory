@@ -1,7 +1,16 @@
 import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { badRequest, conflict } from "../errors.js";
-import { projects, projectGoals, goals, projectWorkspaces, workspaceRuntimeServices, assets } from "@paperclipai/db";
+import {
+  assets,
+  costEvents,
+  goals,
+  issues,
+  projectGoals,
+  projectWorkspaces,
+  projects,
+  workspaceRuntimeServices,
+} from "@paperclipai/db";
 import {
   PROJECT_COLORS,
   deriveProjectUrlKey,
@@ -521,16 +530,24 @@ export function projectService(db: Db) {
       return enriched ?? null;
     },
 
-    remove: (id: string) =>
-      db
-        .delete(projects)
-        .where(eq(projects.id, id))
-        .returning()
-        .then((rows) => {
-          const row = rows[0] ?? null;
-          if (!row) return null;
-          return { ...row, urlKey: deriveProjectUrlKey(row.name, row.id) };
-        }),
+    remove: async (id: string) => {
+      const removed = await db.transaction(async (tx) => {
+        // NOTE: 專案可被多個可選 FK 參照（issues/cost_events/...）。若未先解除關聯，硬刪除會被 FK 阻擋。
+        // 這裡採用「解除關聯（set null）」策略，保留歷史 issue / cost event 記錄。
+        await tx
+          .update(issues)
+          .set({ projectId: null, updatedAt: new Date() })
+          .where(eq(issues.projectId, id));
+
+        await tx.update(costEvents).set({ projectId: null }).where(eq(costEvents.projectId, id));
+
+        const [row] = await tx.delete(projects).where(eq(projects.id, id)).returning();
+        return row ?? null;
+      });
+
+      if (!removed) return null;
+      return { ...removed, urlKey: deriveProjectUrlKey(removed.name, removed.id) };
+    },
 
     listWorkspaces: async (projectId: string): Promise<ProjectWorkspace[]> => {
       const rows = await db

@@ -21,6 +21,7 @@ import {
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { assertCompanyPermission } from "./company-permission.js";
 import { assertCompanyIntegrationScope } from "./integration-scope.js";
+import { coerceZeroCompanyLimitsToNull } from "../lib/company-limit-fields.js";
 
 export function costRoutes(db: Db) {
   const router = Router();
@@ -225,11 +226,12 @@ export function costRoutes(db: Db) {
         res.status(400).json({ error: "Provide at least one of tokenLimit or priceLimitCents" });
         return;
       }
-      const company = await companies.update(companyId, payload);
+      const company = await companies.update(companyId, coerceZeroCompanyLimitsToNull(payload));
       if (!company) {
         res.status(404).json({ error: "Company not found" });
         return;
       }
+      await costs.invalidateBillingRelatedCaches(companyId);
       await logActivity(db, {
         companyId,
         actorType: "user",

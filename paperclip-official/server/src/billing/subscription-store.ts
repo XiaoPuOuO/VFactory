@@ -14,6 +14,7 @@ export async function upsertCompanySubscription(
     externalCustomerId?: string | null;
     externalSubscriptionId?: string | null;
     currentPeriodEnd?: Date | null;
+    cancelAtPeriodEnd?: boolean;
     metadata?: Record<string, unknown> | null;
   },
 ): Promise<void> {
@@ -33,6 +34,7 @@ export async function upsertCompanySubscription(
         externalCustomerId: row.externalCustomerId ?? null,
         externalSubscriptionId: row.externalSubscriptionId ?? null,
         currentPeriodEnd: row.currentPeriodEnd ?? null,
+        cancelAtPeriodEnd: row.cancelAtPeriodEnd ?? false,
         metadata: row.metadata ?? null,
         updatedAt: new Date(),
       })
@@ -48,6 +50,7 @@ export async function upsertCompanySubscription(
     externalCustomerId: row.externalCustomerId ?? null,
     externalSubscriptionId: row.externalSubscriptionId ?? null,
     currentPeriodEnd: row.currentPeriodEnd ?? null,
+    cancelAtPeriodEnd: row.cancelAtPeriodEnd ?? false,
     metadata: row.metadata ?? null,
   });
 }

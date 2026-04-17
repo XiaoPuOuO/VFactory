@@ -46,7 +46,7 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
       { type: "link", to: "/dashboard", label: t("nav.home"), icon: House },
       { type: "link", to: "/issues", label: t("nav.issues"), icon: CircleDot },
       { type: "action", label: t("nav.createAction"), icon: SquarePen, onClick: () => openNewIssue() },
-      { type: "link", to: "/agents/all", label: t("nav.agents"), icon: Users },
+      { type: "link", to: "/agents/all", label: t("nav.agentList"), icon: Users },
       {
         type: "link",
         to: "/inbox",
@@ -77,7 +77,7 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
                 key={item.label}
                 type="button"
                 onClick={item.onClick}
-                className={["board-mobile-nav-item", active && "active"].filter(Boolean).join(" ")}
+                className={["board-mobile-nav-item", "ds-touch-target", active && "active"].filter(Boolean).join(" ")}
               >
                 <Icon className="board-mobile-nav-item-icon" />
                 <span>{item.label}</span>
@@ -91,7 +91,7 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
               key={item.label}
               to={item.to}
               className={({ isActive }) =>
-                ["board-mobile-nav-item", isActive && "active"].filter(Boolean).join(" ")
+                ["board-mobile-nav-item", "ds-touch-target", isActive && "active"].filter(Boolean).join(" ")
               }
             >
               <span className="relative">

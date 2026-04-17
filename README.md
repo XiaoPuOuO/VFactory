@@ -491,6 +491,8 @@ Paperclip/
         └── promptTemplate/               ← Optional versioned prompt templates (Markdown)
 ```
 
+Runtime governance loading order: Paperclip always injects the bundled `paperclip-official/AgentSetting` first, then overlays the selected project workspace's own `AgentSetting` as an add-on. When both define the same skill, the project workspace version wins.
+
 ---
 
 ## Sources & Licensing

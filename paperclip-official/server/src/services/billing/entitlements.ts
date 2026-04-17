@@ -1,8 +1,23 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { companies, companySubscriptions, plans } from "@paperclipai/db";
+import { instanceSettingsService } from "../instance-settings.js";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
+
+/**
+ * 手動指定方案：若已設定到期日且已過期，視為不再享有該方案（回落 free）。
+ * Stripe／綠界訂閱不因 currentPeriodEnd 過期而在此截斷，避免與 Webhook 競態。
+ */
+export function isManualSubscriptionExpired(
+  paymentProvider: string,
+  currentPeriodEnd: Date | null,
+  nowMs: number = Date.now(),
+): boolean {
+  if (paymentProvider !== "manual") return false;
+  if (currentPeriodEnd == null) return false;
+  return currentPeriodEnd.getTime() < nowMs;
+}
 
 export interface CompanyEffectiveLimits {
   tokenLimit: number | null;
@@ -31,14 +46,32 @@ export function mergePlanEntitlementsWithCompanyOverrides(
       ? Number(ent.priceLimitCents)
       : null;
 
+  /** 0 與 null 同義：不覆寫方案（見 company-limit-fields 註解）。 */
+  const useCompanyToken =
+    companyTokenLimit != null && companyTokenLimit !== 0;
+  const useCompanyPrice =
+    companyPriceLimitCents != null && companyPriceLimitCents !== 0;
+
   return {
-    tokenLimit: companyTokenLimit != null ? Number(companyTokenLimit) : planToken,
-    priceLimitCents: companyPriceLimitCents != null ? companyPriceLimitCents : planPrice,
+    tokenLimit: useCompanyToken ? Number(companyTokenLimit) : planToken,
+    priceLimitCents: useCompanyPrice ? companyPriceLimitCents! : planPrice,
   };
+}
+
+/** 實例設定「忽略方案配額」時，自 entitlements 移除用量護欄鍵再合併。 */
+function stripPlanUsageCapsFromEntitlements(entitlements: unknown): unknown {
+  if (!entitlements || typeof entitlements !== "object" || Array.isArray(entitlements)) {
+    return {};
+  }
+  const o = { ...(entitlements as Record<string, unknown>) };
+  delete o.tokenLimit;
+  delete o.priceLimitCents;
+  return o;
 }
 
 /**
  * 公司層有效上限：company 欄位非 null 為覆寫；否則繼承有效方案（訂閱中 plan，無則 free）。
+ * 若實例設定 billing_ignore_plan_usage_caps 啟用，則不採用方案之 tokenLimit／priceLimitCents。
  */
 export async function resolveCompanyEffectiveLimits(
   db: Db,
@@ -62,7 +95,11 @@ export async function resolveCompanyEffectiveLimits(
     .then((rows) => rows[0] ?? null);
 
   let planRow = null as (typeof plans.$inferSelect) | null;
-  if (sub && ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status)) {
+  if (
+    sub &&
+    ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status) &&
+    !isManualSubscriptionExpired(sub.paymentProvider, sub.currentPeriodEnd)
+  ) {
     planRow = await db
       .select()
       .from(plans)
@@ -77,10 +114,15 @@ export async function resolveCompanyEffectiveLimits(
       .then((rows) => rows[0] ?? null);
   }
 
+  const ignorePlanCaps = await instanceSettingsService(db).getBillingIgnorePlanUsageCaps();
+  const planEntitlementsForMerge = ignorePlanCaps
+    ? stripPlanUsageCapsFromEntitlements(planRow?.entitlements)
+    : planRow?.entitlements;
+
   const merged = mergePlanEntitlementsWithCompanyOverrides(
     companyRow.tokenLimit,
     companyRow.priceLimitCents,
-    planRow?.entitlements,
+    planEntitlementsForMerge,
   );
 
   return {

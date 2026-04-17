@@ -346,7 +346,7 @@ function invalidateHeartbeatQueries(
   queryClient.invalidateQueries({ queryKey: queryKeys.heartbeats(companyId) });
   queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(companyId) });
   queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(companyId) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.costs(companyId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.costsAllRanges(companyId) });
   queryClient.invalidateQueries({ queryKey: queryKeys.sidebarBadges(companyId) });
 
   const agentId = readString(payload.agentId);
@@ -419,7 +419,7 @@ function invalidateActivityQueries(
   }
 
   if (entityType === "cost_event") {
-    queryClient.invalidateQueries({ queryKey: queryKeys.costs(companyId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.costsAllRanges(companyId) });
     return;
   }
 

@@ -12,6 +12,7 @@ import { ExternalLink } from "lucide-react";
 import { Identity } from "./Identity";
 import { RunTranscriptView } from "./transcript/RunTranscriptView";
 import { useLiveRunTranscripts } from "./transcript/useLiveRunTranscripts";
+import { PageSection } from "./PageSection";
 
 const MIN_DASHBOARD_RUNS = 4;
 
@@ -52,8 +53,7 @@ export function ActiveAgentsPanel({ companyId }: ActiveAgentsPanelProps) {
   });
 
   return (
-    <div className="dashboard-agents-panel">
-      <h3>{t("dashboard.agentsSection")}</h3>
+    <PageSection title={t("dashboard.agentsSection")} className="dashboard-agents-panel">
       {runs.length === 0 ? (
         <div className="dashboard-agents-panel-empty">
           <p className="dashboard-agents-panel-empty-text">{t("dashboard.noRecentAgentRuns")}</p>
@@ -72,7 +72,7 @@ export function ActiveAgentsPanel({ companyId }: ActiveAgentsPanelProps) {
           ))}
         </div>
       )}
-    </div>
+    </PageSection>
   );
 }
 

@@ -13,6 +13,7 @@ import {
 import { notFound, unprocessable } from "../errors.js";
 import { budgetPolicyService } from "./budget-policies.js";
 import { resolveCompanyEffectiveLimits } from "./billing/entitlements.js";
+import { instanceSettingsService } from "./instance-settings.js";
 import { notifyLimitBreach } from "./limit-breach-notify.js";
 import { del as redisDel, getJson as redisGetJson, setJson as redisSetJson } from "./redis.js";
 import { logger } from "../middleware/logger.js";
@@ -51,8 +52,13 @@ function companyUsageCacheKey(tenantId: string, companyId: string, yyyyMM: strin
   return `paperclip:tenant:${tenantId}:cost:usage:${companyId}:${yyyyMM}`;
 }
 
-function companyLimitExceededCacheKey(tenantId: string, companyId: string, yyyyMM: string): string {
-  return `paperclip:tenant:${tenantId}:cost:limitExceeded:${companyId}:${yyyyMM}`;
+function companyLimitExceededCacheKey(
+  tenantId: string,
+  companyId: string,
+  yyyyMM: string,
+  ignorePlanCaps: boolean,
+): string {
+  return `paperclip:tenant:${tenantId}:cost:limitExceeded:${companyId}:${yyyyMM}:ig${ignorePlanCaps ? 1 : 0}`;
 }
 
 function isCostCacheDebugEnabled(): boolean {
@@ -161,7 +167,8 @@ export function costService(db: Db) {
       if (tenantId) {
         await redisDel([
           companyUsageCacheKey(tenantId, companyId, yyyyMM),
-          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM),
+          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM, false),
+          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM, true),
         ]);
       }
     },
@@ -369,7 +376,8 @@ export function costService(db: Db) {
       if (tenantId) {
         await redisDel([
           companyUsageCacheKey(tenantId, companyId, yyyyMM),
-          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM),
+          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM, false),
+          companyLimitExceededCacheKey(tenantId, companyId, yyyyMM, true),
         ]);
       }
 
@@ -430,6 +438,7 @@ export function costService(db: Db) {
       const { from } = currentMonthRange();
       const yyyyMM = formatYearMonthUtc(from);
       const tenantId = await tenantIdForCompany(companyId);
+      const ignorePlanCaps = await instanceSettingsService(db).getBillingIgnorePlanUsageCaps();
       if (!tenantId) {
         const effective = await resolveCompanyEffectiveLimits(db, companyId);
         if (!effective) return { token: false, price: false, reason: null };
@@ -454,7 +463,7 @@ export function costService(db: Db) {
           reason,
         };
       }
-      const cacheKey = companyLimitExceededCacheKey(tenantId, companyId, yyyyMM);
+      const cacheKey = companyLimitExceededCacheKey(tenantId, companyId, yyyyMM, ignorePlanCaps);
       const cached = await redisGetJson<{ token: boolean; price: boolean; reason: "token_limit" | "price_limit" | null }>(
         cacheKey,
       );
@@ -624,6 +633,15 @@ export function costService(db: Db) {
 
       const effective = await resolveCompanyEffectiveLimits(db, companyId);
 
+      const rawToken =
+        company.tokenLimit != null ? Number(company.tokenLimit) : null;
+      const rawPrice = company.priceLimitCents;
+      /** 表單用：僅公司覆寫；0 與 null 同義（不覆寫）。 */
+      const tokenLimitOverride =
+        rawToken != null && rawToken !== 0 ? rawToken : null;
+      const priceLimitCentsOverride =
+        rawPrice != null && rawPrice !== 0 ? rawPrice : null;
+
       return {
         companyId,
         spendCents,
@@ -632,6 +650,8 @@ export function costService(db: Db) {
         tokenUsage,
         tokenLimit: effective?.tokenLimit ?? null,
         priceLimitCents: effective?.priceLimitCents ?? null,
+        tokenLimitOverride,
+        priceLimitCentsOverride,
         breachEvents,
         forecast,
       };

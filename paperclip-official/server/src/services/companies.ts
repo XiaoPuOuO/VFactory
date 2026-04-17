@@ -6,6 +6,8 @@ import { normalizeWorkingDirectory } from "@paperclipai/shared";
 import { conflict, badRequest } from "../errors.js";
 import {
   companies,
+  companySubscriptions,
+  plans,
   agents,
   agentApiKeys,
   agentConfigRevisions,
@@ -328,15 +330,13 @@ export function companyService(db: Db) {
       }),
 
     stats: async (tenantId?: string) => {
-      const companyIdSet =
+      const companyRows =
         tenantId != null
-          ? new Set(
-              (await db.select({ id: companies.id }).from(companies).where(eq(companies.tenantId, tenantId))).map(
-                (r) => r.id,
-              ),
-            )
-          : null;
-      const [agentRows, issueRows] = await Promise.all([
+          ? await db.select({ id: companies.id }).from(companies).where(eq(companies.tenantId, tenantId))
+          : await db.select({ id: companies.id }).from(companies);
+      const companyIdSet = new Set(companyRows.map((r) => r.id));
+
+      const [agentRows, issueRows, subRows] = await Promise.all([
         db
           .select({ companyId: agents.companyId, count: count() })
           .from(agents)
@@ -345,20 +345,63 @@ export function companyService(db: Db) {
           .select({ companyId: issues.companyId, count: count() })
           .from(issues)
           .groupBy(issues.companyId),
+        db
+          .select({
+            companyId: companySubscriptions.companyId,
+            planId: companySubscriptions.planId,
+            planSlug: plans.slug,
+            planName: plans.name,
+            currentPeriodEnd: companySubscriptions.currentPeriodEnd,
+            paymentProvider: companySubscriptions.paymentProvider,
+            status: companySubscriptions.status,
+          })
+          .from(companySubscriptions)
+          .innerJoin(plans, eq(companySubscriptions.planId, plans.id)),
       ]);
-      const result: Record<string, { agentCount: number; issueCount: number }> = {};
+
+      type SubSummary = {
+        planId: string;
+        planSlug: string;
+        planName: string;
+        currentPeriodEnd: string | null;
+        paymentProvider: string;
+        status: string;
+      };
+
+      const result: Record<
+        string,
+        { agentCount: number; issueCount: number; subscription: SubSummary | null }
+      > = {};
+
+      for (const id of companyIdSet) {
+        result[id] = { agentCount: 0, issueCount: 0, subscription: null };
+      }
+
       for (const row of agentRows) {
-        if (companyIdSet !== null && !companyIdSet.has(row.companyId)) continue;
-        result[row.companyId] = { agentCount: row.count, issueCount: 0 };
+        if (!companyIdSet.has(row.companyId)) continue;
+        const entry = result[row.companyId];
+        if (entry) entry.agentCount = row.count;
       }
       for (const row of issueRows) {
-        if (companyIdSet !== null && !companyIdSet.has(row.companyId)) continue;
-        if (result[row.companyId]) {
-          result[row.companyId].issueCount = row.count;
-        } else {
-          result[row.companyId] = { agentCount: 0, issueCount: row.count };
+        if (!companyIdSet.has(row.companyId)) continue;
+        const entry = result[row.companyId];
+        if (entry) entry.issueCount = row.count;
+      }
+      for (const row of subRows) {
+        if (!companyIdSet.has(row.companyId)) continue;
+        const entry = result[row.companyId];
+        if (entry) {
+          entry.subscription = {
+            planId: row.planId,
+            planSlug: row.planSlug,
+            planName: row.planName,
+            currentPeriodEnd: row.currentPeriodEnd?.toISOString() ?? null,
+            paymentProvider: row.paymentProvider,
+            status: row.status,
+          };
         }
       }
+
       return result;
     },
 

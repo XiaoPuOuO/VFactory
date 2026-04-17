@@ -1,42 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@/lib/router";
-import { billingApi, type CheckoutSessionResponse } from "../api/billing";
+import { billingApi } from "../api/billing";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { PlanEntitlementsList } from "@/components/PlanEntitlementsList";
+import { planTierDisplayDescription, planTierDisplayName } from "@/lib/planLicenseTier";
 import "./CompanyBilling.css";
-
-function EcpayAutoForm({ actionUrl, fields }: { actionUrl: string; fields: Record<string, string> }) {
-  const { t } = useTranslation("billing");
-  const ref = useRef<HTMLFormElement>(null);
-  useEffect(() => {
-    ref.current?.submit();
-  }, [actionUrl, fields]);
-  return (
-    <form ref={ref} method="post" action={actionUrl} className="company-billing-ecpay-form">
-      {Object.entries(fields).map(([k, v]) => (
-        <input key={k} type="hidden" name={k} value={v} />
-      ))}
-      <p className="company-billing-ecpay-hint">{t("ecpayRedirectHint")}</p>
-      <Button type="submit" variant="secondary">
-        {t("ecpayContinueSubmit")}
-      </Button>
-    </form>
-  );
-}
 
 export function CompanyBilling() {
   const { t } = useTranslation("billing");
   const { selectedCompanyId, loading: companiesLoading } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
-  const queryClient = useQueryClient();
-  const [pendingCheckout, setPendingCheckout] = useState<CheckoutSessionResponse | null>(null);
 
   useEffect(() => {
     setBreadcrumbs([
@@ -59,37 +38,14 @@ export function CompanyBilling() {
     enabled: Boolean(companyId),
   });
 
-  const checkoutMut = useMutation({
-    mutationFn: (input: { planSlug: string; currency: "usd" | "twd"; paymentProvider?: "stripe" | "ecpay" }) =>
-      billingApi.checkout(companyId, {
-        planSlug: input.planSlug,
-        currency: input.currency,
-        paymentProvider: input.paymentProvider,
-      }),
-    onSuccess: (data) => {
-      if (data.kind === "stripe_redirect") {
-        window.location.assign(data.url);
-        return;
-      }
-      setPendingCheckout(data);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.billing.company(companyId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.billing.plans(companyId) });
-    },
-  });
-
-  const portalMut = useMutation({
-    mutationFn: () => billingApi.portal(companyId),
-    onSuccess: (data) => {
-      if (data.url) window.location.assign(data.url);
-    },
-  });
-
   if (companiesLoading || !companyId) {
     return <PageSkeleton />;
   }
 
   const plans = plansQuery.data?.plans ?? [];
   const status = statusQuery.data;
+  /** 無訂閱列時，後端有效方案回落為 free。 */
+  const currentPlanSlug = status?.subscription?.planSlug ?? "free";
 
   return (
     <div className="company-billing-page">
@@ -99,81 +55,80 @@ export function CompanyBilling() {
         <p className="company-billing-byok-note">{t("byokChargeSeparationNote")}</p>
       </header>
 
-      {pendingCheckout?.kind === "ecpay_form" ? (
-        <Card className="company-billing-card">
-          <CardHeader>{t("ecpayRedirect")}</CardHeader>
-          <CardContent>
-            <EcpayAutoForm actionUrl={pendingCheckout.actionUrl} fields={pendingCheckout.fields} />
-          </CardContent>
-        </Card>
-      ) : null}
-
       {status ? (
         <Card className="company-billing-card">
           <CardHeader>{t("currentPlan")}</CardHeader>
           <CardContent>
             <dl className="company-billing-dl">
               <dt>{t("plan")}</dt>
-              <dd>{status.subscription?.planName ?? t("freeTier")}</dd>
+              <dd>
+                {status.subscription ? (
+                  planTierDisplayName(
+                    t,
+                    status.subscription.planSlug,
+                    status.subscription.planName,
+                  )
+                ) : (
+                  <>
+                    {planTierDisplayName(t, "free")}
+                    <span className="company-billing-tier-suffix"> — {t("freeTierSuffix")}</span>
+                  </>
+                )}
+              </dd>
               <dt>{t("status")}</dt>
               <dd>{status.subscription?.status ?? "—"}</dd>
+              <dt>{t("deploymentModeLabel")}</dt>
+              <dd>{t("deploymentModeByok")}</dd>
             </dl>
             <p className="company-billing-costs-hint">{t("costLimitsOnCostsPage")}</p>
-            {status.subscription?.paymentProvider === "stripe" ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="company-billing-portal"
-                disabled={portalMut.isPending}
-                onClick={() => portalMut.mutate()}
-              >
-                {t("openStripePortal")}
-              </Button>
-            ) : null}
+            <div className="company-billing-notice">
+              <p className="company-billing-notice-title">{t("selfServeDisabledTitle")}</p>
+              <p className="company-billing-notice-body">{t("selfServeDisabledBody")}</p>
+            </div>
           </CardContent>
         </Card>
       ) : null}
 
-      <section className="company-billing-plans" aria-label={t("availablePlans")}>
-        <h2 className="company-billing-h2">{t("availablePlans")}</h2>
+      <section className="company-billing-plans" aria-label={t("referenceTiers")}>
+        <h2 className="company-billing-h2">{t("referenceTiers")}</h2>
         <div className="company-billing-plan-grid">
-          {plans.map((p) => (
-            <Card key={p.id} className="company-billing-plan-card">
-              <CardHeader>
-                <h3 className="company-billing-plan-name">{p.name}</h3>
-                <p className="company-billing-plan-desc">{p.description ?? ""}</p>
-              </CardHeader>
-              <CardContent>
-                <PlanEntitlementsList ent={p.entitlements} t={t} />
-                <div className="company-billing-plan-actions">
-                  <Button
-                    type="button"
-                    disabled={checkoutMut.isPending || p.slug === "free"}
-                    onClick={() =>
-                      checkoutMut.mutate({ planSlug: p.slug, currency: "usd", paymentProvider: "stripe" })
-                    }
-                  >
-                    {t("subscribeStripe")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={checkoutMut.isPending || p.slug === "free"}
-                    onClick={() =>
-                      checkoutMut.mutate({ planSlug: p.slug, currency: "twd", paymentProvider: "ecpay" })
-                    }
-                  >
-                    {t("subscribeEcpay")}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {plans.map((p) => {
+            const isCurrent = currentPlanSlug === p.slug;
+            return (
+              <Card
+                key={p.id}
+                className={
+                  isCurrent
+                    ? "company-billing-plan-card company-billing-plan-card--current"
+                    : "company-billing-plan-card"
+                }
+              >
+                <CardHeader>
+                  <div className="company-billing-plan-card-head">
+                    <div className="company-billing-plan-card-titles">
+                      <h3 className="company-billing-plan-name">
+                        {planTierDisplayName(t, p.slug, p.name)}
+                      </h3>
+                      <p className="company-billing-plan-desc">
+                        {planTierDisplayDescription(t, p.slug, p.description)}
+                      </p>
+                    </div>
+                    {isCurrent ? (
+                      <span className="company-billing-current-badge">{t("currentPlanBadge")}</span>
+                    ) : null}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <PlanEntitlementsList ent={p.entitlements} t={t} />
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </section>
 
       <p className="company-billing-footnote">
-        <Link to="/pricing">{t("viewPricingPage")}</Link>
+        <Link to="/pricing">{t("viewLicensePage")}</Link>
       </p>
     </div>
   );

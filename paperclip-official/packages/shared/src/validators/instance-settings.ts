@@ -13,3 +13,10 @@ export const setComplianceDefaultRetentionSchema = z.object({
 });
 
 export type SetComplianceDefaultRetention = z.infer<typeof setComplianceDefaultRetentionSchema>;
+
+/** 為 true 時：忽略方案之 Token／花費配額，僅公司覆寫生效。 */
+export const setBillingIgnorePlanUsageCapsSchema = z.object({
+  billingIgnorePlanUsageCaps: z.boolean(),
+});
+
+export type SetBillingIgnorePlanUsageCaps = z.infer<typeof setBillingIgnorePlanUsageCapsSchema>;

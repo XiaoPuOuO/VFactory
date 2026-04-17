@@ -12,7 +12,23 @@ import type {
 } from "@paperclipai/shared";
 import { api } from "./client";
 
-export type CompanyStats = Record<string, { agentCount: number; issueCount: number }>;
+export type CompanySubscriptionSummary = {
+  planId: string;
+  planSlug: string;
+  planName: string;
+  currentPeriodEnd: string | null;
+  paymentProvider: string;
+  status: string;
+};
+
+export type CompanyStats = Record<
+  string,
+  {
+    agentCount: number;
+    issueCount: number;
+    subscription: CompanySubscriptionSummary | null;
+  }
+>;
 
 /** GET /companies/:id/approval-policies/hire 回傳（無列時為預設物件）。 */
 export type CompanyHireApprovalPolicy = {
@@ -42,6 +58,11 @@ export const companiesApi = {
   allowedAdapterTypes: (companyId: string) =>
     api.get<{ adapterTypes: string[] }>(`/companies/${companyId}/allowed-adapter-types`),
   stats: () => api.get<CompanyStats>("/companies/stats"),
+  updateManualSubscription: (companyId: string, body: { planId: string; currentPeriodEnd: string | null }) =>
+    api.patch<{
+      ok: true;
+      subscription: CompanySubscriptionSummary;
+    }>(`/companies/${companyId}/manual-subscription`, body),
   create: (data: { name: string; description?: string | null; budgetMonthlyCents?: number }) =>
     api.post<Company>("/companies", data),
   update: (

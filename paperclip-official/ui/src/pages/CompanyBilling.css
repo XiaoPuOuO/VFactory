@@ -39,6 +39,27 @@
   margin-bottom: 1.5rem;
 }
 
+.company-billing-notice {
+  margin-top: 1rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 0.875rem;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+}
+
+.company-billing-notice-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.company-billing-notice-body {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--muted-foreground, #737373);
+}
+
 .company-billing-dl {
   display: grid;
   grid-template-columns: 10rem 1fr;
@@ -48,6 +69,11 @@
 }
 
 .company-billing-dl dt {
+  color: var(--muted-foreground, #737373);
+}
+
+.company-billing-tier-suffix {
+  font-weight: 400;
   color: var(--muted-foreground, #737373);
 }
 
@@ -65,6 +91,38 @@
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.company-billing-plan-card--current {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--primary, #3b82f6) 55%, transparent),
+    0 1px 2px color-mix(in srgb, var(--foreground, #000) 6%, transparent);
+}
+
+.company-billing-plan-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.company-billing-plan-card-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.company-billing-current-badge {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--primary-foreground, #fff);
+  background: var(--primary, #3b82f6);
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
 }
 
 .company-billing-plan-name {

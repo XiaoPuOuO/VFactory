@@ -1,6 +1,6 @@
 import type { SkillArgumentDefinition, SkillFrontmatter } from "@paperclipai/shared";
 import { requiresWorkflowRuntime } from "@paperclipai/shared";
-import { loadSkillRegistryForWorkspace } from "./skill-registry.js";
+import { loadSkillRegistryForWorkspaces } from "./skill-registry.js";
 import { logger } from "../middleware/logger.js";
 
 /** Exported for tests: compact wake signal for passiveWakeHints matching. */
@@ -177,8 +177,21 @@ function buildSkillPromptForInjection(frontmatter: SkillFrontmatter, values: Rec
   return pieces.filter((p) => p.trim().length > 0).join("\n\n");
 }
 
+function summarizeSkillDescription(description: string): string {
+  const normalized = description.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+
+  const firstSentence = (normalized.match(/[^.!?]+[.!?]?/)?.[0] ?? normalized)
+    .replace(/[.!?]+$/, "")
+    .trim();
+
+  if (firstSentence.length <= 64) return firstSentence;
+  return `${firstSentence.slice(0, 61).trimEnd()}...`;
+}
+
 export async function buildSkillInjectionPrompt(args: {
   workspaceCwd: string;
+  governanceWorkspaceCwds?: string[];
   context: unknown;
   agentId: string;
   companyId: string;
@@ -192,7 +205,11 @@ export async function buildSkillInjectionPrompt(args: {
    */
   chatLightMode?: boolean;
 }): Promise<string | null> {
-  const registry = await loadSkillRegistryForWorkspace(args.workspaceCwd);
+  const governanceWorkspaceCwds =
+    Array.isArray(args.governanceWorkspaceCwds) && args.governanceWorkspaceCwds.length > 0
+      ? args.governanceWorkspaceCwds
+      : [args.workspaceCwd];
+  const registry = await loadSkillRegistryForWorkspaces(governanceWorkspaceCwds);
   const workspaceByKey = registry.skillsByName;
 
   const companyByKey = new Map<string, SkillFrontmatter>();
@@ -239,9 +256,7 @@ export async function buildSkillInjectionPrompt(args: {
     activeSkills.push({ entry, invocation: inv });
   }
 
-  if (passiveSkills.length === 0 && activeSkills.length === 0) return null;
-
-  const MAX_CHARS = args.chatLightMode ? 6000 : 16_000;
+  const MAX_CHARS = args.chatLightMode ? 20_000 : 16_000;
   const sections: string[] = [];
   sections.push("Skill injection context (Paperclip):");
   sections.push("Follow the injected skill instructions. Active skills are injected only when explicitly invoked.");
@@ -254,6 +269,36 @@ export async function buildSkillInjectionPrompt(args: {
     sections.push(section);
     return true;
   };
+
+  let addedChatLightCatalog = false;
+  if (args.chatLightMode) {
+    const visibleSkills = all
+      .filter((e) => e.frontmatter.metadata?.internal !== true)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (visibleSkills.length > 0) {
+      const lines: string[] = ["## Available Skills"];
+      for (const entry of visibleSkills) {
+        const description = summarizeSkillDescription(entry.frontmatter.description?.trim() ?? "");
+        lines.push(`- ${entry.name}${description.length > 0 ? `: ${description}` : ""}`);
+      }
+      if (addSection(lines.join("\n"))) {
+        addedChatLightCatalog = true;
+      } else {
+        const partialLines: string[] = ["## Available Skills"];
+        for (const entry of visibleSkills) {
+          const description = summarizeSkillDescription(entry.frontmatter.description?.trim() ?? "");
+          const nextLine = `- ${entry.name}${description.length > 0 ? `: ${description}` : ""}`;
+          const candidate = [...partialLines, nextLine].join("\n");
+          if (sections.join("\n").length + candidate.length + 1 > MAX_CHARS) break;
+          partialLines.push(nextLine);
+        }
+        addedChatLightCatalog = partialLines.length > 1 && addSection(partialLines.join("\n"));
+      }
+    }
+  }
+
+  if (passiveSkills.length === 0 && activeSkills.length === 0 && !addedChatLightCatalog) return null;
 
   if (passiveSkills.length > 0) {
     const passiveHeader = "## Passive Skills";

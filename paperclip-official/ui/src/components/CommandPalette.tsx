@@ -9,6 +9,7 @@ import { issuesApi } from "../api/issues";
 import { agentsApi } from "../api/agents";
 import { projectsApi } from "../api/projects";
 import { queryKeys } from "../lib/queryKeys";
+import { allBoardNavItemsForPalette } from "../lib/navConfig";
 import {
   CommandDialog,
   CommandEmpty,
@@ -18,20 +19,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import {
-  CircleDot,
-  Bot,
-  Hexagon,
-  Target,
-  LayoutDashboard,
-  Inbox,
-  DollarSign,
-  History,
-  SquarePen,
-  Plus,
-  Keyboard,
-  CreditCard,
-} from "lucide-react";
+import { CircleDot, Bot, Hexagon, SquarePen, Plus, Keyboard } from "lucide-react";
 import { Identity } from "./Identity";
 import { agentUrl, projectUrl } from "../lib/utils";
 
@@ -141,43 +129,21 @@ export function CommandPalette() {
 
         <CommandSeparator />
 
-        <CommandGroup heading="Pages">
-          <CommandItem onSelect={() => go("/dashboard")}>
-            <LayoutDashboard className="ui-cmd-icon" />
-            {t("dashboard")}
-          </CommandItem>
-          <CommandItem onSelect={() => go("/inbox")}>
-            <Inbox className="ui-cmd-icon" />
-            {t("inbox")}
-          </CommandItem>
-          <CommandItem onSelect={() => go("/issues")}>
-            <CircleDot className="ui-cmd-icon" />
-            {t("issues")}
-          </CommandItem>
-          <CommandItem onSelect={() => go("/projects")}>
-            <Hexagon className="ui-cmd-icon" />
-            {t("projects")}
-          </CommandItem>
-          <CommandItem onSelect={() => go("/goals")}>
-            <Target className="ui-cmd-icon" />
-            {t("goals")}
-          </CommandItem>
-          <CommandItem onSelect={() => go("/agents")}>
-            <Bot className="ui-cmd-icon" />
-            {t("agents")}
-          </CommandItem>
-          <CommandItem onSelect={() => go("/costs")}>
-            <DollarSign className="ui-cmd-icon" />
-            {t("costs")}
-          </CommandItem>
-          <CommandItem onSelect={() => go("/company/billing")}>
-            <CreditCard className="ui-cmd-icon" />
-            {t("billing")}
-          </CommandItem>
-          <CommandItem onSelect={() => go("/activity")}>
-            <History className="ui-cmd-icon" />
-            {t("activity")}
-          </CommandItem>
+        <CommandGroup heading={t("pagesHeading")}>
+          {allBoardNavItemsForPalette.map((item) => {
+            const Icon = item.icon;
+            const label = t(item.labelKey);
+            return (
+              <CommandItem
+                key={item.id}
+                value={`${label} ${item.path}`}
+                onSelect={() => go(item.path)}
+              >
+                <Icon className="ui-cmd-icon" />
+                {label}
+              </CommandItem>
+            );
+          })}
         </CommandGroup>
 
         {visibleIssues.length > 0 && (

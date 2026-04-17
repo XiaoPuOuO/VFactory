@@ -127,6 +127,60 @@
   letter-spacing: 0.01em;
 }
 
+/* 右側更多動作 */
+.goal-node-actions {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.goal-node-row:hover .goal-node-actions,
+.goal-node-row:focus-within .goal-node-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .goal-node-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.goal-node-actions-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 6px;
+}
+
+.goal-node-actions-icon,
+.goal-node-menu-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* 刪除確認對話框（與現有 Dialog 基礎樣式相容） */
+.goal-delete-dialog {
+  width: min(420px, calc(100vw - 2rem));
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(20, 20, 24, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+
+.goal-delete-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
 /* 子節點容器 */
 .goal-node-children {
   display: flex;

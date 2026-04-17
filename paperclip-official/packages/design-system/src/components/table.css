@@ -1,0 +1,69 @@
+/**
+ * Data tables — 可捲動容器、sticky 表頭、斑馬紋；窄螢可搭配卡片降級（由頁面切換 markup）。
+ */
+
+.ds-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+
+.ds-table {
+  width: 100%;
+  min-width: min(40rem, 100%);
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.ds-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  background: color-mix(in oklch, var(--muted) 65%, var(--card));
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-3) var(--space-4);
+  white-space: nowrap;
+}
+
+.dark .ds-table thead th {
+  background: color-mix(in oklch, var(--muted) 50%, var(--card));
+}
+
+.ds-table tbody td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--foreground);
+}
+
+.ds-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ds-table--zebra tbody tr:nth-child(even) {
+  background: color-mix(in oklch, var(--muted) 35%, transparent);
+}
+
+.ds-table tbody tr:hover td {
+  background: color-mix(in oklch, var(--accent) 40%, transparent);
+}
+
+.ds-table [data-align="numeric"],
+.ds-table .ds-table__numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-table tbody tr {
+    transition: none;
+  }
+}

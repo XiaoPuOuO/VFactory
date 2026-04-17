@@ -59,7 +59,14 @@ export {
   type SetDefaultCompanyPath,
   setComplianceDefaultRetentionSchema,
   type SetComplianceDefaultRetention,
+  setBillingIgnorePlanUsageCapsSchema,
+  type SetBillingIgnorePlanUsageCaps,
 } from "./instance-settings.js";
+
+export {
+  updateCompanyManualSubscriptionSchema,
+  type UpdateCompanyManualSubscription,
+} from "./company-manual-subscription.js";
 
 export {
   portabilityIncludeSchema,
@@ -312,7 +319,13 @@ export {
 
 export { workflowStepWorkerResultSchema, type WorkflowStepWorkerResultParsed } from "./workflow-worker.js";
 
-export { billingCheckoutSchema, billingCheckoutInvoiceSchema, type BillingCheckoutInput } from "./billing.js";
+export {
+  billingCheckoutSchema,
+  billingCheckoutInvoiceSchema,
+  billingSwitchPlanSchema,
+  type BillingCheckoutInput,
+  type BillingSwitchPlanInput,
+} from "./billing.js";
 
 export {
   createInstancePlanSchema,
