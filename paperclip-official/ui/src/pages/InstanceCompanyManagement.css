@@ -2,7 +2,7 @@
  * InstanceCompanyManagement 頁面 — 此站設定 > Company 管理
  */
 .instance-company-management-page {
-  max-width: 64rem;
+  max-width: var(--layout-container-max);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -54,29 +54,97 @@
   margin-top: 0.25rem;
 }
 
-.instance-company-management-archive-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.875rem;
+.instance-company-default-path-card {
+  border: 1px solid var(--border);
+}
+
+.instance-company-default-path-card-content {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.instance-company-default-path-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.instance-company-default-path-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.instance-company-default-path-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
   color: var(--muted-foreground);
-  text-decoration: none;
-  margin-top: 0.25rem;
 }
 
-.instance-company-management-archive-link:hover {
+.instance-company-default-path-title-stack {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.instance-company-default-path-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
   color: var(--foreground);
-  text-decoration: underline;
 }
 
-.instance-company-management-archive-link svg {
-  width: 1rem;
-  height: 1rem;
+.instance-company-default-path-desc {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--muted-foreground);
+}
+
+.instance-company-default-path-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.instance-company-default-path-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.instance-company-management-action-banner {
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in oklab, var(--destructive) 40%, transparent);
+  background: color-mix(in oklab, var(--destructive) 5%, transparent);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--destructive);
 }
 
 .instance-company-management-card-content {
   padding: 0;
   overflow-x: auto;
+}
+
+.instance-company-management-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.instance-company-management-table-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.instance-company-management-cleanup-btn {
+  flex-shrink: 0;
 }
 
 .instance-company-management-table {
@@ -125,6 +193,23 @@
   min-width: 4rem;
 }
 
+.instance-company-management-th-plan,
+.instance-company-management-td-plan {
+  min-width: 11rem;
+  max-width: 18rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--foreground);
+}
+
+.instance-company-management-plan-text {
+  display: block;
+}
+
+.instance-company-management-plan-expired {
+  color: var(--muted-foreground);
+}
+
 .instance-company-management-th-agents,
 .instance-company-management-td-agents,
 .instance-company-management-th-issues,
@@ -135,8 +220,45 @@
 
 .instance-company-management-th-actions,
 .instance-company-management-td-actions {
-  min-width: 8rem;
+  min-width: 13.5rem;
   text-align: right;
+}
+
+.instance-company-management-action-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.375rem;
+}
+
+.instance-company-management-confirm-box {
+  width: min(22rem, 70vw);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, transparent);
+  background: color-mix(in oklab, var(--destructive) 4%, transparent);
+}
+
+.instance-company-management-confirm-text {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.instance-company-management-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.instance-company-management-plan-btn {
+  justify-content: flex-end;
 }
 
 .instance-company-management-status {
@@ -174,4 +296,67 @@
   height: 0.875rem;
   margin-right: 0.25rem;
   vertical-align: -0.125em;
+}
+
+/* 手動方案對話框 */
+.instance-company-plan-dialog {
+  max-width: min(26rem, 100vw - 2rem);
+}
+
+.instance-company-plan-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 0.25rem;
+}
+
+.instance-company-plan-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.instance-company-plan-fieldset {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 0.5rem);
+}
+
+.instance-company-plan-legend {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0 0.25rem;
+}
+
+.instance-company-plan-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.instance-company-plan-radio-row:first-of-type {
+  margin-top: 0.25rem;
+}
+
+.instance-company-plan-select,
+.instance-company-plan-datetime {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 0.375rem);
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.instance-company-plan-select:focus,
+.instance-company-plan-datetime:focus {
+  outline: none;
+  border-color: var(--ring, var(--primary));
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring, var(--primary)) 25%, transparent);
 }

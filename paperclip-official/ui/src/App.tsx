@@ -40,9 +40,8 @@ import { CompanyWorkflowEditPage, CompanyWorkflowNewPage } from "./pages/Company
 import { Account } from "./pages/Account";
 import { DesignGuide } from "./pages/DesignGuide";
 import { InstanceSettings } from "./pages/InstanceSettings";
-import { DefaultCompanyPathSettings } from "./pages/DefaultCompanyPathSettings";
 import { ComplianceRetentionSettings } from "./pages/ComplianceRetentionSettings";
-import { ArchiveCompanySettings } from "./pages/ArchiveCompanySettings";
+import { BillingIgnorePlanUsageCapsSettings } from "./pages/BillingIgnorePlanUsageCapsSettings";
 import { InstanceCompanyManagement } from "./pages/InstanceCompanyManagement";
 import { InstanceGroupManagement } from "./pages/InstanceGroupManagement";
 import { InstanceUserManagement } from "./pages/InstanceUserManagement";
@@ -140,12 +139,16 @@ function CloudAccessGate() {
   });
 
   if (healthQuery.isLoading || (requireLogin && sessionQuery.isLoading)) {
-    return <div className="app-gate-wrap app-gate-message">{t("app.loading")}</div>;
+    return (
+      <div className="app-gate-wrap app-gate-wrap--viewport app-gate-message" role="status" aria-live="polite">
+        {t("app.loading")}
+      </div>
+    );
   }
 
   if (healthQuery.error) {
     return (
-      <div className="app-gate-wrap app-gate-error">
+      <div className="app-gate-wrap app-gate-wrap--viewport app-gate-error" role="alert">
         {healthQuery.error instanceof Error ? healthQuery.error.message : t("app.failedToLoadAppState")}
       </div>
     );
@@ -353,7 +356,11 @@ function CompanyRootRedirect() {
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">{t("app.loading")}</div>;
+    return (
+      <div className="app-gate-wrap app-gate-wrap--viewport app-gate-message" role="status" aria-live="polite">
+        {t("app.loading")}
+      </div>
+    );
   }
 
   // Keep the first-run onboarding mounted until it completes.
@@ -379,7 +386,11 @@ function UnprefixedBoardRedirect() {
   }
 
   if (loading) {
-    return <div className="app-gate-wrap app-gate-message">{t("app.loading")}</div>;
+    return (
+      <div className="app-gate-wrap app-gate-wrap--viewport app-gate-message" role="status" aria-live="polite">
+        {t("app.loading")}
+      </div>
+    );
   }
 
   const targetCompany = selectedCompany ?? companies[0] ?? null;
@@ -441,13 +452,16 @@ export function App() {
             <Route index element={<InstanceSettings />} />
           </Route>
           <Route path="instance/default-company-path" element={<Layout />}>
-            <Route index element={<DefaultCompanyPathSettings />} />
+            <Route index element={<Navigate to="/instance/companies" replace />} />
           </Route>
           <Route path="instance/compliance-retention" element={<Layout />}>
             <Route index element={<ComplianceRetentionSettings />} />
           </Route>
+          <Route path="instance/billing-ignore-plan-usage-caps" element={<Layout />}>
+            <Route index element={<BillingIgnorePlanUsageCapsSettings />} />
+          </Route>
           <Route path="instance/archive-company" element={<Layout />}>
-            <Route index element={<ArchiveCompanySettings />} />
+            <Route index element={<Navigate to="/instance/companies" replace />} />
           </Route>
           <Route path="instance/companies" element={<Layout />}>
             <Route index element={<InstanceCompanyManagement />} />

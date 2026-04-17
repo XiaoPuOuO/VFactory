@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Archive, Building2, CreditCard, FolderOpen, Settings, Users, UserCog } from "lucide-react";
+import { Building2, CreditCard, Settings, Users, UserCog } from "lucide-react";
 import { SidebarNavItem } from "./SidebarNavItem";
 
 export function InstanceSidebar({ canManagePlans = false }: { canManagePlans?: boolean }) {
@@ -28,11 +28,6 @@ export function InstanceSidebar({ canManagePlans = false }: { canManagePlans?: b
             />
           ) : null}
           <SidebarNavItem
-            to="/instance/default-company-path"
-            label={t("instance.defaultCompanyPath")}
-            icon={FolderOpen}
-          />
-          <SidebarNavItem
             to="/instance/groups"
             label={t("instance.groupManagement")}
             icon={Users}
@@ -41,11 +36,6 @@ export function InstanceSidebar({ canManagePlans = false }: { canManagePlans?: b
             to="/instance/companies"
             label={t("instance.companyManagement")}
             icon={Building2}
-          />
-          <SidebarNavItem
-            to="/instance/archive-company"
-            label={t("instance.archiveCompanySettings")}
-            icon={Archive}
           />
         </div>
       </nav>
