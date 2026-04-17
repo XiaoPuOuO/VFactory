@@ -15,3 +15,8 @@ AGENTS.md
 **/*.pyo
 .omc/
 .superpowers/
+# 預設忽略本機/匯出的 docs 目錄內容，但保留 Superpowers 規格文件可版本化追蹤
+docs/**
+!docs/superpowers/
+!docs/superpowers/specs/
+!docs/superpowers/specs/**
