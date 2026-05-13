@@ -1,4 +1,4 @@
-# Paperclip — AI Agent Orchestration Platform
+# AI Agent Orchestration Platform
 
 > **Language / 語言：** [繁體中文](documents/MultiLanguage/README.zh_TW.md) · [简体中文](documents/MultiLanguage/README.zh_CN.md)
 
